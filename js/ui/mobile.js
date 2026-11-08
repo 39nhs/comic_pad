@@ -43,7 +43,8 @@ export function initMobile() {
         title: '앱으로 설치', body: h('div.help-text', null,
           h('p', null, '안드로이드 Chrome / 삼성 인터넷: 메뉴(⋮) → "홈 화면에 추가" 또는 "앱 설치"'),
           h('p', null, '아이패드/아이폰 Safari: 공유 버튼 → "홈 화면에 추가"'),
-          h('p', null, 'PC Edge: 주소창 오른쪽의 "앱 설치" 아이콘 (또는 바탕화면의 ComicPad 바로가기 사용)')),
+          h('p', null, 'PC Edge: 주소창 오른쪽의 "앱 설치" 아이콘 (또는 바탕화면의 ComicPad 바로가기 사용)'),
+          h('p', null, 'PC 없이 휴대폰·태블릿만으로 쓰기: 휴대폰 브라우저로 https://39nhs.github.io/comic_pad/ 를 열고 위 방법으로 설치하면, 인터넷이 없어도 열리고 작품은 그 기기 안에 저장됩니다 (AI 기능·PC 폴더 저장은 PC 버전에서만).')),
         actions: [{ label: '닫기', primary: true }],
       });
     },

@@ -556,6 +556,8 @@ body.popout-win > .panel-body, body.popout-win > .popout-content { flex: 1; over
 .manual-frame { width: min(1100px, 92vw); height: 74vh; border: 0; border-radius: 8px; background: #fff; display: block; }
 .about { width: min(900px, 100%); max-width: 100%; }
 .update { width: min(560px, 100%); }
+.report { width: min(820px, 100%); }
+.report-text { width: 100%; height: 50vh; font: 12px/1.5 ui-monospace, Consolas, monospace; background: var(--bg); color: var(--text); border: 1px solid var(--line); border-radius: 6px; padding: 8px; resize: vertical; box-sizing: border-box; }
 .update-notes { max-height: 30vh; overflow: auto; white-space: pre-wrap; overflow-wrap: anywhere; font: 12px/1.5 inherit; background: var(--bg); padding: 8px 10px; border-radius: 6px; }
 .license-text { max-height: 56vh; overflow: auto; white-space: pre-wrap; overflow-wrap: anywhere; overflow-x: hidden; font: 12px/1.5 ui-monospace, Consolas, monospace; background: var(--bg); color: var(--text); padding: 10px 12px; border-radius: 6px; user-select: text; }
 .frame .frame-wave { position: absolute; left: 6px; right: 6px; bottom: 2px; background: #4fb3e8; border-radius: 2px; opacity: .85; }

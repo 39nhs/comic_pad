@@ -26,8 +26,9 @@ function value(b, v) {
   else if (v.t === 'tdta') { b.ascii('tdta'); b.u32(v.v.length); b.push(v.v); }
   else if (v.t === 'UntF') { b.ascii('UntF'); b.ascii(v.unit); b.f64(v.v); }
   else if (v.t === 'Objc') { b.ascii('Objc'); descriptor(b, v.cls, v.items); }
+  else if (v.t === 'VlLs') { b.ascii('VlLs'); b.u32(v.v.length); for (const x of v.v) value(b, x); }
 }
-function descriptor(b, cls, items) {
+export function descriptor(b, cls, items) {
   uni(b, '');
   key(b, cls);
   b.u32(items.length);
@@ -100,6 +101,28 @@ function engineData(m, text) {
   let p = 0;
   for (const x of parts) { out.set(x, p); p += x.length; }
   return out;
+}
+
+export { Buf };
+
+/** '8BIM' + 키 + 길이 + (설명자 버전 16 + 설명자) — 길이는 짝수로 맞춤 */
+export function descriptorBlock(blockKey, cls, items, prefix = null) {
+  const d = new Buf();
+  if (prefix) prefix(d);
+  d.u32(16);
+  descriptor(d, cls, items);
+  return keyedBlock(blockKey, d.bytes());
+}
+
+/** '8BIM' + 키 + 길이(짝수로 채움) + 데이터 */
+export function keyedBlock(blockKey, data) {
+  const out = new Buf();
+  out.ascii('8BIM'); out.ascii(blockKey);
+  const pad = data.length % 2;
+  out.u32(data.length + pad);
+  out.push(data);
+  if (pad) out.u8(0);
+  return out.bytes();
 }
 
 /** 글자 레이어 meta → TySh 블록 바이트 ('8BIM' 'TySh' 길이 포함) */

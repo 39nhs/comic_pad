@@ -3,9 +3,12 @@
 //  - 비트 깊이: 1 / 8 / 16 / 32  (모두 8비트 RGB 로 변환)
 //  - 압축: 무압축 / RLE / ZIP / ZIP+예측
 //  - 레이어 이름·불투명도·합성 모드·클리핑·숨김·투명 잠금, 폴더, 레이어 마스크
+//  - 레이어 효과(그림자·획·외부 광선 → ComicPad 레이어 효과), 그라데이션 맵·색상 균형·자연 채도 조정 레이어
+//  - 단색 칠/셰이프 레이어: 그림이 비어 있으면 벡터 마스크·선 설정으로 다시 그림
 //  - 텍스트 레이어: 그림은 그대로 두고 글자 내용/크기/색/글꼴을 meta.psdText 에 보관 → 텍스트 도구로 탭하면 편집 가능한 텍스트로 변환
 import { Doc, Layer } from './doc.js';
 import { createCanvas, uid } from './util.js';
+import { readVectorPaths, pathsToPath2D } from './psdvector.js';
 
 const BLEND = {
   norm: 'source-over', pass: 'source-over', 'mul ': 'multiply', scrn: 'screen', over: 'overlay', dark: 'darken', lite: 'lighten',
@@ -196,6 +199,76 @@ function readItem(r, t) {
   }
 }
 
+/** 설명자 속 색(RGBC·Grsc·HSBC·CMYC, 새 형식 redFloat 등) → '#rrggbb' */
+function descColor(c) {
+  if (!c) return '#000000';
+  const hx = (v) => Math.max(0, Math.min(255, Math.round(v))).toString(16).padStart(2, '0');
+  let r = 0, g = 0, b = 0;
+  if ('Rd' in c || 'Grn' in c) { r = c.Rd ?? 0; g = c.Grn ?? 0; b = c.Bl ?? 0; }
+  else if ('redFloat' in c) { r = c.redFloat * 255; g = c.greenFloat * 255; b = c.blueFloat * 255; }
+  else if ('Gry' in c) { r = g = b = 255 - (c.Gry ?? 0) * 2.55; }
+  else if ('H' in c) {
+    const h = ((c.H ?? 0) % 360) / 60, s2 = (c.Strt ?? 0) / 100, v = (c.Brgh ?? 0) / 100, i = Math.floor(h), f = h - i;
+    const p2 = v * (1 - s2), q = v * (1 - s2 * f), t = v * (1 - s2 * (1 - f));
+    [r, g, b] = [[v, t, p2], [q, v, p2], [p2, v, t], [p2, q, v], [t, p2, v], [v, p2, q]][i % 6].map(x => x * 255);
+  } else if ('Cyn' in c) {
+    const k = 1 - (c.Blck ?? 0) / 100;
+    r = 255 * (1 - (c.Cyn ?? 0) / 100) * k; g = 255 * (1 - (c.Mgnt ?? 0) / 100) * k; b = 255 * (1 - (c.Ylw ?? 0) / 100) * k;
+  }
+  return '#' + hx(r) + hx(g) + hx(b);
+}
+
+/** 레이어 효과 설명자(lfx2 / lmfx) → ComicPad fx { shadow, stroke, glow } */
+function readEffects(d, globalAngle) {
+  if (!d || d.masterFXSwitch === false) return null;
+  const k = (d.Scl ?? 100) / 100;
+  const pick = (one, many) => {
+    const list = Array.isArray(d[many]) ? d[many] : (d[one] ? [d[one]] : []);
+    return list.find(e => e && e.enab !== false) || null;
+  };
+  const fx = {};
+  const ds = pick('DrSh', 'dropShadowMulti');
+  if (ds) {
+    const ang = ((ds.uglg !== false && globalAngle != null) ? globalAngle : (ds.lagl ?? 120)) * Math.PI / 180;
+    const dist = (ds.Dstn ?? 5) * k;
+    fx.shadow = { on: true, dx: Math.round(-Math.cos(ang) * dist), dy: Math.round(Math.sin(ang) * dist), blur: Math.round((ds.blur ?? 5) * k), color: descColor(ds['Clr']), opacity: Math.max(0, Math.min(1, (ds.Opct ?? 75) / 100)) };
+  }
+  const st = pick('FrFX', 'frameFXMulti');
+  if (st) {
+    const size = (st.Sz ?? 3) * k;
+    // ComicPad 획은 바깥쪽만: 안쪽·가운데 획은 바깥 굵기로 근사
+    const pos = st.Styl;
+    fx.stroke = { on: true, size: Math.max(1, Math.round(pos === 'InsF' ? size / 2 : pos === 'CtrF' ? size / 2 : size)), color: descColor(st['Clr']) };
+  }
+  const og = pick('OrGl', 'outerGlowMulti');
+  if (og) fx.glow = { on: true, size: Math.round((og.blur ?? 10) * k), color: descColor(og['Clr']), opacity: Math.max(0, Math.min(1, (og.Opct ?? 75) / 100)) };
+  return Object.keys(fx).length ? fx : null;
+}
+
+/** 예전 형식 레이어 효과(lrFX): 그림자·외부 광선만 (lfx2 가 없을 때) */
+function readLegacyEffects(r, end) {
+  const fx = {};
+  r.u16();
+  const n = r.u16();
+  const fixed = (v) => (v > 65535 ? v / 65536 : v);
+  const color = () => { r.u16(); const c = [r.u16(), r.u16(), r.u16()]; r.u16(); return '#' + c.map(v => (v >> 8).toString(16).padStart(2, '0')).join(''); };
+  for (let i = 0; i < n && r.o + 12 <= end; i++) {
+    if (r.str(4) !== '8BIM') break;
+    const key = r.str(4), size = r.u32(), start = r.o;
+    if (key === 'dsdw') {
+      r.u32(); const blur = fixed(r.u32()); r.u32(); const ang = r.i32(), dist = r.i32();
+      const c = color(); r.skip(8); const on = r.u8(); r.u8(); const op = r.u8();
+      if (on) fx.shadow = { on: true, dx: Math.round(-Math.cos(ang * Math.PI / 180) * dist), dy: Math.round(Math.sin(ang * Math.PI / 180) * dist), blur: Math.round(blur), color: c, opacity: op / 255 };
+    } else if (key === 'oglw') {
+      r.u32(); const blur = fixed(r.u32()); r.u32();
+      const c = color(); r.skip(8); const on = r.u8(); const op = r.u8();
+      if (on) fx.glow = { on: true, size: Math.round(blur), color: c, opacity: op / 255 };
+    }
+    r.o = start + size;
+  }
+  return Object.keys(fx).length ? fx : null;
+}
+
 function decodePSString(s) {
   // EngineData 안의 (þÿ....) UTF-16BE 문자열
   s = s.replace(/\\(.)/g, '$1');
@@ -266,7 +339,13 @@ async function readLayerInfo(r, c) {
         if (key === 'luni') { const n = r.u32(); let s = ''; for (let k = 0; k < n; k++) s += String.fromCharCode(r.u16()); rec.name = s.replace(/\0+$/, ''); }
         else if (key === 'lsct' || key === 'lsdk') rec.section = r.u32();
         else if (key === 'TySh') rec.text = parseTySh(r.bytes(len));
-        else if (['SoCo', 'GdFl', 'PtFl', 'brit', 'levl', 'curv', 'expA', 'vibA', 'hue ', 'hue2', 'blnc', 'blwh', 'phfl', 'mixr', 'clrL', 'nvrt', 'post', 'thrs', 'selc', 'grdm'].includes(key)) {
+        else if (key === 'lfx2' || key === 'lmfx') { r.u32(); r.u32(); rec.fx = readEffects(readDescriptor(r), c.globalAngle); rec.hasLfx2 = true; }
+        else if (key === 'lrFX') rec.fxLegacy = readLegacyEffects(r, dStart + len);
+        else if (key === 'vmsk' || key === 'vsms') rec.vpaths = readVectorPaths(r.bytes(len), c.W, c.H);
+        else if (key === 'vstk') { r.u32(); rec.vstroke = readDescriptor(r); }
+        else if (key === 'SoCo') { r.u32(); rec.fillColor = descColor(readDescriptor(r)['Clr']); rec.fillLayer = 'SoCo'; }
+        else if (key === 'GdFl' || key === 'PtFl') rec.fillLayer = key;
+        else if (['brit', 'levl', 'curv', 'expA', 'vibA', 'hue ', 'hue2', 'blnc', 'blwh', 'phfl', 'mixr', 'clrL', 'nvrt', 'post', 'thrs', 'selc', 'grdm'].includes(key)) {
           rec.adjust = key;
           rec.adj = readAdjust(key, new Reader(r.u8a.slice(r.o, r.o + len).buffer));
         }
@@ -274,6 +353,7 @@ async function readLayerInfo(r, c) {
       r.o = dStart + len + (len % 2);
     }
     r.o = exEnd;
+    if (!rec.hasLfx2 && rec.fxLegacy) rec.fx = rec.fxLegacy;   // 새 형식(lfx2)이 있으면 그것만 믿음
     recs.push(rec);
   }
   for (const rec of recs) {
@@ -317,6 +397,36 @@ export function readAdjust(key, r) {
       }
       return { type: 'curves', params: p };
     }
+    if (key === 'blnc') {
+      // 어두운 곳·중간·밝은 곳 × (청록-빨강, 자홍-초록, 노랑-파랑)
+      const v = Array.from({ length: 9 }, () => Math.max(-100, Math.min(100, r.i16())));
+      return { type: 'balance', params: { sr: v[0], sg: v[1], sb: v[2], mr: v[3], mg: v[4], mb: v[5], hr: v[6], hg: v[7], hb: v[8] } };
+    }
+    if (key === 'grdm') {
+      const ver = r.u16();
+      if (ver !== 1 && ver !== 3) return null;
+      const reversed = !!r.u8(); r.u8();
+      if (ver === 3) r.skip(4);                                     // 보간 방식
+      r.skip(r.u32() * 2);                                          // 이름 (유니코드)
+      const n = r.u16(), stops = [];
+      for (let i = 0; i < n; i++) {
+        const loc = r.u32(); r.u32();                               // 위치(0~4096), 중간점
+        const space = r.u16(), c1 = r.u16(), c2 = r.u16(), c3 = r.u16(); r.u16();
+        r.skip(2);
+        let rgb = [c1, c2, c3].map(x => x >> 8);
+        if (space === 8) rgb = [c1, c1, c1].map(x => 255 - Math.round(x / 10000 * 255));   // 흑백(0~10000)
+        const pos = Math.max(0, Math.min(1, loc / 4096));
+        stops.push({ pos: reversed ? 1 - pos : pos, color: '#' + rgb.map(x => Math.max(0, Math.min(255, x)).toString(16).padStart(2, '0')).join('') });
+      }
+      if (stops.length < 2) return null;
+      stops.sort((a, b) => a.pos - b.pos);
+      return { type: 'gradmap', params: { stops } };
+    }
+    if (key === 'vibA') {
+      r.u32();
+      const d = readDescriptor(r);
+      return { type: 'vibrance', params: { v: Math.max(-100, Math.min(100, d.vibrance ?? 0)) } };
+    }
     if (key === 'hue2' || key === 'hue ') {
       r.u16(); r.u8(); r.u8();                                     // 버전, 단색 입히기 여부, 채움
       r.i16(); r.i16(); r.i16();                                   // 단색 입히기 값
@@ -325,6 +435,40 @@ export function readAdjust(key, r) {
     }
   } catch (e) { console.warn('PSD 조정 레이어 읽기 실패', key, e); }
   return null;
+}
+
+function hasPixels(cv) {
+  if (!cv || !cv.width || !cv.height) return false;
+  const d = cv.getContext('2d').getImageData(0, 0, cv.width, cv.height).data;
+  for (let i = 3; i < d.length; i += 4) if (d[i]) return true;
+  return false;
+}
+
+/** 단색 칠 + 벡터 마스크 + 선(vstk) → 그림 */
+function drawFillLayer(ctx, rec, W, H) {
+  const st = rec.vstroke || {};
+  const path = rec.vpaths?.length ? pathsToPath2D(rec.vpaths) : null;
+  const rule = rec.vpaths?.some(p => p.op === 2 || p.op === 0) ? 'evenodd' : 'nonzero';
+  ctx.save();
+  if (st.fillEnabled !== false) {
+    ctx.fillStyle = rec.fillColor || '#000';
+    if (path) ctx.fill(path, rule); else ctx.fillRect(0, 0, W, H);
+  }
+  if (path && st.strokeEnabled) {
+    const w = st.strokeStyleLineWidth || 1;
+    ctx.strokeStyle = descColor(st.strokeStyleContent?.['Clr']);
+    ctx.lineJoin = { strokeStyleRoundJoin: 'round', strokeStyleBevelJoin: 'bevel' }[st.strokeStyleLineJoinType] || 'miter';
+    const align = st.strokeStyleLineAlignment;
+    if (align === 'strokeStyleAlignInside' || align === 'strokeStyleAlignOutside') {
+      // 안쪽/바깥쪽 선: 2배 굵기로 그리고 모양 안/밖으로 잘라 냄
+      const t = createCanvas(W, H), tx = t.getContext('2d');
+      tx.lineJoin = ctx.lineJoin; tx.strokeStyle = ctx.strokeStyle; tx.lineWidth = w * 2; tx.stroke(path);
+      tx.globalCompositeOperation = align === 'strokeStyleAlignInside' ? 'destination-in' : 'destination-out';
+      tx.fill(path, rule);
+      ctx.drawImage(t, 0, 0);
+    } else { ctx.lineWidth = w; ctx.stroke(path); }
+  }
+  ctx.restore();
 }
 
 // ---- 메인 --------------------------------------------------------------------
@@ -342,7 +486,19 @@ export async function readPSD(buffer, name = 'PSD') {
   const cmLen = r.u32();
   if (mode === 2 && cmLen >= 768) c.palette = r.bytes(768).slice();
   else r.skip(cmLen);
-  r.skip(r.u32());   // image resources
+  {
+    // 이미지 리소스: 전체 조명 각도(1037, 그림자 방향에 씀)
+    const irLen = r.u32(), irEnd = r.o + irLen;
+    while (r.o + 12 <= irEnd) {
+      if (r.str(4) !== '8BIM') break;
+      const id = r.u16();
+      const nl = r.u8(); r.skip(nl + ((nl + 1) % 2));
+      const size = r.u32(), start = r.o;
+      if (id === 1037 && size >= 4) c.globalAngle = r.i32();
+      r.o = start + size + (size % 2);
+    }
+    r.o = irEnd;
+  }
 
   const lmLen = c.psb ? r.u64() : r.u32(), lmEnd = r.o + lmLen;
   let recs = [];
@@ -384,13 +540,19 @@ export async function readPSD(buffer, name = 'PSD') {
       doc.layers.push(new Layer(doc, { name: rec.name || '조정', kind: 'adjust', parent, visible: rec.visible, opacity: rec.opacity, clip: rec.clip, meta: { type: rec.adj.type, params: rec.adj.params } }));
       continue;
     }
-    if (rec.adjust) notes.add('일부 조정 레이어(그라데이션 맵·색상 균형 등)는 효과 없이 빈 레이어로 들어왔습니다');
+    if (rec.adjust) notes.add('일부 조정 레이어(선택 색상·채널 혼합 등)는 효과 없이 빈 레이어로 들어왔습니다');
     const l = new Layer(doc, {
       name: rec.name || '레이어', parent, visible: rec.visible, opacity: rec.opacity,
       blend: BLEND[rec.blend] || 'source-over', clip: rec.clip, alphaLock: rec.alphaLock,
-      meta: rec.text ? { psdText: rec.text } : null,
+      meta: rec.text ? { psdText: rec.text } : null, fx: rec.fx || null,
     });
+    if (rec.fx) notes.add('레이어 효과(그림자·획·외부 광선)는 ComicPad 레이어 효과로 들어왔습니다 (그 밖의 효과는 빠짐)');
     if (rec.canvas) l.ctx.drawImage(rec.canvas, rec.left, rec.top);
+    // 단색 칠/셰이프 레이어인데 그림이 비어 있으면 벡터 마스크·선 설정으로 직접 그림
+    if (rec.fillLayer && !hasPixels(rec.canvas)) {
+      if (rec.fillLayer === 'SoCo') { drawFillLayer(l.ctx, rec, W, H); notes.add('단색 칠·셰이프 레이어는 그림 레이어로 들어왔습니다'); }
+      else notes.add('그라데이션·패턴 칠 레이어는 빈 레이어로 들어왔습니다');
+    }
     if (rec.maskData) {
       const m = rec.mask, mw = m.right - m.left, mh = m.bottom - m.top;
       const mk = createCanvas(W, H), mx = mk.getContext('2d');

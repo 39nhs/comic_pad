@@ -7,8 +7,8 @@ import { retargetPoints } from '../three/bvh.js';
 
 let visionP = null;
 const vision = () => (visionP ||= (async () => {
-  const v = await import('/vendor/ai/mediapipe/vision_bundle.mjs');
-  const files = await v.FilesetResolver.forVisionTasks(new URL('/vendor/ai/mediapipe/wasm', location.href).href);
+  const v = await import(new URL('../../vendor/ai/mediapipe/vision_bundle.mjs', import.meta.url).href);
+  const files = await v.FilesetResolver.forVisionTasks(new URL(new URL('../../vendor/ai/mediapipe/wasm', import.meta.url).href, location.href).href);
   return { v, files };
 })());
 

@@ -17,7 +17,7 @@ export const FREQUENT = {
   filter: ['filter.lineExtract', 'filter.lineClean', 'filter.mono', 'filter.blur', 'filter.outline', 'filter.shadow', 'ai.img2img', 'pixel.quantize'],
   view: ['view.fit', 'view.actual', 'view.zoomIn', 'view.zoomOut', 'view.rotL', 'view.rotR', 'view.resetRotation', 'view.flip', 'view.luma', 'view.toggleUI', 'view.fullscreen', 'workspace.manage', 'ui.customize', 'ui.mode', 'pixel.grid'],
   ai: ['ai.lineart', 'ai.cutout', 'ai.select', 'ai.depth', 'ai.upscale', 'ai.pose', 'filter.lineClean', 'ai.img2img', 'ai.setup', 'ai.models', 'vt.studio', 'vt.setup'],
-  help: ['settings.open', 'help.manual', 'setup.choose', 'palette.open', 'help.features', 'help.keys', 'pen.diagnose', 'mobile.connect', 'selftest.run', 'help.update', 'help.about'],
+  help: ['settings.open', 'help.manual', 'setup.choose', 'palette.open', 'help.features', 'help.keys', 'pen.diagnose', 'mobile.connect', 'selftest.run', 'help.update', 'help.report', 'help.about'],
 };
 
 export const ui = () => (app.settings.ui ||= { mode: 'simple' });

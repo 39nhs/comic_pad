@@ -1,7 +1,7 @@
 // AI 계산 전용 작업자 (화면이 멈추지 않게 따로 돈다). WebGPU 가 되면 그래픽으로, 아니면 CPU 로.
 let ortP = null;
-const ort = () => (ortP ||= import('/vendor/ai/ort/ort.all.min.mjs').then((o) => {
-  o.env.wasm.wasmPaths = new URL('/vendor/ai/ort/', self.location.href).href;
+const ort = () => (ortP ||= import(new URL('../../vendor/ai/ort/ort.all.min.mjs', import.meta.url).href).then((o) => {
+  o.env.wasm.wasmPaths = new URL(new URL('../../vendor/ai/ort/', import.meta.url).href, self.location.href).href;
   o.env.wasm.numThreads = 1;
   o.env.logLevel = 'error';
   return o;

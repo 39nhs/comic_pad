@@ -59,6 +59,10 @@ export async function updateDialog(pre = null) {
         info.notes ? h('pre.update-notes', null, info.notes) : null,
         info.available && info.launcher ? h('div.help', null, '창 프로그램(ComicPad.exe)도 바뀝니다. 적용 후 ComicPad 를 완전히 껐다 켜야 그 부분이 반영됩니다.') : null,
       ) : null,
+      st.rollback ? section('되돌리기',
+        h('div.help', null, `지금 ${st.rollback.from} 에 문제가 있으면 업데이트 전 ${st.rollback.to} 로 되돌릴 수 있습니다. 작업물(data)은 그대로이고, 되돌린 버전은 자동 알림에서 빠집니다.`),
+        row(h('button.btn', { type: 'button', disabled: busy, onclick: rollback }, `${st.rollback.to} 로 되돌리기`)),
+      ) : null,
       status,
       row(
         h('button.btn', { type: 'button', disabled: busy, onclick: check }, '지금 확인'),
@@ -72,10 +76,16 @@ export async function updateDialog(pre = null) {
     try { info = await post('/api/update/check'); status.textContent = ''; } catch (e) { status.textContent = '⚠ ' + e.message; }
     busy = false; render();
   }
-  async function install() {
+  async function rollback() {
+    const ok = await confirmDialog(`${st.rollback.to} 로 되돌릴까요? 프로그램 파일만 바뀌고 작업물은 그대로입니다.`, '되돌리기');
+    if (!ok) return;
+    await run('/api/update/rollback');
+  }
+  async function install() { await run('/api/update/install'); }
+  async function run(endpoint) {
     busy = true; render();
     try {
-      await post('/api/update/install');
+      await post(endpoint);
       for (;;) {
         await sleep(400);
         const s = await api('/api/update');
@@ -83,9 +93,11 @@ export async function updateDialog(pre = null) {
         else if (s.state === 'apply') status.textContent = `적용하는 중… ${s.total ? `${s.done}/${s.total}` : ''}`;
         else if (s.state === 'error') throw new Error(s.error);
         else if (s.state === 'done') {
-          status.textContent = `${s.applied.from} → ${s.applied.to} 적용 완료 (파일 ${s.applied.files}개). 이전 판은 data/updates 에 남겨 두었습니다.`
-            + (s.applied.launcher ? ' 창 프로그램 변경은 ComicPad 를 완전히 껐다 켜면 반영됩니다.' : '');
-          busy = false; info = null; render();
+          status.textContent = s.applied.rollback
+            ? `${s.applied.from} → ${s.applied.to} 로 되돌렸습니다 (파일 ${s.applied.files}개). ComicPad 를 다시 시작한 뒤, 창 프로그램까지 맞추려면 완전히 껐다 켜 주세요.`
+            : `${s.applied.from} → ${s.applied.to} 적용 완료 (파일 ${s.applied.files}개). 이전 판은 data/updates 에 남겨 두었습니다.`
+              + (s.applied.launcher ? ' 창 프로그램 변경은 ComicPad 를 완전히 껐다 켜면 반영됩니다.' : '');
+          busy = false; info = null; st = await api('/api/update'); st.rollback = null; render();
           body.append(row(h('button.btn.primary', { type: 'button', onclick: () => restartNow(s.applied.to) }, '지금 다시 시작')));
           return;
         }
@@ -97,6 +109,25 @@ export async function updateDialog(pre = null) {
   openModal({ title: '업데이트', body, actions: [{ label: '닫기', primary: true }], onClose: () => { closed = true; } });
 }
 
+/** 업데이트 뒤 처음 켤 때 한 번: 바뀐 점 */
+async function whatsNew() {
+  if (!server.http) return;
+  let st;
+  try { st = await api('/api/update'); } catch { return; }
+  const j = st.conf.just;
+  if (!j || !j.to || j.to !== st.current) return;
+  post('/api/update/seen').catch(() => {});
+  openModal({
+    title: `ComicPad ${j.to} 로 업데이트되었습니다`,
+    body: h('div.update', null,
+      h('p', null, `${j.from} → ${j.to}`),
+      j.notes ? h('pre.update-notes', null, j.notes) : h('p.help', null, '바뀐 점 설명이 없습니다.'),
+      h('div.help', null, '문제가 있으면 도움말 > 업데이트 확인 에서 이전 버전으로 되돌릴 수 있습니다.'),
+    ),
+    actions: [{ label: '되돌리기…', run: () => updateDialog() }, { label: '확인', primary: true }],
+  });
+}
+
 /** 켤 때 하루 한 번 조용히 확인 */
 async function autoCheck() {
   if (!server.http) return;
@@ -106,12 +137,13 @@ async function autoCheck() {
   if (Date.now() / 1000 - (st.conf.checked || 0) < 20 * 3600) return;
   let info;
   try { info = await post('/api/update/check'); } catch { return; }   // 인터넷 없음·릴리스 없음 → 조용히
-  if (!info.available) return;
+  if (!info.available || info.latest === st.conf.skip) return;
   app.toast(`ComicPad 새 버전 ${info.latest} 이 나왔습니다`, 'info', { duration: 0, actions: [{ label: '업데이트', run: () => updateDialog(info) }] });
 }
 
 export function initUpdate() {
   app.registerCommand('help.update', { label: '업데이트 확인…', run: () => updateDialog() });
   app.addMenuItem('help', { command: 'help.update' });
+  setTimeout(whatsNew, 2500);
   setTimeout(autoCheck, 8000);
 }
