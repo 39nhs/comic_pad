@@ -1,6 +1,6 @@
 // 캔버스 아래쪽에 뜨는 작업 막대 (선택 메뉴, 변형 확정 등)
 import { app } from '../app.js';
-import { h } from '../core/util.js';
+import { h, setHTML, esc } from '../core/util.js';
 import { icon } from './icons.js';
 
 const bars = new Map();
@@ -22,7 +22,7 @@ export function showBar(id, items) {
   for (const it of items) {
     if (it.sep) { bar.append(h('span.actbar-sep')); continue; }
     const b = h(`button.actbtn${it.cls ? '.' + it.cls : ''}`, { type: 'button', title: it.label });
-    b.innerHTML = `${it.icon ? icon(it.icon, 20) : ''}<span>${it.label}</span>`;
+    setHTML(b, `${it.icon ? icon(it.icon, 20) : ''}<span>${esc(it.label)}</span>`);
     b.addEventListener('click', (e) => { e.stopPropagation(); it.run(); });
     bar.append(b);
   }

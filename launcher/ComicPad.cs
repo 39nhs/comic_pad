@@ -134,14 +134,28 @@ static class Program
     public static bool IsLocal(string uri)
     {
         Uri u;
-        if (!Uri.TryCreate(uri, UriKind.Absolute, out u)) return true;
-        if (u.Scheme == "about" || u.Scheme == "blob" || u.Scheme == "data") return true;
-        return (u.Host == "127.0.0.1" || u.Host == "localhost") && u.Port == Port;
+        if (!Uri.TryCreate(uri, UriKind.Absolute, out u)) return false;
+        if (u.Scheme == "about" || u.Scheme == "data") return true;          // 빈 창, 내보내기 파일
+        if (u.Scheme == "blob") return IsApp(uri.Substring(5));            // blob:http://127.0.0.1:8787/... (이 앱이 만든 것만)
+        return IsApp(uri);
+    }
+
+    // 이 PC 의 ComicPad 화면 (http://127.0.0.1:포트 또는 localhost:포트) 인가
+    public static bool IsApp(string uri)
+    {
+        Uri u;
+        if (!Uri.TryCreate(uri, UriKind.Absolute, out u)) return false;
+        return u.Scheme == "http" && (u.Host == "127.0.0.1" || u.Host == "localhost") && u.Port == Port;
     }
 
     public static void OpenOutside(string uri)
     {
-        try { Process.Start(new ProcessStartInfo(uri) { UseShellExecute = true }); } catch { }
+        // 웹 주소(https/http)와 메일 주소만 기본 브라우저로. file:, 다른 프로그램을 여는 주소 등은 열지 않음 (프로그램 실행 방지)
+        Uri u;
+        if (!Uri.TryCreate(uri, UriKind.Absolute, out u)) return;
+        if (u.Scheme != Uri.UriSchemeHttps && u.Scheme != Uri.UriSchemeHttp && u.Scheme != Uri.UriSchemeMailto) return;
+        if (u.IsUnc || u.IsFile) return;
+        try { Process.Start(new ProcessStartInfo(u.AbsoluteUri) { UseShellExecute = true }); } catch { }
     }
 
     /** WebView2 가 없을 때 (예전 Windows 10): Edge 앱 창으로 대신 */
@@ -256,7 +270,8 @@ class AppWindow : Form
         c.PermissionRequested += (s, e) =>
         {
             // 이 PC 의 ComicPad 화면이 묻는 권한(클립보드·소리 등)은 허용
-            if (Program.IsLocal(e.Uri) && e.PermissionKind != CoreWebView2PermissionKind.Geolocation) e.State = CoreWebView2PermissionState.Allow;
+            // (data:/blob: 처럼 출처가 다른 화면에는 주지 않음)
+            if ((Program.IsApp(e.Uri) || e.Uri == "about:blank") && e.PermissionKind != CoreWebView2PermissionKind.Geolocation) e.State = CoreWebView2PermissionState.Allow;
         };
         if (pending != null)
         {

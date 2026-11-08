@@ -63,7 +63,7 @@ export async function updateDialog(pre = null) {
       row(
         h('button.btn', { type: 'button', disabled: busy, onclick: check }, '지금 확인'),
         info?.available ? h('button.btn.primary', { type: 'button', disabled: busy, onclick: install }, '받아서 적용') : null,
-        info?.page ? h('button.btn', { type: 'button', onclick: () => window.open(info.page, '_blank') }, '릴리스 페이지') : null,
+        /^https:\/\/github\.com\//.test(info?.page || '') ? h('button.btn', { type: 'button', onclick: () => window.open(info.page, '_blank') }, '릴리스 페이지') : null,
       ),
     ].filter(Boolean));
   };

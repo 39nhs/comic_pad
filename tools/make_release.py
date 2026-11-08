@@ -133,7 +133,8 @@ def cmd_build(args):
     with open(key_path, encoding="utf-8") as f:
         key = json.load(f)
     with open(args.pub or PUB_PATH, encoding="utf-8") as f:
-        if json.load(f)["n"] != key["n"]:
+        pubs = json.load(f)
+        if key["n"] not in [k["n"] for k in (pubs.get("keys") or [pubs])]:
             sys.exit("release_pubkey.json 과 비밀키가 짝이 아닙니다")
     # 앱 파일 목록(오프라인 캐시) 갱신
     subprocess.run([sys.executable, os.path.join(ROOT, "server.py"), "--precache-only"], check=True, cwd=ROOT)
@@ -163,8 +164,10 @@ def cmd_build(args):
             elif fn in ("server.py", "VERSION", "release_pubkey.json"):
                 sys.exit(f"{fn} 이 없습니다")
     exe = os.path.join(ROOT, "ComicPad.exe")
-    man = {"version": version, "file": zname, "size": os.path.getsize(zpath), "sha256": sha256_file(zpath),
+    import datetime
+    man = {"product": "ComicPad", "version": version, "file": zname, "size": os.path.getsize(zpath), "sha256": sha256_file(zpath),
            "exe_sha256": sha256_file(exe) if os.path.exists(exe) else "", "notes": args.notes or "",
+           "date": datetime.datetime.now(datetime.timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ"),
            "models": bool(args.with_models)}
     man_bytes = json.dumps(man, ensure_ascii=False, indent=1).encode("utf-8")
     with open(os.path.join(out, "update.json"), "wb") as f:

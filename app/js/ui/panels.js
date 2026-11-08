@@ -1,6 +1,6 @@
 // 도구막대, 도킹 패널(도구 속성/색/레이어/에셋), 메뉴바, 상태바
 import { app } from '../app.js';
-import { h, hsvToRgb, rgbToHsv, hexToRgb, rgbToHex, clamp, throttleRAF } from '../core/util.js';
+import { h, setHTML, esc, hsvToRgb, rgbToHsv, hexToRgb, rgbToHex, clamp, throttleRAF } from '../core/util.js';
 import { icon } from './icons.js';
 import { slider, toggle, select, syncAll, button, row, section } from './controls.js';
 import * as ops from '../core/ops.js';
@@ -25,7 +25,7 @@ export function initToolbar() {
     for (const id of ids) {
       const t = app.tools.get(id);
       const b = h('button.tool-btn', { type: 'button', title: `${t.name}${t.key ? ` (${t.key.toUpperCase()})` : ''}`, 'data-tool': id });
-      b.innerHTML = icon(t.icon, 24);
+      setHTML(b, icon(t.icon, 24));
       b.addEventListener('click', () => {
         if (app.toolId === id) document.body.classList.remove('no-side');
         app.setTool(id);
@@ -100,7 +100,7 @@ export function initDocks() {
         const list = [...app.panels.values()].filter(p => p.dock === name && panelShown(p.id) && !p.popped);
         for (const p of list) {
           const b = h('button', { type: 'button', 'data-id': p.id });
-          b.innerHTML = `${icon(p.icon || 'dots', 16)}<span>${p.title}</span>`;
+          setHTML(b, `${icon(p.icon || 'dots', 16)}<span>${esc(p.title)}</span>`);
           b.onclick = () => dock.select(p.id);
           tabs.append(b);
         }
@@ -142,7 +142,7 @@ export function toolPropsPanel(el) {
   const render = () => {
     const t = app.tool;
     body.innerHTML = '';
-    head.innerHTML = t ? `${icon(t.icon, 18)}<b>${t.name}</b>` : '';
+    setHTML(head, t ? `${icon(t.icon, 18)}<b>${esc(t.name)}</b>` : '');
     if (t?.options) {
       try { t.options(body); } catch (e) { console.error(e); body.append(h('div.help', null, '옵션 표시 오류: ' + e.message)); }
     } else body.append(h('div.help', null, '설정할 옵션이 없습니다.'));

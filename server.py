@@ -168,6 +168,15 @@ def lan_key():
     return k
 
 
+_LAN_IPS = {"t": 0, "ips": []}
+
+
+def lan_ips_cached():
+    if time.time() - _LAN_IPS["t"] > 60:
+        _LAN_IPS.update(t=time.time(), ips=lan_ips())
+    return _LAN_IPS["ips"]
+
+
 def lan_ips():
     ips = []
     try:
@@ -511,13 +520,24 @@ def update_conf():
     return {"auto": u.get("auto", True), "repo": u.get("repo") or UPDATE_REPO, "checked": u.get("checked", 0)}
 
 
-def release_pubkey():
+def release_pubkeys():
+    """믿는 공개키 목록. 키를 바꿀 때는 옛 키로 서명한 업데이트에 새 키를 함께 넣어 보낸다 ("keys" 에 여러 개)."""
     try:
         with open(os.path.join(ROOT, "release_pubkey.json"), encoding="utf-8") as f:
             k = json.load(f)
-        return int(k["n"], 16), int(k["e"])
-    except (OSError, ValueError, KeyError):
-        return None
+        keys = k.get("keys") or [k]
+        return [(int(x["n"], 16), int(x["e"])) for x in keys if int(x["n"], 16).bit_length() >= 3072]
+    except (OSError, ValueError, KeyError, TypeError, AttributeError):
+        return []
+
+
+def release_pubkey():
+    keys = release_pubkeys()
+    return keys[0] if keys else None
+
+
+def verify_any(data, sig):
+    return any(rsa_verify(data, sig, n, e) for n, e in release_pubkeys())
 
 
 def rsa_verify(data, sig, n, e):
@@ -547,10 +567,22 @@ def exe_changed(man):
     return h.hexdigest() != want
 
 
-def gh_get(url, timeout=20):
+UPDATE_MAX = 600 * 1000 * 1000      # 업데이트 꾸러미 최대 크기
+
+
+def _https_only(r):
+    if UPDATE_API == "https://api.github.com" and not r.geturl().startswith("https://"):
+        raise ValueError("업데이트 주소가 https 가 아니어서 받지 않습니다")
+
+
+def gh_get(url, timeout=20, limit=2 * 1000 * 1000):
     req = urllib.request.Request(url, headers={"User-Agent": "ComicPad-Updater", "Accept": "application/vnd.github+json"})
     with urllib.request.urlopen(req, timeout=timeout) as r:
-        return r.read()
+        _https_only(r)
+        data = r.read(limit + 1)
+    if len(data) > limit:
+        raise ValueError("응답이 너무 큽니다")
+    return data
 
 
 def update_check():
@@ -578,15 +610,21 @@ def update_check():
         sig = bytes.fromhex(sig_text)
     except ValueError:
         sig = b""
-    if not rsa_verify(man_bytes, sig, *pub):
+    if not verify_any(man_bytes, sig):
         raise ValueError("업데이트 서명이 맞지 않아 받지 않습니다 (만든 사람이 올린 파일이 아닐 수 있음)")
     man = json.loads(man_bytes)
-    if man.get("file") not in assets or not re.fullmatch(r"[0-9a-f]{64}", str(man.get("sha256", ""))):
+    # 서명된 내용 확인: 이 프로그램용인지, 파일 이름·크기·해시 형식
+    if man.get("product") not in (None, "ComicPad"):
+        raise ValueError("다른 프로그램용 업데이트입니다")
+    if man.get("file") not in assets or not re.fullmatch(r"ComicPad_update_[\w.-]+\.zip", str(man.get("file"))) \
+            or not re.fullmatch(r"[0-9a-f]{64}", str(man.get("sha256", ""))) \
+            or not (0 < int(man.get("size") or 0) <= UPDATE_MAX) or not re.fullmatch(r"\d+\.\d+\.\d+", str(man.get("version", ""))):
         raise ValueError("업데이트 정보가 올바르지 않습니다")
     cur = app_version()
     info = {"current": cur, "latest": str(man["version"]), "available": vtuple(man["version"]) > vtuple(cur),
-            "size": int(man.get("size") or 0), "notes": str(man.get("notes") or rel.get("body") or "").strip()[:4000],
-            "page": rel.get("html_url", ""), "date": rel.get("published_at", ""), "launcher": exe_changed(man)}
+            "size": int(man["size"]), "notes": str(man.get("notes") or "").strip()[:4000],
+            "page": f"https://github.com/{repo}/releases/tag/v{man['version']}", "date": str(man.get("date") or ""),
+            "launcher": exe_changed(man)}
     UPDATE_STATE.update(info=info, _man=man, _url=assets[man["file"]])
     conf = read_conf()
     u = conf.get("update") or {}
@@ -644,17 +682,20 @@ def update_install():
         req = urllib.request.Request(url, headers={"User-Agent": "ComicPad-Updater"})
         try:
             with urllib.request.urlopen(req, timeout=60) as r, open(zpath + ".part", "wb") as f:
-                st["total"] = int(r.headers.get("Content-Length") or st["total"])
+                _https_only(r)
+                st["total"] = int(man["size"])
                 while True:
                     b = r.read(1 << 18)
                     if not b:
                         break
+                    st["done"] += len(b)
+                    if st["done"] > int(man["size"]):      # 서명된 크기보다 크면 바로 중단
+                        raise ValueError("받는 파일이 예상보다 커서 중단했습니다")
                     f.write(b)
                     h.update(b)
-                    st["done"] += len(b)
         except OSError as e:
             raise ValueError(f"업데이트를 받지 못했습니다 ({e})")
-        if h.hexdigest() != man["sha256"]:
+        if st["done"] != int(man["size"]) or h.hexdigest() != man["sha256"]:
             os.remove(zpath + ".part")
             raise ValueError("받은 파일이 손상되었습니다 (SHA-256 이 다름). 다시 시도하세요")
         os.replace(zpath + ".part", zpath)
@@ -803,11 +844,46 @@ class Handler(http.server.BaseHTTPRequestHandler):
         os.makedirs(base, exist_ok=True)
         return base, safe_join(base, q.get("name", "")) if q.get("name") else None
 
+    @staticmethod
+    def protected(full):
+        """서버 설정·연결 키 (휴대폰 등 다른 기기는 못 바꿈)"""
+        return os.path.normcase(os.path.abspath(full)) in {os.path.normcase(SERVER_CONF), os.path.normcase(KEY_FILE)}
+
     def is_local(self):
         return self.client_address[0] in LOCAL_ADDRS
 
+    def allowed_hosts(self):
+        hosts = {"127.0.0.1", "localhost", "[::1]"}
+        if LAN:
+            hosts.update(lan_ips_cached())
+        return hosts
+
+    def check_origin(self):
+        """웹사이트가 이 PC 의 ComicPad 서버에 몰래 요청하는 것을 막는다.
+        - Host: 이 PC 주소로 온 요청만 (다른 도메인 이름을 127.0.0.1 로 돌리는 DNS 리바인딩 차단)
+        - 바꾸는 요청(POST/PUT/DELETE): 다른 사이트에서 온 것(Origin·Sec-Fetch-Site)은 거절"""
+        host = (self.headers.get("Host") or "").strip().lower()
+        name = host.rsplit(":", 1)[0] if not host.endswith("]") else host
+        if name not in self.allowed_hosts():
+            self.send_json({"error": "허용되지 않은 주소로 온 요청입니다"}, 403)
+            return False
+        if self.command in ("POST", "PUT", "DELETE"):
+            site = (self.headers.get("Sec-Fetch-Site") or "").lower()
+            origin = self.headers.get("Origin")
+            bad = site == "cross-site"
+            if origin is not None:
+                u = urllib.parse.urlparse(origin)
+                bad = bad or u.scheme != "http" or (u.hostname or "").lower() not in {h.strip("[]") for h in self.allowed_hosts()} \
+                    or (u.port or 80) != PORT
+            if bad:
+                self.send_json({"error": "다른 사이트에서 온 요청은 받지 않습니다"}, 403)
+                return False
+        return True
+
     def check_access(self, path):
         """다른 기기(휴대폰 등)는 키가 있어야 작업물/저장에 접근 가능. PC 전용 기능은 로컬에서만."""
+        if not self.check_origin():
+            return False
         if self.is_local():
             return True
         if path in ("/api/open-folder", "/api/lan", "/api/info", "/api/drive/config", "/api/models/fetch", "/api/backup/now", "/api/backup/config", "/api/backup/restore") or path.startswith("/api/update") or path == "/api/shutdown":
@@ -916,6 +992,8 @@ class Handler(http.server.BaseHTTPRequestHandler):
             _, full = self.kind_path(self.query(), write=True)
             if not full:
                 raise ValueError("name required")
+            if not self.is_local() and self.protected(full):
+                return self.send_json({"error": "PC 에서만 바꿀 수 있는 파일입니다"}, 403)
             data = self.read_body()
             os.makedirs(os.path.dirname(full), exist_ok=True)
             # 프로젝트를 덮어쓰기 전에 이전 판을 versions 폴더에 보관 (작품마다 최근 30개)
@@ -940,6 +1018,8 @@ class Handler(http.server.BaseHTTPRequestHandler):
             _, full = self.kind_path(self.query(), write=True)
             if not full or not os.path.isfile(full):
                 return self.send_json({"error": "not found"}, 404)
+            if not self.is_local() and self.protected(full):
+                return self.send_json({"error": "PC 에서만 지울 수 있는 파일입니다"}, 403)
             os.makedirs(TRASH_DIR, exist_ok=True)
             dest = os.path.join(TRASH_DIR, time.strftime("%Y%m%d-%H%M%S_") + os.path.basename(full))
             DRIVE.delete(self.query().get("kind"), full)

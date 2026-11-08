@@ -1,5 +1,5 @@
 // 터치 친화적인 작은 UI 부품들. 각 요소는 el.sync() 로 값을 다시 읽는다.
-import { h, clamp } from '../core/util.js';
+import { h, clamp, setHTML } from '../core/util.js';
 
 /** 슬라이더: 손가락으로 끌기 쉬운 큰 막대 + 숫자 표시. log=true 면 로그 스케일 */
 export function slider(label, o) {
@@ -91,7 +91,7 @@ export function segmented(options, get, set, cls = '') {
   const el = h(`div.ctl.seg${cls ? '.' + cls : ''}`);
   const btns = options.map(([v, t, title]) => {
     const b = h('button', { type: 'button', title: title || '' });
-    if (t instanceof Node) b.append(t); else b.innerHTML = t;
+    if (t instanceof Node) b.append(t); else setHTML(b, t);
     b.addEventListener('click', () => { set(v); sync(); });
     el.append(b);
     return [v, b];
@@ -114,7 +114,7 @@ export function colorInput(label, get, set) {
 
 export function button(label, onClick, cls = '') {
   const b = h(`button.btn${cls ? '.' + cls : ''}`, { type: 'button' });
-  b.innerHTML = label;
+  setHTML(b, label);
   b.addEventListener('click', onClick);
   return b;
 }
