@@ -17,6 +17,7 @@ import hashlib
 import json
 import os
 import secrets
+import shutil
 import subprocess
 import sys
 import zipfile
@@ -179,11 +180,13 @@ def cmd_build(args):
 
 def upload(version, out, args):
     tag = f"v{version}"
-    files = [os.path.join(out, f) for f in sorted(os.listdir(out))]
     if args.installer:
+        # GitHub 는 한글·띄어쓰기 파일 이름을 바꿔 버리므로 영문 이름으로 복사해 올림
         inst = os.path.join(ROOT, "dist", "ComicPad 설치파일.exe")
-        if os.path.exists(inst):
-            files.append(inst + "#ComicPad_Setup.exe")
+        if not os.path.exists(inst):
+            sys.exit("dist 에 설치파일이 없습니다 (installer\\build_setup.ps1 로 먼저 만들기)")
+        shutil.copy2(inst, os.path.join(out, f"ComicPad_Setup_{version}.exe"))
+    files = [os.path.join(out, f) for f in sorted(os.listdir(out))]
     notes = args.notes or f"ComicPad {version}"
     r = subprocess.run(["gh", "release", "view", tag, "--repo", args.repo], capture_output=True)
     if r.returncode == 0:
