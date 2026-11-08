@@ -333,5 +333,8 @@ async function boot() {
 
 boot().catch((e) => {
   console.error(e);
-  document.body.insertAdjacentHTML('beforeend', `<pre style="position:fixed;inset:auto 0 0 0;background:#400;color:#fff;padding:12px;z-index:99;white-space:pre-wrap">시작 오류: ${e.stack || e}</pre>`);
+  const pre = document.createElement('pre');
+  pre.style.cssText = 'position:fixed;inset:auto 0 0 0;background:#400;color:#fff;padding:12px;z-index:99;white-space:pre-wrap';
+  pre.textContent = `시작 오류: ${e.stack || e}`;
+  document.body.append(pre);
 });

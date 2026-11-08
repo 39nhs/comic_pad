@@ -1,6 +1,8 @@
 // SVG 필터 엔진: 캔버스 ctx.filter = 'url(#id)' 로 GPU 에서 색 보정/효과를 처리한다.
 // 조정 레이어, 보정 미리보기, 레이어 효과, 언샤프 마스크 등이 모두 이걸 쓴다.
 
+import { sanitizeInto } from './util.js';
+
 const NS = 'http://www.w3.org/2000/svg';
 let defs = null;
 
@@ -40,7 +42,15 @@ export function defineFilter(id, inner, w = 4096, h = 4096) {
   // 영역은 그리는 캔버스 크기와 정확히 같게 (너무 크면 브라우저가 일부만 처리함)
   f.setAttribute('x', '0'); f.setAttribute('y', '0');
   f.setAttribute('width', String(Math.ceil(w))); f.setAttribute('height', String(Math.ceil(h)));
-  if (f._inner !== inner) { f.innerHTML = inner; f._inner = inner; }
+  if (f._inner !== inner) {
+    // 작품 파일 속 보정 값이 그대로 들어가므로, 필터 부품(fe…)만 남기고 넣는다
+    const t = document.createElement('template');
+    t.innerHTML = `<svg xmlns="${NS}">${inner}</svg>`;
+    const svg = t.content.firstElementChild;
+    sanitizeInto(svg, (n) => /^fe[A-Za-z]+$/.test(n));
+    f.replaceChildren(...svg.childNodes);
+    f._inner = inner;
+  }
   return `url(#${id})`;
 }
 

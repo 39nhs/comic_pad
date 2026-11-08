@@ -148,6 +148,33 @@ export function pickFile(accept) {
   });
 }
 
+// 아이콘·짧은 꾸밈 글자만 허용하는 HTML 넣기 (공유 받은 프리셋·파일 이름 등에 섞인 스크립트 차단)
+const SAFE_TAGS = new Set(['svg', 'path', 'circle', 'rect', 'line', 'polyline', 'polygon', 'ellipse', 'g', 'span', 'b', 'i', 'em', 'strong', 'small', 'br', 'kbd', 'sub', 'sup', 'u', 's']);
+const BAD_ATTR = /^(on|href$|xlink:href$|src$|srcset$|action$|formaction$)/i;
+export function sanitizeInto(root, allowTag) {
+  const walk = (node) => {
+    for (const c of [...node.childNodes]) {
+      if (c.nodeType === 1) {
+        if (!allowTag(c.localName)) { c.replaceWith(document.createTextNode(c.textContent)); continue; }
+        for (const a of [...c.attributes]) {
+          if (BAD_ATTR.test(a.name) || (a.name === 'style' && /url\s*\(|expression/i.test(a.value))) c.removeAttribute(a.name);
+        }
+        walk(c);
+      } else if (c.nodeType !== 3) c.remove();
+    }
+  };
+  walk(root);
+  return root;
+}
+export const esc = (s) => String(s ?? '').replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+export function setHTML(el, html) {
+  const t = document.createElement('template');   // template 안은 실행·로딩이 일어나지 않음
+  t.innerHTML = String(html ?? '');
+  sanitizeInto(t.content, (n) => SAFE_TAGS.has(n));
+  el.replaceChildren(t.content);
+  return el;
+}
+
 // DOM 헬퍼: h('div.cls', {attrs}, children...)
 export function h(tag, attrs, ...children) {
   const [name, ...classes] = tag.split('.');
@@ -158,7 +185,7 @@ export function h(tag, attrs, ...children) {
       if (v == null || v === false) continue;
       if (k.startsWith('on') && typeof v === 'function') el.addEventListener(k.slice(2), v);
       else if (k === 'style' && typeof v === 'object') Object.assign(el.style, v);
-      else if (k === 'html') el.innerHTML = v;
+      else if (k === 'html') setHTML(el, v);
       else if (k in el && typeof v !== 'string') el[k] = v;
       else el.setAttribute(k, v === true ? '' : v);
     }

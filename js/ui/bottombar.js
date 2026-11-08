@@ -1,6 +1,6 @@
 // 아래쪽 큰 버튼 막대: 실행취소/다시실행처럼 자주 누르는 것들을 손이 닿기 쉬운 곳에
 import { app } from '../app.js';
-import { h } from '../core/util.js';
+import { h, setHTML, esc } from '../core/util.js';
 import { icon } from './icons.js';
 import { slider } from './controls.js';
 import { activePreset } from '../tools/brush.js';
@@ -44,7 +44,7 @@ export function initBottombar() {
         continue;
       }
       const b = h('button.bb-btn', { type: 'button', title: a.label, 'data-id': id });
-      b.innerHTML = `${icon(a.icon, 24)}<span>${a.label}</span>`;
+      setHTML(b, `${icon(a.icon, 24)}<span>${esc(a.label)}</span>`);
       b.addEventListener('click', () => { a.run(); sync(); });
       bar.append(b);
     }

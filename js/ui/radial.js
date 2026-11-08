@@ -1,7 +1,7 @@
 // 원형 메뉴: 펜 측면 버튼(설정) 또는 마우스 오른쪽 버튼을 누르면 펜 주위에 자주 쓰는 도구가 원형으로 뜬다.
 // 누른 채 원하는 방향으로 밀고 떼면 선택 (짧게 눌렀다 떼면 메뉴가 남아 있어 탭으로 고르기)
 import { app } from '../app.js';
-import { h } from '../core/util.js';
+import { h, esc } from '../core/util.js';
 import { icon } from './icons.js';
 import { form } from './dialogs.js';
 
@@ -27,7 +27,7 @@ export function openRadial(cx, cy, pointerId = null) {
   const root = h('div.radial', { style: { left: cx + 'px', top: cy + 'px' } });
   const btns = list.map((it, i) => {
     const a = -Math.PI / 2 + (i / n) * Math.PI * 2;
-    const b = h(`button.radial-item${it.on ? '.on' : ''}`, { type: 'button', style: { left: Math.cos(a) * R + 'px', top: Math.sin(a) * R + 'px' }, html: `${icon(it.icon, 22)}<span>${it.label}</span>` });
+    const b = h(`button.radial-item${it.on ? '.on' : ''}`, { type: 'button', style: { left: Math.cos(a) * R + 'px', top: Math.sin(a) * R + 'px' }, html: `${icon(it.icon, 22)}<span>${esc(it.label)}</span>` });
     b.onclick = (e) => { e.stopPropagation(); pick(i); };
     root.append(b);
     return b;

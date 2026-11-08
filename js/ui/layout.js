@@ -1,7 +1,7 @@
 // 화면 구성: 기본은 "간단히" (자주 쓰는 도구·메뉴만), 나머지는 "모든 항목 보기"·기능 검색(Ctrl+K)으로.
 // 화면 꾸미기 창에서 도구 막대·메뉴 항목·패널 탭을 직접 고를 수 있다.
 import { app } from '../app.js';
-import { h } from '../core/util.js';
+import { h, esc } from '../core/util.js';
 import { openModal } from './dialogs.js';
 import { icon } from './icons.js';
 
@@ -80,7 +80,7 @@ export function moreToolsPopup(anchor, ids) {
   for (const id of ids) {
     const t = app.tools.get(id);
     box.append(h('button.menu-item', { type: 'button', onclick: () => { layer.innerHTML = ''; layer.classList.remove('open'); app.setTool(id); } },
-      h('span', { html: `${icon(t.icon, 18)} ${t.name}` }), h('kbd', null, t.key ? t.key.toUpperCase() : '')));
+      h('span', { html: `${icon(t.icon, 18)} ${esc(t.name)}` }), h('kbd', null, t.key ? t.key.toUpperCase() : '')));
   }
   box.append(h('div.menu-sep'), h('button.menu-item', { type: 'button', onclick: () => { layer.innerHTML = ''; layer.classList.remove('open'); customizeDialog('tools'); } }, h('span', null, '도구 막대 꾸미기…')));
   layer.append(box);
