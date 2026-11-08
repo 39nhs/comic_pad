@@ -1,0 +1,14 @@
+ComicPad
+Copyright 2026 ComicPad 제작자
+
+이 프로그램은 Apache License 2.0 으로 배포합니다 (LICENSE 파일).
+ComicPad 로 그린 그림·만화·애니메이션의 권리는 그린 사람에게 있습니다. 이 라이선스는 프로그램에만 적용됩니다.
+
+함께 들어 있는 다른 프로젝트의 소프트웨어와 AI 모델, 그 라이선스 전문은
+app/LICENSES.txt 에 있습니다 (앱에서는 도움말 > ComicPad 정보·라이선스).
+
+AI 모델 관리 창에서 따로 받는 모델은 설치파일에 들어 있지 않고 각 모델의 라이선스를 따릅니다.
+"비상업" 표시가 붙은 모델로 만든 결과물은 상업적으로 쓸 수 없습니다.
+
+상표 안내: CLIP STUDIO PAINT 는 CELSYS, Photoshop 은 Adobe, Aseprite 는 Igara Studio 의 상표입니다.
+ComicPad 는 이 회사들과 관계가 없으며, 이 이름들은 비슷한 단축키·화면 배치·파일 호환을 설명하는 데만 씁니다.

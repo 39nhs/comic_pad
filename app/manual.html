@@ -1,0 +1,436 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>ComicPad 설명서</title>
+<style>
+:root { --bg: #f7f6f3; --card: #fff; --ink: #222; --sub: #666; --line: #e3e0da; --accent: #c8862d; --kbd: #efece6; }
+@media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) { --bg: #1f1f23; --card: #2a2a30; --ink: #eee; --sub: #a8a8b0; --line: #3a3a42; --accent: #e0a24a; --kbd: #383840; } }
+:root[data-theme="dark"] { --bg: #1f1f23; --card: #2a2a30; --ink: #eee; --sub: #a8a8b0; --line: #3a3a42; --accent: #e0a24a; --kbd: #383840; }
+* { box-sizing: border-box; }
+body { margin: 0; background: var(--bg); color: var(--ink); font: 15px/1.65 "Malgun Gothic", "Apple SD Gothic Neo", sans-serif; }
+header { position: sticky; top: 0; z-index: 2; background: var(--bg); border-bottom: 1px solid var(--line); padding: 10px 16px; display: flex; gap: 12px; align-items: center; flex-wrap: wrap; }
+header h1 { margin: 0; font-size: 19px; }
+header input { flex: 1; min-width: 180px; padding: 8px 12px; border-radius: 8px; border: 1px solid var(--line); background: var(--card); color: var(--ink); font-size: 15px; }
+.wrap { display: flex; max-width: 1180px; margin: 0 auto; }
+nav { width: 230px; flex: none; position: sticky; top: 58px; height: calc(100vh - 58px); overflow: auto; padding: 14px 8px 40px 16px; font-size: 14px; }
+nav a { display: block; padding: 4px 8px; border-radius: 6px; color: var(--ink); text-decoration: none; }
+nav a:hover { background: var(--card); }
+main { flex: 1; min-width: 0; padding: 14px 16px 80px; }
+section { background: var(--card); border: 1px solid var(--line); border-radius: 12px; padding: 6px 20px 14px; margin-bottom: 16px; }
+section h2 { font-size: 18px; color: var(--accent); margin: 14px 0 6px; }
+h3 { font-size: 15px; margin: 14px 0 4px; }
+p, li { margin: 4px 0; }
+ul { padding-left: 20px; }
+kbd { background: var(--kbd); border: 1px solid var(--line); border-bottom-width: 2px; border-radius: 4px; padding: 0 5px; font: 12px/1.6 Consolas, monospace; white-space: nowrap; }
+table { border-collapse: collapse; width: 100%; font-size: 14px; }
+td, th { border-bottom: 1px solid var(--line); padding: 5px 6px; text-align: left; vertical-align: top; }
+.where { color: var(--sub); font-size: 13px; }
+.tip { border-left: 3px solid var(--accent); padding: 4px 10px; margin: 8px 0; background: var(--bg); border-radius: 0 6px 6px 0; }
+.hide { display: none !important; }
+mark { background: #ffe08a; color: #000; }
+@media (max-width: 760px) { nav { display: none; } main { padding: 10px; } section { padding: 4px 12px 10px; } }
+@media print { header, nav { display: none; } section { break-inside: avoid; border: none; } }
+</style>
+</head>
+<body>
+<header>
+  <h1>ComicPad 설명서</h1>
+  <input id="q" type="search" placeholder="찾기 (예: 말풍선, 인쇄, 필압, 단축키)">
+</header>
+<div class="wrap">
+<nav id="toc"></nav>
+<main id="main">
+
+<section id="start">
+<h2>1. 시작하기</h2>
+<h3>설치</h3>
+<ul>
+  <li><b>ComicPad 설치파일.exe</b> 를 실행하면 설치할 폴더를 고르고, 바탕화면·시작 메뉴 바로가기와 "설치된 앱" 목록 등록까지 합니다. 관리자 권한은 필요 없습니다.</li>
+  <li><b>필요한 프로그램도 함께 설치됩니다</b>: ComicPad 전용 Python 이 설치 파일에 들어 있어 Python 을 따로 설치할 필요가 없습니다(ComicPad 폴더 안에만 들어가고 PC 에는 설치되지 않음). 전용 창에 쓰는 WebView2 는 Windows 11 에 기본으로 있고, 없는 PC 에서는 함께 들어 있는 마이크로소프트 WebView2 전체 설치본으로 인터넷 없이 설치합니다(그래도 안 되면 Edge 앱 창으로 열림).</li>
+  <li>설치한 뒤에는 인터넷 없이 모든 기능이 동작합니다 (내장 AI 모델만 처음 한 번 받아야 함).</li>
+  <li>이미 폴더째 가지고 있다면 폴더 안의 <b>ComicPad 설치.bat</b> 으로 바로가기만 만들 수도 있습니다.</li>
+  <li>지우기: 시작 메뉴 &gt; ComicPad &gt; ComicPad 제거, 또는 Windows 설정 &gt; 앱 &gt; 설치된 앱. 작업한 그림(data 폴더)은 지우지 않습니다.</li>
+</ul>
+<h3>실행</h3>
+<ul>
+  <li>바탕화면의 <b>ComicPad</b> 아이콘(ComicPad.exe)을 누르면 PC 안에서만 도는 작은 프로그램(서버)이 켜지고 <b>ComicPad 전용 창</b>으로 열립니다. Windows 에 들어 있는 WebView2(Edge 엔진)를 쓰지만 Edge 창이 아니라서 주소창·브라우저 알림이 없고, 자기 아이콘으로 작업 표시줄에 뜹니다. 인터넷이 없어도 됩니다.</li>
+  <li>창을 닫을 때 저장하지 않은 변경이 있으면 저장할지 묻습니다. 앱 안의 링크(모델 출처 등)는 기본 브라우저로 열립니다.</li>
+  <li>WebView2 런타임이 없는 예전 Windows 10 에서는 Edge 앱 창으로 대신 열립니다.</li>
+  <li>한 번 열어 두면 서버가 꺼져 있어도 앱 화면은 열립니다 (도움말 &gt; 앱으로 설치를 해 두면 시작 메뉴에서 바로).</li>
+</ul>
+<h3>처음 세팅 고르기 <span class="where">도움말 &gt; 초기 세팅 프리셋 고르기</span></h3>
+<p>처음 켜면 익숙한 방식과 <b>쓸 AI 기능</b>을 고르는 창이 한 번 뜹니다. <b>기본은 클립스튜디오식</b>입니다(창을 그냥 닫아도 클립스튜디오식). 나중에 도움말 메뉴에서 언제든 바꿀 수 있습니다.</p>
+<table>
+<tr><th>세팅</th><th>바뀌는 것</th></tr>
+<tr><td><b>클립스튜디오식 (기본)</b></td><td>비슷한 도구 키(P·B 펜, G 채우기/그라데이션, J 손끝, U 도형/컷/자, T 텍스트/말풍선, O 벡터 선 고르기), 펜 중심 도구 막대, G펜, 새 작품 추천 = 흑백 B5 600dpi 원고(재단선·도련 가이드).</td></tr>
+<tr><td>포토샵식 (일러스트)</td><td>비슷한 도구 키(M·L·W 선택, Q 선택 펜, A 벡터 선 고르기, S 복제 도장 등), <kbd>Ctrl</kbd>+<kbd>1</kbd> 100%, <kbd>Ctrl</kbd>+<kbd>Shift</kbd>+<kbd>E</kbd> 보이는 레이어 결합, 모든 메뉴 보이기.</td></tr>
+<tr><td>웹툰 (컬러)</td><td>새 작품 추천 = 800px 폭 세로 긴 캔버스, 아래 막대에 웹툰 미리보기·아래로 늘리기·레이어·색.</td></tr>
+<tr><td>S펜·터치 태블릿</td><td>큰 버튼, 넓은 아래 막대, S펜 측면 버튼 = 원형 메뉴, 손가락 제스처.</td></tr>
+<tr><td>간단히 (ComicPad 원래 화면)</td><td>자주 쓰는 도구·메뉴만, 단축키는 ComicPad 기본.</td></tr>
+</table>
+<ul>
+  <li>같은 키를 여러 도구가 쓰면 누를 때마다 다음 도구로 바뀝니다 (예: 클립스튜디오식의 <kbd>G</kbd>).</li>
+  <li><b>AI 기능 고르기</b>: 같은 창 아래에서 쓸 AI 기능(사진→인형 자세, 선화 추출, 크기 키우기, 캐릭터 따기, 깊이, 탭해서 고르기)을 체크하면 그 모델만 받습니다(크기 표시, 상업용으로 쓸 수 있는 모델만). 나중에 <b>AI &gt; AI 기능 고르기·받기</b>에서 더 받을 수 있습니다. 크기 키우기 모델은 설치 파일에 들어 있어 인터넷 없이 됩니다.</li>
+  <li>적용하기 전 상태는 백업되어 <b>도움말 &gt; 세팅 되돌리기</b> 한 번으로 돌아갑니다. 내가 만든 브러시·작업 화면·팔레트는 지우지 않습니다.</li>
+  <li>"~식"은 비슷한 손 배치를 뜻할 뿐, 해당 프로그램의 파일·아이콘을 쓰지 않습니다.</li>
+</ul>
+<h3>세팅 파일 주고받기 <span class="where">도움말 &gt; 내 세팅 내보내기 / 세팅 가져오기</span></h3>
+<ul>
+  <li>단축키·화면 구성·브러시·작업 화면·팔레트·펜 설정·새 작품 추천 크기 중 고른 부분을 작은 <code>.cpset</code> 파일 하나로 저장합니다(그림은 안 들어감).</li>
+  <li>받은 사람은 <b>세팅 가져오기</b>로 파일을 열고, 들어 있는 부분 중 원하는 것만 골라 가져옵니다. 브러시·작업 화면은 내 것에 합쳐지고, 가져오기 전 상태는 되돌릴 수 있습니다.</li>
+  <li>그림 모양(이미지 팁) 브러시는 모양 그림 파일이 따로 있어야 합니다.</li>
+</ul>
+<h3>작업물은 어디에?</h3>
+<ul>
+  <li>설치 폴더 안 <b>data</b> 폴더: <code>projects</code>(작품) · <code>exports</code>(내보낸 그림) · <code>assets</code>(에셋) · <code>versions</code>(이전 저장본) · <code>autosave</code>(자동 저장) · <code>trash</code>(지운 파일).</li>
+  <li>파일 &gt; 저장 위치 에서 지금 어디에 저장되는지 볼 수 있습니다. 서버가 없을 때는 고른 폴더에, 그것도 없으면 이 기기(브라우저) 안에 저장됩니다.</li>
+</ul>
+<div class="tip">모르는 기능은 <kbd>Ctrl</kbd>+<kbd>K</kbd> (기능 검색)에 이름 일부를 치면 바로 실행됩니다. <kbd>F2</kbd> 는 앱 안 기능 안내입니다.</div>
+</section>
+
+<section id="screen">
+<h2>2. 화면 구성</h2>
+<ul>
+  <li><b>왼쪽 도구 막대</b>: 자주 쓰는 도구만 나와 있고, 끝의 <b>…</b> 에 나머지 도구가 있습니다.</li>
+  <li><b>위 메뉴</b>: 자주 쓰는 항목만 보이고, 메뉴 맨 아래 <b>모든 항목 보기</b> 로 전부 볼 수 있습니다.</li>
+  <li><b>오른쪽 패널</b>: 위(도구 설정·색·내비·페이지)와 아래(레이어·에셋·기록·애니). 가운데 경계를 끌어 크기 조절.</li>
+  <li><b>아래 큰 버튼 막대</b>: 실행취소·다시실행·브러시·지우개·스포이트·크기·농도·저장 등. 오른쪽 "편집"으로 버튼을 고릅니다.</li>
+  <li><b>아래 상태줄</b>: 그림 크기·현재 레이어·저장 상태·<b>⏱ 작업 시간</b>(누르면 진행표).</li>
+</ul>
+<h3>화면 꾸미기 <span class="where">보기 &gt; 화면 꾸미기</span></h3>
+<ul>
+  <li>도구 막대에 꺼내 둘 도구, 메뉴 막대에 보일 메뉴와 각 메뉴 항목, 오른쪽 패널 탭을 직접 고릅니다.</li>
+  <li><b>간단히 ↔ 모든 기능 보기</b> 전환, 처음 상태로 초기화.</li>
+  <li><b>작업 화면 저장</b> (보기 메뉴): 패널 배치·도구·브러시를 이름 붙여 저장하고 <kbd>Ctrl</kbd>+<kbd>Alt</kbd>+<kbd>1</kbd>~<kbd>4</kbd> 로 바꿉니다.</li>
+</ul>
+<h3>앱 밖 창으로 꺼내기</h3>
+<ul>
+  <li>패널 탭 줄 끝의 <b>⧉</b> 를 누르면 그 패널이 별도 창이 됩니다. 다른 모니터로 옮기거나 "항상 위" 작은 창으로 띄울 수 있고, 창을 닫으면 제자리로 돌아옵니다.</li>
+  <li>환경 설정도 설정 창의 <b>앱 밖 창으로</b> 버튼으로 꺼낼 수 있습니다.</li>
+  <li>브라우저가 팝업을 막으면 주소창의 팝업 허용을 눌러 주세요.</li>
+</ul>
+<h3>원형 메뉴</h3>
+<p>마우스 오른쪽 버튼(또는 설정에서 S펜 측면 버튼)을 누르면 펜 주위에 도구가 원형으로 뜹니다. 누른 채 방향으로 밀고 떼면 선택, 짧게 누르면 열린 채로 탭해서 고릅니다. 보기 &gt; 원형 메뉴 편집 에서 8칸을 고릅니다.</p>
+</section>
+
+<section id="pen">
+<h2>3. 펜·태블릿·터치</h2>
+<p>S펜(갤럭시 북·갤럭시 탭), 와콤·휴이온·XP-Pen 같은 PC 용 펜 태블릿·액정 태블릿, 서피스 펜, 애플 펜슬(아이패드 Safari) 모두 같은 방식으로 됩니다.</p>
+<ul>
+  <li><b>PC 용 태블릿(와콤·휴이온·XP-Pen)</b>: 드라이버 설정에서 <b>"Windows Ink"</b> 를 켜야 필압·기울기가 옵니다. 꺼져 있으면 펜이 마우스로 들어와 필압이 없고, 그을 때 알림이 뜹니다("필압 없이 쓰기"로 굵기 고정도 가능).</li>
+  <li><b>오른쪽 클릭</b>(펜 길게 누르기 포함)을 하면 앱의 메뉴만 뜹니다. 웹페이지용 기본 메뉴는 나오지 않고, 글자 입력칸에서만 복사·붙여넣기 메뉴가 뜹니다.</li>
+  <li><b>펜 버튼</b>: 측면 버튼 = 스포이트(바꿀 수 있음), <b>두 번째 측면 버튼</b> = 화면 이동(바꿀 수 있음), <b>펜 뒤쪽 지우개</b> = 그동안만 지우개.</li>
+  <li><b>기울기·돌림</b>: tiltX/Y(와콤·S펜·서피스)와 애플 펜슬의 고도·방위각 모두 기울기로 씁니다. 와콤 아트 펜처럼 펜을 돌리는 각도(twist)가 오면 납작 펜 각도에 씁니다.</li>
+  <li><b>아이패드 Safari</b>: 두 손가락 확대로 페이지 전체가 커지거나, 길게 누르면 메뉴가 뜨는 것을 막았습니다. 같은 와이파이에서 PC 에 연결해 씁니다(내장 AI 는 그래픽 가속 없이 CPU 로).</li>
+  <li><b>펜 필기감 진단</b> <span class="where">도움말 메뉴 / 설정 &gt; 펜</span>: 네 단계(자유롭게·가장 약하게·가장 세게·가만히)로 그어 보면 초당 점 개수·필압 범위·떨림을 재고, 이 펜에 맞는 값을 적용합니다.</li>
+  <li><b>필기감 설정</b>: 손떨림 보정(빠르면 덜, 느리면 더), 필압 다듬기, 펜을 대는 순간 굵게 찍힘 줄이기, 펜 위치 예측(지연 감소), 필압 곡선.</li>
+  <li><b>측면 버튼</b>: 누르고 그리면 스포이트(기본) / 지우개 / 화면 이동 / 원형 메뉴.</li>
+  <li><b>손가락</b>: 두 손가락 = 이동·확대·회전, <b>두 손가락 탭 = 실행취소</b>, 세 손가락 탭 = 다시실행, 네 손가락 탭 = 패널 숨기기, 한 손가락 길게 = 스포이트.</li>
+  <li>기본은 손가락으로 그려지지 않습니다(손바닥 오입력 방지). 위쪽 손가락 아이콘으로 켜고 끕니다. 펜을 뗀 직후 터치도 잠깐 무시합니다.</li>
+</ul>
+</section>
+
+<section id="draw">
+<h2>4. 그리기 도구</h2>
+<table>
+<tr><th>도구</th><th>키</th><th>설명</th></tr>
+<tr><td>브러시</td><td><kbd>B</kbd></td><td>G펜·마루펜·필기 펜·연필·러프 연필·마커·에어브러시·수채/유화(혼색)·스프레이·납작 펜·발광 등. 크기 <kbd>[</kbd> <kbd>]</kbd>. 입출 보정, 빠를수록 가늘게, <b>종이 결</b>(브러시마다)</td></tr>
+<tr><td>지우개</td><td><kbd>E</kbd></td><td>벡터 레이어에서는 "닿은 부분만 / 교차점까지 / 선 전체"</td></tr>
+<tr><td>채우기 · 올가미 채우기</td><td><kbd>G</kbd> <kbd>L</kbd></td><td>틈 닫기, 참조 레이어 기준, 넓히기</td></tr>
+<tr><td>그라데이션</td><td><kbd>J</kbd></td><td></td></tr>
+<tr><td>스포이트</td><td><kbd>I</kbd></td><td><kbd>Alt</kbd> 누르고 탭해도 됨</td></tr>
+<tr><td>선택 · 선택 펜</td><td><kbd>M</kbd> <kbd>Q</kbd></td><td>사각/올가미/자동 선택, 칠해서 선택</td></tr>
+<tr><td>이동/변형</td><td><kbd>V</kbd> (<kbd>Ctrl</kbd>+<kbd>T</kbd>)</td><td>크기·회전·자유 변형(원근). 글자·컷·벡터는 정보째 변형되어 계속 편집 가능</td></tr>
+<tr><td>도형</td><td><kbd>U</kbd></td><td>직선·사각·원·곡선</td></tr>
+<tr><td>자 (투시/평행)</td><td><kbd>R</kbd></td><td>1·2·3점 투시, 평행, 방사, 동심원. 선이 자에 맞춰 그려짐</td></tr>
+<tr><td>손끝 · 흐림 · 복제 도장 · 픽셀 유동화</td><td><kbd>W</kbd> <kbd>S</kbd></td><td>보정용</td></tr>
+<tr><td>벡터 선 고르기</td><td><kbd>O</kbd></td><td>벡터 선을 골라 옮기기·다듬기·굵기·색·삭제. 선 하나를 고르면 흰 점을 끌어 모양 고치기</td></tr>
+<tr><td>화면 이동</td><td><kbd>H</kbd> / <kbd>Space</kbd></td><td><kbd>Space</kbd>+<kbd>Ctrl</kbd> 확대, <kbd>Space</kbd>+<kbd>Shift</kbd> 회전</td></tr>
+</table>
+<h3>브러시 동작 <span class="where">브러시 도구 옵션</span></h3>
+<ul>
+  <li><b>동작 (기울기·속도·색)</b>: 펜을 눕힐수록 굵게/옅게, 빠를수록 옅게, 필압으로 배경색↔전경색, 찍을 때마다 색상·채도·명도 흔들기.</li>
+  <li><b>종이 결</b>: 브러시마다 종이 무늬(결 고운 종이·캔버스·수채지 등)와 세기·크기. "연필(종이 결)"·"수채(종이 결)" 프리셋.</li>
+  <li><b>포토샵 브러시(.abr)</b>: 모양과 함께 크기·간격·각도·경도·흩뿌리기·필압 크기/불투명도·색 흔들림 설정도 읽어 옵니다.</li>
+</ul>
+<h3>펜 미리보기 · 필압 · 흔들림 보정 <span class="where">브러시 도구 옵션 / 설정 &gt; 펜</span></h3>
+<ul>
+  <li><b>미리보기</b>: 브러시 목록마다 작은 획 미리보기, 옵션 맨 위에 큰 미리보기(필압 약→강→약). 설정을 바꾸면 바로 다시 그려집니다.</li>
+  <li><b>시험 그리기 칸</b>: 옵션 안의 흰 칸에 펜으로 그려 보며 브러시를 고릅니다(그림에는 안 들어감).</li>
+  <li><b>필압 곡선 편집기</b>: 점을 끌어 곡선 모양을 바꾸고, 빈 곳 두 번 탭 = 점 추가, 점 두 번 탭 = 지우기. "부드럽게·딱딱하게·S자·약한 손힘…" 곡선 모음. 펜을 누르면 지금 필압이 곡선 위에 파란 점으로 보입니다. 설정 &gt; 펜 = 모든 브러시 공통, 브러시 옵션 "이 브러시만 필압 곡선 따로" = 브러시마다.</li>
+  <li><b>가장 약한 힘 / 가장 센 힘</b>: 이보다 약하면 0, 이만큼만 눌러도 최대 (설정 &gt; 펜).</li>
+  <li><b>흔들림 보정 방식</b> (브러시마다): 자동(1€) · 평균 · <b>끈 당기기</b>(펜이 끈 길이만큼 멀어질 때만 선이 따라옴, 그리는 동안 끈이 보임) · <b>무거운 펜</b>(용수철처럼 살짝 늦게 부드럽게 따라옴). 세기 0~20.</li>
+  <li><b>펜 끝까지 이어 그리기</b>: 펜을 떼면 늦게 따라오던 선을 펜 끝까지 마저 그림 (끄면 늦은 자리에서 끝남).</li>
+  <li><b>멈추면 직선</b>: 선 끝에서 펜을 잠시 멈추면 시작점→끝점 직선으로 바뀌고, 그대로 움직여 끝점 조절(<kbd>Ctrl</kbd> = 15도 단위).</li>
+  <li><b>브러시 커서 모양</b> (설정 &gt; 펜): 크기 원 / 브러시 끝 모양(납작 펜은 기운 타원, 이미지 브러시는 그 모양, 부드러운 브러시는 진한 안쪽 표시) / 십자 / 점.</li>
+</ul>
+<h3>픽셀아트 <span class="where">파일 &gt; 픽셀 아트 새로 만들기 · 필터 · 보기</span></h3>
+<ul>
+  <li><b>픽셀 연필 / 픽셀 지우개</b>: 브러시 끝 "픽셀" — 계단 없는 네모 픽셀(1px 이상), <b>픽셀 퍼펙트</b>(1px 선의 ㄴ자 겹친 모서리를 그리는 동안 지움).</li>
+  <li><b>픽셀 격자</b>(보기 메뉴, 6배 이상 확대하면 보임), <b>픽셀아트로 보기</b>(축소해도 흐리지 않게, 픽셀 작품은 기본).</li>
+  <li><b>팔레트 색으로만 칠하기</b>(작품마다): 브러시·채우기 색이 가장 가까운 팔레트 색으로, 반투명 가장자리는 없앰.</li>
+  <li><b>색 수 줄이기</b>(필터): 그림에서 N색 뽑기(미디언 컷) 또는 지금 팔레트로, 디더링 없음 · 격자 2×2/4×4 · 오차 확산. 뽑은 색을 팔레트로.</li>
+  <li><b>팔레트 가져오기·내보내기</b>(.gpl = GIMP·Aseprite·Krita, .hex = Lospec), <b>팔레트 색 바꾸기</b>(레이어의 같은 색 픽셀을 한꺼번에).</li>
+  <li><b>명암 잉크</b>: 밑 색을 팔레트에서 같은 계열 색끼리 밝기 순으로 한 칸 어둡게/밝게 (한 획에 한 번, Alt = 반대).</li>
+  <li><b>디더 무늬</b>: 브러시 옵션 "디더 무늬"와 채우기 도구 옵션에서 칠하는 칸 비율(2×2 / 4×4 Bayer). 문서에 고정된 무늬라 이어 칠해도 어긋나지 않음.</li>
+</ul>
+<h3>브러시 확장 <span class="where">브러시 도구 옵션</span></h3>
+<ul>
+  <li><b>듀얼 브러시</b>: 두 번째 끝 모양(거친 결·원·점)이 닿은 곳만 남겨 마른 붓·거친 질감 (크기·찍는 수·퍼짐). 무늬는 문서에 고정이라 겹쳐 칠해도 결이 살아 있음. 프리셋 "마른 붓 (듀얼)".</li>
+  <li><b>리본</b>: 끝 모양 그림을 획 방향으로 이어 붙여 늘림 (붓결이 획을 따라 흐름). 프리셋 "리본 붓".</li>
+  <li><b>종이 결 합성 방식</b>: 곱하기(기본) · 빼기(옅게 칠한 곳부터 결이 비어 보임) · 문턱(결이 또렷).</li>
+</ul>
+<h3>러프</h3>
+<ul>
+  <li>러프 연필은 <b>러프 레이어</b>에서만 그려집니다(다른 레이어면 바꾸라는 알림). 레이어 패널 "러프" 버튼.</li>
+  <li>러프 색은 14가지 단색 중에서 골라 의견서처럼 사람마다 다른 색으로 쓸 수 있습니다.</li>
+</ul>
+<h3>벡터 레이어</h3>
+<p>레이어 패널 "벡터". 그린 선을 기억해 두므로 나중에 굵기 일괄 조정·색 바꾸기·교차점까지 지우기·조절점 수정이 되고, 크기를 바꿔도 깨지지 않습니다.</p>
+</section>
+
+<section id="layers">
+<h2>5. 레이어</h2>
+<ul>
+  <li>폴더, 클리핑, 투명 잠금, 잠금, 밑그림(내보내기·채우기 제외), 참조, 레이어 마스크, 레이어 효과(테두리·그림자·광선), 톤화(망점), 합성 모드(곱하기·스크린·더하기 등).</li>
+  <li><b>여러 개 선택</b>: <kbd>Ctrl</kbd>/<kbd>Shift</kbd>+클릭, 터치는 "여러 개" 버튼 → 보이기/숨기기·폴더로 묶기(<kbd>Ctrl</kbd>+<kbd>G</kbd>)·병합(<kbd>Ctrl</kbd>+<kbd>E</kbd>)·삭제.</li>
+  <li>레이어 줄의 손잡이를 끌어 순서 바꾸기, 폴더 가운데에 놓으면 폴더 안으로.</li>
+  <li>조정 레이어(레벨·곡선·색조 등): 원본을 바꾸지 않고 아래 그림에 보정을 겹니다.</li>
+</ul>
+</section>
+
+<section id="comic">
+<h2>6. 만화</h2>
+<ul>
+  <li><b>컷 나누기</b> <kbd>K</kbd>: 사각·대각선·다각형 컷, 페이지 틀. 컷 밖은 가려짐.</li>
+  <li><b>말풍선</b> <kbd>F</kbd>: 드래그로 크기 → 꼬리 끝 탭. 만든 뒤에도 탭해서 이동(대사도 함께)·크기·꼬리·모양·색 수정, <b>겹친 풍선과 이어 붙이기</b>(외곽선 하나로).</li>
+  <li><b>텍스트</b> <kbd>T</kbd>: 다시 편집 가능한 글자. 세로쓰기, 외곽선, 자간, <b>문장부호 좁게</b>, <b>루비</b>(<code>{漢字|かんじ}</code> 처럼 쓰면 읽는 법이 작게 붙음). data/fonts 에 글꼴을 넣거나 파일 &gt; 글꼴 파일 추가.</li>
+  <li><b>대본 배치</b> 도구: 대사를 한꺼번에 넣고(한 줄 = 말풍선 하나) 탭할 때마다 놓기, 또는 컷 순서대로 자동 배치. <code>이름: 대사</code>는 이름을 빼고, <code>(생각)</code> 구름, <code>!</code> 외침, <code>#</code> 나레이션 상자.</li>
+  <li><b>밑색 한 번에 칠하기</b> <span class="where">만화 메뉴</span>: 선화로 닫힌 영역마다 다른 색으로 채운 밑색 레이어.</li>
+  <li><b>색 점으로 칠하기</b> <span class="where">만화 메뉴</span>: "색 힌트 레이어 만들기" → 영역마다 칠할 색으로 점이나 짧은 선을 찍기 → "색 점으로 칠하기". 영역마다 가장 많이 찍힌 색으로 채우고, 점이 없는 영역은 가장 많이 맞닿은 이웃 색을 따라갑니다(끌 수 있음). 결과는 "밑색 (색 점)" 레이어, 점을 고쳐 다시 하면 같은 레이어가 바뀝니다. 힌트 레이어는 내보내기에 안 나옵니다. (AI 아님, 크리타 색칠 마스크와 비슷)</li>
+  <li><b>틈 막기</b> <span class="where">채우기·자동 선택·밑색·색 점</span>: 이 너비(px)까지의 빈틈은 선이 이어진 것으로 보고 틈 너머로 칠하지 않습니다. 0~50px 마음대로 (보통 3~5, 러프는 10~20). 틈 너머로 조금 번지던 것도 고쳤습니다.</li>
+  <li><b>집중선·유선·효과선</b>, <b>망점 톤</b>(플러그인).</li>
+  <li><b>메모 핀</b> <kbd>Y</kbd>: 그림 위에 피드백 메모(색·해결됨 표시), 내보내기에는 안 나옴.</li>
+  <li><b>여러 페이지 작품</b> <span class="where">만화 &gt; 새 작품</span>: 페이지 패널에서 넘기기(<kbd>PageUp</kbd>/<kbd>PageDown</kbd>), 카드를 끌어 순서 바꾸기.</li>
+  <li><b>진행표</b>: 페이지마다 콘티→선화→채색→완료, 작업 시간 자동 측정, 마감일·하루 몇 쪽.</li>
+  <li><b>원고 설정</b>: B5·A5·B6·A4·투고 B4 → 재단선·도련·안전선 가이드.</li>
+  <li><b>효과음 글자</b> <span class="where">만화 &gt; 효과음 글자 도구</span>: "쾅!", "두근" 같은 의성어를 아치·물결·원근·흔들림·통통으로 휘고, 글자마다 크기·각도·위치를 따로, 안쪽·바깥쪽 2중 외곽선, 그라데이션, 기울기, 자간, 세로쓰기. 모양 모음(쾅!·두근·스윽·ドーン·파바박·휘익). 다시 탭하면 언제든 고치고, 변형 도구로 크기·회전·원근을 줘도 글자 정보가 남습니다. 붓으로 다듬으려면 "그림으로 바꾸기". 내 글꼴(data/fonts)도 됩니다.</li>
+  <li><b>컷 나누기 템플릿</b> <span class="where">만화 메뉴</span>: 1컷·2단·3단·4컷·2×2·계단·큰 컷+2칸·대각선·사선·웹툰 세로 컷 등을 골라 바로 넣기. 원고 설정이 있으면 안전선(또는 재단선)에 맞추고, 칸 사이 간격은 직접. 지금 페이지의 컷을 내 템플릿으로 저장·이름 바꾸기·지우기, 세팅 파일(.cpset)로 주고받기.</li>
+  <li><b>인쇄·투고 전 점검</b> <span class="where">만화·파일 메뉴</span>: 해상도(흑백 600dpi·컬러 300dpi), 캔버스가 도련보다 작음, 재단선 그림이 도련까지 안 이어짐, 안전선 밖 글자·말풍선, 7pt 보다 작은 글자, 없는 글꼴, 흑백 원고의 회색·섞인 컬러, 보이는 러프 레이어, 비상업 AI, 빈 페이지를 한 번에 찾아 목록으로. "가서 보기"로 그 자리로, 러프는 "밑그림으로", 회색은 "2값화 조정 레이어"로 바로 고치기. 여러 페이지 작품은 전체 페이지를 점검.</li>
+</ul>
+</section>
+
+<section id="color">
+<h2>7. 채색·보정</h2>
+<ul>
+  <li>색 패널: 색상/채도/명도, RGB, 최근 색, 팔레트. <kbd>X</kbd> 전경/배경 바꾸기.</li>
+  <li>보정: 레벨·곡선·색조/채도·색 균형·밝기/대비·자연 채도·그라데이션 맵·흑백·포스터화·한계값·반전, 조정 레이어로도.</li>
+  <li>필터: 선화 추출·흑백·흐림·외곽선·그림자·색 입히기·선명하게·노이즈·모자이크·움직임/방사 흐림·발광.</li>
+  <li><b>선화 정리</b> <span class="where">필터 메뉴</span>: 먼지·작은 점 지우기, 끊긴 선 잇기, 가장자리 매끈하게, 선 굵기 ±, 진하게. 스캔한 흰 바탕 원고도 됩니다.</li>
+  <li><b>이미지 AI (내 PC)</b> <span class="where">필터 &gt; 이미지 AI로 다시 그리기</span>: 이 PC 에서 켜 둔 Stable Diffusion WebUI(AUTOMATIC1111·Forge, <code>--api</code> 로 실행)에 지금 그림을 보내 결과를 새 레이어 "AI 결과"로 받습니다. 그림은 이 PC 밖으로 나가지 않으며, 다른 컴퓨터 주소는 막혀 있습니다. AI 프로그램은 따로 설치해야 합니다.</li>
+</ul>
+<h3>포토샵식 고치기 도구 <span class="where">편집 · 선택 메뉴, 도구 막대 "…"</span></h3>
+<ul>
+  <li><b>복구 브러시</b>: 스팟 복구(그냥 문지르면 주변에서 비슷한 곳을 골라 씀) / 복구 브러시(<kbd>Alt</kbd>+클릭으로 원본). 결(무늬)은 원본에서, 색·밝기는 그 자리 주변에 맞춰 잡티·먼지·흉터를 지웁니다.</li>
+  <li><b>내용 인식 채우기</b> <span class="where">편집 메뉴 / 선택 막대</span>: 지울 물체를 대충 선택 → 주변 무늬로 메웁니다(PatchMatch 방식, 따로 도는 계산이라 화면이 멈추지 않음). 이 레이어에 또는 새 레이어로.</li>
+  <li><b>펜 (패스)</b> <span class="where">선택 메뉴 &gt; 펜 도구</span>: 탭 = 꺾인 점, 끌기 = 곡선 점, 첫 점 탭 = 닫기, 점·손잡이 끌어 고치기(<kbd>Alt</kbd> = 한쪽 손잡이만), 점 두 번 탭 = 꺾임↔곡선, <kbd>Alt</kbd>+탭 = 점 지우기. 패스 → 선택 영역 / 선택 영역 → 패스 / 지금 브러시로 선 그리기(시작·끝 가늘게) / 칠하기. 패스는 작품에 저장됩니다.</li>
+  <li><b>원근·격자 왜곡</b> <span class="where">편집 메뉴</span>: 한 면·두 면(건물 모서리처럼 꺾인 벽)·격자 3×3/4×4. 점을 끌어 맞추고 Enter.</li>
+  <li><b>퍼펫 왜곡</b> <span class="where">편집 메뉴</span>: 그림에 핀을 꽂고 끌면 나머지가 자연스럽게 휩니다(팔·머리카락·옷자락). <kbd>Alt</kbd>+탭 = 핀 빼기, Enter = 적용, Esc = 취소.</li>
+  <li><b>선택 다듬기</b> <span class="where">선택 메뉴</span>: 매끄럽게·경계 이동·페더·대비를 바로 보며 조절. <b>머리카락 다듬기</b> 브러시로 털·머리카락 가장자리를 문지르면 안팎 색을 보고 다시 선택합니다.</li>
+  <li><b>자동 액션</b> <span class="where">편집 &gt; 자동 액션</span>: "새로 기록" → 메뉴 명령·필터·보정 실행(대화상자 값도 기록) → "기록 멈추기"로 저장. 실행 한 번, 또는 <b>일괄</b>: 지금 작품의 모든 쪽 / 작품 폴더의 모든 그림에 적용(PNG 로 내보내기 또는 저장). 펜 획은 기록되지 않습니다.</li>
+</ul>
+<h3>내장 AI <span class="where">AI 메뉴</span></h3>
+<p>AI 모델을 앱 안(이 PC)에서 돌립니다. 그림은 밖으로 나가지 않습니다. 처음에는 <b>AI &gt; AI 모델 관리</b>에서 쓸 모델을 받으세요(서버 모드에서만, 모델은 data/models 폴더). 그래픽 가속(WebGPU)이 되면 빠르고, 안 되면 CPU로 저절로 바뀝니다(느림).</p>
+<ul>
+  <li><b>AI 선화 추출</b>: 채색 그림·스캔 원고에서 선만 뽑아 "AI 선화" 레이어로(만화용 MangaLineExtraction, Anime2Sketch, 사진용 Informative Drawings).</li>
+  <li><b>AI 캐릭터·배경 따기</b>: 캐릭터만 선택 영역으로 또는 오려 낸 새 레이어로(anime-segmentation, BiRefNet, RMBG).</li>
+  <li><b>AI 고르기</b>: 그림을 한 번 읽은 뒤 탭한 물체를 선택(Shift+탭 더하기, Alt+탭 빼기). 기본 모델은 빠른 <b>MobileSAM</b>(설치 파일에 들어 있음, 노트북에서도 몇 초).</li>
+  <li><b>사진에서 퍼스 자</b> <span class="where">AI 메뉴 / 자 메뉴</span>: 배경 사진·그림의 곧은 선(건물·가구·바닥)을 찾아 소실점을 계산하고 1·2·3점 투시 자를 만듭니다. 찾은 소실선이 잠깐 색으로 보이고, 자 도구로 점을 다듬을 수 있습니다(AI 모델 없이 계산만).</li>
+  <li><b>AI 깊이 추정</b>: 밝을수록 가까운 흑백 그림 → 명암·원근 참고(Depth Anything V2).</li>
+  <li><b>AI 크기 키우기</b>: 2배·4배로 키운 새 작품(Real-ESRGAN).</li>
+  <li><b>사진에서 자세·손 모양</b>: 3D 소재 창의 인형·손 모델에서 "사진에서 자세 (AI)"(MediaPipe).</li>
+</ul>
+<p><b>라이선스 표시</b>: 모델마다 <b>상업 가능</b> / <b>확인 필요</b>(저장소는 상업 허용, 모델 파일 표기 없음) / <b>⚠ 비상업</b>. 비상업 모델은 쓸 때 "이 작품은 상업용이 아닙니다" 확인을 받고, 결과 레이어 이름에 (비상업 AI)가 붙고, 작품에 기록이 남아 아래 막대에 "⚠ 비상업 AI 사용"이 보이며, 내보낼 때 다시 알려 줍니다. 판매·연재·외주·회사 업무에는 비상업 모델을 쓰지 마세요.</p>
+<ul>
+  <li><b>명도 확인 보기</b> <kbd>Shift</kbd>+<kbd>Y</kbd>: 화면만 흑백 → 5단계 명암 → 끔.</li>
+  <li><b>용지 질감</b>: 레이어 패널 맨 아래 용지 줄의 "질감". 칠한 그림 위에도 결 보이기.</li>
+  <li>대칭 그리기(좌우·상하·방사), 참조 이미지 창, 내비게이터.</li>
+</ul>
+</section>
+
+<section id="three">
+<h2>8. 3D 소재 <span class="where">만화 &gt; 3D 소재</span></h2>
+<ul>
+  <li><b>데생 인형</b>: 관절 19개, 포즈 프리셋, 좌우 뒤집기, <b>체형</b>(머리·몸통·어깨·골반·팔·다리·두께, 8등신~SD 프리셋), <b>손발 끌기</b>(손·발을 끌면 팔꿈치·무릎이 따라 굽혀짐).</li>
+  <li><b>손 모델</b>: 오른손/왼손, 손가락 마디마다 굽히기, 주먹·가리키기·브이·엄지척·잡기·OK 포즈.</li>
+  <li>상자·구·원기둥·계단·책상·의자 등, <b>3D 모델 불러오기</b>(.glb/.gltf/.obj).</li>
+  <li>시점·화각·부감/앙각·빛 방향·음영 단계·선 굵기.</li>
+  <li><b>만화에 넣기</b>: 원고 크기 그대로 색·음영·선화 레이어로, <b>퍼스 자</b>도 시점 그대로 만들어짐.</li>
+  <li>인형은 팔다리가 끝으로 갈수록 가늘어지는 사람 모양입니다.</li>
+  <li><b>동작 파일(BVH) 불러오기</b>: 모션 캡처 .bvh 파일을 인형에 입히고 프레임 막대로 자세 고르기(관절 이름이 달라도 흔한 이름은 알아봄).</li>
+  <li><b>애니메이션 프레임으로</b>: BVH 동작·카메라 한 바퀴를 원하는 장수만큼 렌더해 애니 패널 "3D 애니" 폴더로.</li>
+</ul>
+</section>
+
+<section id="vtuber">
+<h2>버튜버 <span class="where">AI 메뉴 &gt; 버튜버 스튜디오</span></h2>
+<ul>
+  <li><b>아바타 만들기</b> (버튜버 아바타 만들기): 캐릭터를 부위별 레이어로 그려 두면(몸·얼굴·뒷머리·앞머리·눈 뜸/감음·눈동자·눈썹·입 닫힘/벌림·볼터치·액세서리, 있으면 입 ㅏㅣㅜㅔㅗ) 레이어 이름으로 부위를 짐작해 줍니다. 틀린 것만 고르고, 깊이(클수록 고개 방향으로 더 움직임)를 바꿀 수 있습니다. PSD 로 그린 캐릭터도 열어서 그대로 쓰면 됩니다.</li>
+  <li><b>움직임</b>: 고개 좌우·위아래(부위 깊이에 따른 입체감)·기울기, 눈 깜빡임(추적 안 할 때는 자동), 눈동자, 눈썹, 입 벌림·모양, 숨쉬기, 머리카락 흔들림(용수철).</li>
+  <li><b>웹캠 얼굴 추적</b>: "카메라 얼굴 추적 켜기" — 표정·고개를 그대로 따라 합니다(MediaPipe 얼굴 모델, AI 모델 관리 또는 처음 세팅에서 "버튜버 얼굴 추적" 받기, 3.8MB). 영상은 이 PC 안에서만 쓰고 저장·전송하지 않습니다. "거울처럼", 움직임 크기·입 민감도·부드럽게 조절.</li>
+  <li><b>마이크</b>: 말소리 크기로 입이 움직입니다(카메라 없이도). <b>PNG 버튜버</b>: "PNG: 가만히 / 말할 때 / 눈 감음" 그림 몇 장만 정하면 말할 때 그림이 바뀌고 살짝 튑니다.</li>
+  <li><b>표정</b>: "표정" 레이어에 1~9 키를 주면 스튜디오(와 방송 창)에서 숫자 키로 켜고 끕니다. 0 = 기본.</li>
+  <li><b>방송</b>: "방송 창 열기" → 캐릭터만 보이는 창(초록·자홍·파랑 배경). OBS 에서 "창 캡처"로 이 창을 잡고 색 키(크로마 키)로 배경을 빼세요. 본 창을 내려도 방송 창은 계속 움직입니다.</li>
+  <li><b>녹화·사진</b>: MP4(안 되면 WebM, 마이크 소리 포함)·PNG 를 data/exports 에. <b>.cpvt 아바타 파일</b>로 저장해 두면 작품 없이 그 파일만 열어 방송할 수 있습니다.</li>
+  <li>카메라·마이크는 ComicPad 창(이 PC)에서만 됩니다. 와이파이로 연결한 태블릿·휴대폰에서는 브라우저 보안 규칙(https 필요) 때문에 안 됩니다.</li>
+</ul>
+</section>
+
+<section id="anim">
+<h2>9. 애니메이션</h2>
+<ul>
+  <li><b>타임라인 (트랙 × 프레임)</b>: 애니 패널의 격자. 줄 = 트랙(애니메이션 폴더), 칸 = 프레임. 트랙을 여러 개 만들어 몸·팔·배경을 따로 움직입니다 (애니 &gt; 트랙 추가).</li>
+  <li><b>칸</b>: 그림이 있는 칸 = 새 그림, 옅은 띠 = 앞 그림 이어 보이기(길게), 점선 테두리 = <b>연결된 칸</b>(다른 프레임과 같은 그림 — 하나 고치면 같이 바뀜), 빈 칸 = 안 보임(두 번 누르면 새 그림).</li>
+  <li><b>프레임 추가</b>: +빈(새 그림) · +복제(지금 그림 복사) · +연결(같은 그림 이어 쓰기). 지금 트랙만 새 그림을 받고 다른 트랙은 앞 그림이 이어집니다. 연결 끊기·칸 비우기·칸 옮기기.</li>
+  <li><b>프레임 길이</b>: 지금 그림을 1·2·3·4·6·8장 동안, 또는 프레임마다 ms 로 따로(Aseprite식).</li>
+  <li><b>태그(구간)</b>: "걷기 1~8" 처럼 이름을 붙이고 정방향·역방향·<b>핑퐁</b>으로 반복. "이 구간만 재생", 내보낼 때 구간 고르기.</li>
+  <li><b>어니언 스킨</b>: 앞뒤 0~5장, 앞·뒤 색, 진하기, 멀수록 옅게. 같은 그림을 길게 보여 주는 칸은 건너뛰고 다른 그림만.</li>
+  <li><b>라이트 테이블</b>: 원화·기준 그림을 올려 두면 어느 프레임에서나 흐리게 보임 (내보내기에는 안 나옴).</li>
+  <li><b>타임시트(노출표)</b> <span class="where">애니 메뉴</span>: 프레임 × 트랙 표에 그림 번호를 적어 타이밍 고치기("|" = 이어 보이기), CSV 저장.</li>
+  <li><b>스프라이트 시트</b>: 격자·가로·세로 배치, 여백, 투명 가장자리 잘라내기, <b>Aseprite 형식 JSON</b>(프레임 위치·시간·태그)을 함께 저장 → Unity·Godot·Phaser 등 게임 엔진. 시트 가져오기(칸 수·칸 크기·JSON으로 자르기).</li>
+  <li><b>Aseprite 파일 열기</b> (.aseprite/.ase, 파일 &gt; 열기에서도): 레이어 → 트랙, 연결 셀, 프레임 시간, 태그, 팔레트(“팔레트로 쓰기”). 타일맵 레이어·슬라이스는 아직 못 읽습니다.</li>
+  <li><b>움짤 만들기</b> <span class="where">애니 메뉴 / 애니 패널</span>: 누르면 바로 GIF 로 (지난 설정 그대로, 처음엔 50%·무한 반복). <b>내보내기 (형식 고르기)</b>에서 GIF · <b>WebP</b>(작고 선명, 투명) · <b>APNG</b>(색 그대로, 투명) · <b>MP4</b>(SNS 용) · WebM · PNG 연번, 크기·구간·반복 횟수·배경 투명·GIF 색 수·디더링·WebP 화질을 고르고, 예상 파일 크기를 미리 보여 줍니다.</li>
+  <li><b>모션 경로 (트윈)</b> <span class="where">애니 &gt; 모션 경로 도구</span>: 트랙의 그림을 끌어 프레임마다 위치 키를 찍으면(Shift = 회전, Alt = 크기) 사이 프레임은 이징(천천히 출발·정지, 통통 튐, 직접 곡선 등)을 따라 자동으로 움직입니다. 원고 위에 경로와 키(네모)가 보이고 끌어서 고칩니다. 그림은 그대로 두고 그릴 때만 움직이며, "그림으로 굳히기"로 프레임마다 그림을 만들 수 있습니다. 내보내기·어니언 스킨에도 반영됩니다.</li>
+  <li><b>립싱크 (입 모양 자동)</b> <span class="where">애니 패널, 소리가 있을 때</span>: 입 모양 그림(닫힘·반·ㅏ·ㅣ·ㅜ)을 트랙 하나에 그리고 모양마다 그림을 고르면, 소리의 크기와 높낮이를 분석해 그 트랙의 칸을 자동으로 채웁니다(너무 짧게 바뀌지 않게 2장 이상 유지). 대략 고르는 것이라 끝나고 다듬으세요.</li>
+  <li><b>소리</b>: 음악·대사·효과음 파일 하나를 붙여 재생과 함께 듣기, 프레임 막대에 소리 모양 표시, 프레임을 넘길 때 그 부분만 짧게 들림, 시작 위치·음량. WebM 으로 내보내면 소리도 들어갑니다.</li>
+  <li><b>카메라</b>: 프레임마다 위치·확대·회전 키를 찍으면 사이 프레임은 부드럽게 이어짐(팬·줌·회전). 화면에 카메라 틀 표시, 내보낼 때 적용.</li>
+  <li>내보내기: GIF · WebM 동영상 · PNG 연번.</li>
+  <li><b>타임랩스</b> <span class="where">보기 메뉴</span>: 기록을 켜면 그릴 때마다 장면을 찍어 두었다가 동영상으로.</li>
+</ul>
+</section>
+
+<section id="export">
+<h2>10. 내보내기·인쇄</h2>
+<ul>
+  <li><b>전자책 (EPUB 3 / CBZ)</b> <span class="where">파일 메뉴</span>: 지금 그림 또는 여러 페이지 작품 전체 → 고정 레이아웃 EPUB(한 쪽 = 그림 한 장, 펼침면 좌우, 오른쪽→왼쪽 넘김 선택) 또는 만화 뷰어용 CBZ(ComicInfo 포함). 원고 설정이 있으면 재단선 안쪽만.</li>
+  <li><b>이미지 내보내기</b> <kbd>Ctrl</kbd>+<kbd>Shift</kbd>+<kbd>E</kbd>: PNG/JPG, 배율, 투명 배경, 원고 설정이 있으면 재단선/도련/전체.</li>
+  <li><b>인쇄용 내보내기</b>: PDF 한 파일 / 1비트 흑백 TIFF / PNG, 흑백 기준값 또는 디더링, 여러 페이지 작품 전체.</li>
+  <li><b>CMYK 인쇄</b>: 인쇄소가 준 ICC 프로파일(또는 Windows 에 설치된 프로파일)로 CMYK 변환 → CMYK TIFF(프로파일 포함) / CMYK PDF(출력 의도 포함). 지각적·상대 색도 선택.</li>
+  <li><b>인쇄 색 미리보기</b> <span class="where">보기 메뉴</span>: 화면에서 CMYK 로 찍혔을 때 색을 흉내 내고, 인쇄로 못 내는 색은 표시.</li>
+  <li><b>웹툰 플랫폼 규격</b>: 가로폭 맞춤 → 세로로 나누기(되도록 컷 사이 빈 곳) → 장당 용량에 맞춰 압축. 규격은 바뀔 수 있으니 올리기 전 공지 확인.</li>
+  <li><b>웹툰 분할</b>, <b>레이어별 내보내기</b>, <b>PSD 열기·저장</b>(레이어·폴더·마스크 유지, 열 때 레벨·곡선·밝기/대비·색조/채도·반전·포스터화·한계값·흑백 조정 레이어는 조정 레이어 그대로). 글자 레이어는 포토샵에서 <b>다시 고칠 수 있는 글자</b>로 저장(글꼴·크기·색·정렬·세로쓰기).</li>
+  <li><b>펼침면 미리보기</b>(책처럼 두 쪽, 넘김 방향), <b>웹툰 미리보기</b>(휴대폰 폭).</li>
+  <li><b>에셋</b>: 레이어·선택 영역을 투명 PNG 에셋으로 저장해 에셋 패널에서 끌어 쓰기. <b>포토샵 브러시(.abr) 가져오기</b>.</li>
+</ul>
+</section>
+
+<section id="save">
+<h2>11. 저장·백업·협업</h2>
+<ul>
+  <li><b>작업물 자동 백업</b> <span class="where">파일 &gt; 작업물 백업</span>: 하루 한 번(간격 바꿀 수 있음) 작품·에셋·글꼴·설정을 zip 하나로 묶어 dataackups 에 두고 최근 14개만 남깁니다. 구글 드라이브 사본이 켜져 있으면 드라이브의 ComicPad\백업 에도 한 부. 목록에서 작품 하나를 "(복원 날짜)" 새 파일로 꺼낼 수 있습니다(지금 파일은 덮어쓰지 않음).</li>
+  <li><b>자동 저장</b>(설정에서 간격), 비정상 종료 후 다시 켜면 복구 제안.</li>
+  <li><b>버전 기록</b> <span class="where">파일 메뉴</span>: 저장할 때마다 이전 판 보관(작품마다 30개). 따로 열기·되돌리기·<b>비교</b>(밀어서·겹쳐·달라진 곳 빨갛게·나란히).</li>
+  <li><b>저장 충돌 감지</b>: 연 뒤에 다른 곳에서 같은 작품이 저장됐으면 알리고, 덮어쓸지 묻습니다.</li>
+  <li><b>구글 드라이브 사본</b> <span class="where">파일 &gt; 저장 위치</span>: Google Drive 데스크톱 앱의 내 드라이브\ComicPad 로 저장할 때마다 복사. 다른 PC 에서 저장한 것은 "드라이브에서 가져오기".</li>
+  <li><b>휴대폰·태블릿</b> <span class="where">도움말 &gt; 휴대폰·태블릿 연결</span>: 같은 와이파이에서 QR 로 연결(보안 키 필요). 연결이 끊기면 기기에 임시 저장.</li>
+  <li><b>피드백 파일</b>: 러프·메모만 작은 .cpfb 파일로 보내고, 받은 쪽은 자기 원고 위 "피드백" 폴더로 얹어 봄.</li>
+  <li><b>업데이트</b>: 켤 때 하루 한 번 새 버전을 확인해 알려 줍니다(인터넷이 있을 때만). <b>도움말 &gt; 업데이트 확인</b>에서 직접 확인하거나 자동 확인을 끌 수 있습니다. 만든 사람의 서명이 맞는 파일만 받고, 그린 그림·설정(data 폴더)은 건드리지 않습니다. 바꾸기 전 프로그램은 data\updates 에 남겨 둡니다.</li>
+  <li><b>창을 닫으면</b> 뒤에서 돌던 ComicPad 서버(python)도 같이 꺼집니다. 휴대폰 연결을 켜 두었으면 휴대폰이 계속 쓸 수 있게 서버는 남습니다. 설치 파일을 실행할 때 ComicPad 가 켜져 있으면 먼저 끄고(저장 안 한 작업은 창이 물어봄) 설치합니다.</li>
+</ul>
+</section>
+
+<section id="keys">
+<h2>12. 단축키</h2>
+<table>
+<tr><th>동작</th><th>키</th></tr>
+<tr><td>새로 만들기 / 열기 / 저장 / 다른 이름</td><td><kbd>Ctrl</kbd>+<kbd>N</kbd> / <kbd>Ctrl</kbd>+<kbd>O</kbd> / <kbd>Ctrl</kbd>+<kbd>S</kbd> / <kbd>Ctrl</kbd>+<kbd>Shift</kbd>+<kbd>S</kbd></td></tr>
+<tr><td>실행취소 / 다시실행</td><td><kbd>Ctrl</kbd>+<kbd>Z</kbd> / <kbd>Ctrl</kbd>+<kbd>Y</kbd> (<kbd>Ctrl</kbd>+<kbd>Shift</kbd>+<kbd>Z</kbd>)</td></tr>
+<tr><td>잘라내기 / 복사 / 붙여넣기 / 지우기 / 채우기</td><td><kbd>Ctrl</kbd>+<kbd>X</kbd> <kbd>C</kbd> <kbd>V</kbd> / <kbd>Delete</kbd> / <kbd>Alt</kbd>+<kbd>Backspace</kbd></td></tr>
+<tr><td>변형</td><td><kbd>Ctrl</kbd>+<kbd>T</kbd>, 확정 <kbd>Enter</kbd>, 취소 <kbd>Esc</kbd></td></tr>
+<tr><td>전체 선택 / 해제 / 반전</td><td><kbd>Ctrl</kbd>+<kbd>A</kbd> / <kbd>Ctrl</kbd>+<kbd>D</kbd> / <kbd>Ctrl</kbd>+<kbd>Shift</kbd>+<kbd>I</kbd></td></tr>
+<tr><td>새 레이어 / 복제 / 아래로 병합 / 클리핑 / 폴더로 묶기</td><td><kbd>Ctrl</kbd>+<kbd>Shift</kbd>+<kbd>N</kbd> / <kbd>Ctrl</kbd>+<kbd>J</kbd> / <kbd>Ctrl</kbd>+<kbd>E</kbd> / <kbd>Ctrl</kbd>+<kbd>Alt</kbd>+<kbd>G</kbd> / <kbd>Ctrl</kbd>+<kbd>G</kbd></td></tr>
+<tr><td>화면 맞춤 / 100% / 확대 / 축소</td><td><kbd>Ctrl</kbd>+<kbd>0</kbd> / <kbd>Ctrl</kbd>+<kbd>Alt</kbd>+<kbd>0</kbd> / <kbd>Ctrl</kbd>+<kbd>=</kbd> / <kbd>Ctrl</kbd>+<kbd>-</kbd></td></tr>
+<tr><td>화면 회전 / 좌우 반전</td><td><kbd>Ctrl</kbd>+<kbd>[</kbd> <kbd>]</kbd> / <kbd>Shift</kbd>+<kbd>H</kbd></td></tr>
+<tr><td>브러시 크기</td><td><kbd>[</kbd> <kbd>]</kbd></td></tr>
+<tr><td>패널 모두 숨기기</td><td><kbd>Tab</kbd></td></tr>
+<tr><td>기능 검색 / 기능 안내 / 단축키 목록</td><td><kbd>Ctrl</kbd>+<kbd>K</kbd> / <kbd>F2</kbd> / <kbd>F1</kbd></td></tr>
+<tr><td>명도 확인 보기</td><td><kbd>Shift</kbd>+<kbd>Y</kbd></td></tr>
+<tr><td>작업 화면 1~4</td><td><kbd>Ctrl</kbd>+<kbd>Alt</kbd>+<kbd>1</kbd>~<kbd>4</kbd></td></tr>
+<tr><td>이전/다음 페이지</td><td><kbd>PageUp</kbd> / <kbd>PageDown</kbd></td></tr>
+</table>
+<p>도구 키를 <b>길게 누르고 있으면</b> 그동안만 그 도구로 바뀝니다. 단축키는 도움말 &gt; 단축키 편집에서 바꿀 수 있습니다.</p>
+</section>
+
+<section id="extend">
+<h2>13. 기능 추가하기 (플러그인)</h2>
+<ul>
+  <li>설치 폴더의 <code>plugins</code> 에 .js 파일 하나를 넣으면 켤 때 불러옵니다(이름이 <code>_</code> 로 시작하면 꺼짐). 명령·메뉴·도구·패널을 추가할 수 있습니다 — <code>plugins/README.md</code> 참고.</li>
+  <li>앱 자체는 <code>app/js</code> 의 파일을 직접 고칠 수 있습니다(빌드 과정 없음).</li>
+</ul>
+</section>
+
+<section id="trouble">
+<h2>14. 문제가 생기면</h2>
+<ul>
+  <li><b>도움말 &gt; 자동 점검</b>: 주요 기능 42가지를 시험용 그림에서 돌려 보고 결과를 표로 보여 줍니다(작업 중인 그림은 그대로).</li>
+  <li>앱이 안 열림: Python 이 설치되어 있는지, 바탕화면 아이콘으로 열었는지 확인. 서버 없이 열렸으면 위쪽 알림의 저장 위치를 확인하세요.</li>
+  <li>창이 갑자기 닫혔음: 다시 켜면 자동 저장본 복구를 제안합니다. 파일 &gt; 자동 저장 복구, 버전 기록도 확인.</li>
+  <li>펜이 이상함: 도움말 &gt; S펜 필기감 진단 → 추천값 적용, 어색하면 "기본값으로".</li>
+  <li>아주 큰 원고(B4 600dpi 등)에서 느림: <b>메모리 절약</b>이 한동안 안 쓴 레이어를 압축해 둡니다(아래 막대 "💤 레이어 n개 절약 중", 레이어를 고르면 바로 돌아옴). 설정 &gt; 큰 원고 메모리 절약에서 자동/항상/끄기, 보기 &gt; 지금 압축. 그래도 무거우면 다 그린 레이어를 병합하세요.</li>
+  <li>앱 밖 창이 안 열림: 브라우저 주소창에서 팝업 허용.</li>
+</ul>
+</section>
+
+<section id="missing">
+<h2>15. 아직 없는 기능</h2>
+<ul>
+  <li><b>휴대폰 단독 사용</b>(PC 없이): https 주소가 필요합니다. 지금은 같은 와이파이로 PC 에 연결해서 씁니다.</li>
+  <li><b>여러 사람이 동시에 같은 원고 편집</b>(실시간 협업), <b>클라우드 계정</b>. 지금은 구글 드라이브 사본·피드백 파일로 주고받습니다.</li>
+  <li><b>아이패드 Safari</b>: 일부 기능(폴더 직접 저장 등)이 안 됩니다.</li>
+  <li><b>AI 모델</b>: 탭 선택(MobileSAM)·크기 키우기 모델만 설치 파일에 들어 있고, 나머지는 처음에 AI 모델 관리에서 받아야 합니다(인터넷 필요). 일부는 PyTorch 가 있는 PC 에서만 변환해 쓸 수 있고, RMBG 는 약관 동의 후 직접 받아야 합니다. 그림을 새로 그려 주는 생성형 AI 는 넣지 않았습니다(따로 설치한 SD WebUI 연결만).</li>
+  <li><b>CMYK</b>: 프로파일로 변환해 내보내기·미리보기는 되지만, 그리는 동안 CMYK 로 작업하지는 않습니다(RGB 로 그리고 내보낼 때 변환).</li>
+  <li><b>PSD</b>: 말풍선·벡터 선은 여전히 그림으로 저장됩니다(글자만 글자 그대로).</li>
+</ul>
+</section>
+
+<section id="license">
+<h2>16. 라이선스</h2>
+<ul>
+  <li>ComicPad 는 <b>Apache License 2.0</b> 으로 배포합니다. 누구나 쓰고, 고치고, 다시 배포하고, 상업적으로 쓸 수 있습니다. 다시 배포할 때는 LICENSE·NOTICE 파일을 함께 넣고, 고친 파일에는 고쳤다고 적어야 합니다.</li>
+  <li>ComicPad 로 그린 그림·만화·애니메이션의 권리는 <b>그린 사람</b>에게 있습니다.</li>
+  <li>함께 들어 있는 라이브러리·AI 모델(ONNX Runtime, MediaPipe, MobileSAM, Real-ESRGAN, WebView2, Python)의 라이선스 전문은 <b>도움말 &gt; ComicPad 정보 · 라이선스</b>에서 볼 수 있습니다.</li>
+  <li>AI 모델 관리에서 따로 받는 모델은 각자의 라이선스를 따릅니다. <b>⚠ 비상업</b> 표시가 붙은 모델로 만든 결과물은 상업적으로 쓸 수 없습니다.</li>
+  <li>CLIP STUDIO PAINT(CELSYS), Photoshop(Adobe), Aseprite(Igara Studio)는 각 회사의 상표이며, ComicPad 는 이 회사들과 관계가 없습니다.</li>
+</ul>
+</section>
+
+</main>
+</div>
+<script>
+// 목차 만들기 + 찾기
+const toc = document.getElementById('toc'), q = document.getElementById('q');
+const secs = [...document.querySelectorAll('main section')];
+for (const s of secs) { const a = document.createElement('a'); a.href = '#' + s.id; a.textContent = s.querySelector('h2').textContent; toc.append(a); }
+const items = [...document.querySelectorAll('main li, main tr, main p, main .tip')];
+const orig = new Map(items.map(e => [e, e.innerHTML]));
+q.addEventListener('input', () => {
+  const k = q.value.trim().toLowerCase();
+  for (const [e, html] of orig) e.innerHTML = html;
+  for (const s of secs) {
+    if (!k) { s.classList.remove('hide'); s.querySelectorAll('.hide').forEach(x => x.classList.remove('hide')); continue; }
+    let any = s.querySelector('h2').textContent.toLowerCase().includes(k);
+    s.querySelectorAll('li, tr, p, .tip').forEach(e => {
+      const hit = e.textContent.toLowerCase().includes(k) || e.tagName === 'TR' && !e.querySelector('td');
+      e.classList.toggle('hide', !hit && !any);
+      if (hit && e.textContent.toLowerCase().includes(k)) { any = true; e.innerHTML = e.innerHTML.replace(new RegExp('(' + k.replace(/[.*+?^${}()|[\]\\]/g, '\\$&') + ')(?![^<]*>)', 'gi'), '<mark>$1</mark>'); }
+    });
+    s.classList.toggle('hide', !any);
+  }
+});
+const t = new URLSearchParams(location.search).get('theme');
+if (t) document.documentElement.dataset.theme = t;
+</script>
+</body>
+</html>

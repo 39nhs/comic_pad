@@ -1,0 +1,1 @@
+ComicPad 수정 사항: vision_bundle.mjs 의 사용 기록(odml.pa.googleapis.com) 전송 함수를 아무것도 보내지 않도록 바꿨습니다. 그 밖은 @mediapipe/tasks-vision 1.2.2 원본 그대로입니다 (Apache-2.0, LICENSE 참고).

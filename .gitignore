@@ -1,0 +1,19 @@
+# 작업물·만든 결과·큰 설치 파일은 저장소에 넣지 않음
+/data/
+/dist/
+/redist/
+/python/
+/python_path.txt
+# launcher/build.ps1 로 만드는 것
+/ComicPad.exe
+/ComicPad.old.exe
+/Microsoft.Web.WebView2.Core.dll
+/Microsoft.Web.WebView2.WinForms.dll
+/runtimes/
+# 기타
+__pycache__/
+*.pyc
+*.part
+*.cpold
+# 서명 비밀키는 절대 넣지 말 것 (보통 %USERPROFILE%\.comicpad 에 있음)
+release_key.json

@@ -1,0 +1,1 @@
+MobileSAM (https://github.com/ChaoningZhang/MobileSAM, Apache-2.0) 의 공식 가중치를 ComicPad 가 ONNX 로 바꾼 것입니다 (모델 구조·값은 그대로, 입출력 모양만 SlimSAM 과 같게).

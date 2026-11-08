@@ -1,0 +1,50 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no">
+<title>ComicPad</title>
+<link rel="icon" href="icon.png">
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="apple-touch-icon" href="icon-192.png">
+<meta name="theme-color" content="#2f2f35">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<link rel="stylesheet" href="css/style.css">
+</head>
+<body>
+<div id="app">
+  <header id="topbar">
+    <div class="brand">ComicPad</div>
+    <nav id="menubar"></nav>
+    <div class="spacer"></div>
+    <div id="top-actions"></div>
+  </header>
+  <div id="main">
+    <nav id="toolbar"></nav>
+    <div id="stage">
+      <canvas id="view"></canvas>
+      <div id="stage-overlay"></div>
+      <div id="quickbar"></div>
+    </div>
+    <aside id="sidepanel">
+      <section class="dock" id="dock-top">
+        <div class="dock-tabs" data-dock="top"></div>
+        <div class="dock-body"></div>
+      </section>
+      <div class="dock-split" id="dock-split"></div>
+      <section class="dock" id="dock-bottom">
+        <div class="dock-tabs" data-dock="bottom"></div>
+        <div class="dock-body"></div>
+      </section>
+    </aside>
+  </div>
+  <div id="bottombar"></div>
+  <footer id="statusbar"></footer>
+</div>
+<div id="menu-layer"></div>
+<div id="modal-root"></div>
+<div id="toast-root"></div>
+<script type="module" src="js/main.js"></script>
+</body>
+</html>
