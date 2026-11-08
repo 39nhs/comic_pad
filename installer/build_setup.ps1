@@ -20,6 +20,9 @@ Get-ChildItem $Root -Filter '*.bat' | Copy-Item -Destination $pkg
 $redist = Join-Path $Root 'redist'
 $pyZip = Get-ChildItem $redist -Filter 'python-*-embed-amd64.zip' | Select-Object -First 1
 if ($pyZip) { Expand-Archive $pyZip.FullName (Join-Path $pkg 'python') -Force; Write-Host "  Python 넣음: $($pyZip.Name)" -ForegroundColor Green }
+# ARM 노트북(스냅드래곤 등)용 Python 도 함께 (설치할 때 PC 종류에 맞는 것만 남김)
+$pyArm = Get-ChildItem $redist -Filter 'python-*-embed-arm64.zip' | Select-Object -First 1
+if ($pyArm) { Expand-Archive $pyArm.FullName (Join-Path $pkg 'python-arm64') -Force; Write-Host "  Python(ARM64) 넣음: $($pyArm.Name)" -ForegroundColor Green }
 else { Write-Host '  redist 에 Python 내장형이 없어 넣지 않았습니다 (설치할 PC 에 Python 필요)' -ForegroundColor Yellow }
 New-Item -ItemType Directory -Force (Join-Path $pkg 'redist') | Out-Null
 foreach ($n in 'MicrosoftEdgeWebView2RuntimeInstallerX64.exe', 'MicrosoftEdgeWebview2Setup.exe') {

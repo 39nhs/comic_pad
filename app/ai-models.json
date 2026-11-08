@@ -1,295 +1,310 @@
 {
-  "_note": "ComicPad 내장 AI 모델 목록. commercial: yes(상업 가능) / check(저장소는 상업 허용, 학습된 모델 파일엔 따로 표기 없음) / no(비상업). 파일은 data/models/<id>/ 에 받습니다.",
-  "models": [
+ "_note": "ComicPad 내장 AI 모델 목록. commercial: yes(상업 가능) / check(저장소는 상업 허용, 학습된 모델 파일엔 따로 표기 없음) / no(비상업). 파일은 data/models/<id>/ 에 받습니다.",
+ "models": [
+  {
+   "id": "pose-mp",
+   "task": "pose",
+   "name": "MediaPipe 포즈 (사진 → 인형 자세)",
+   "license": "Apache-2.0",
+   "commercial": "yes",
+   "source": "https://ai.google.dev/edge/mediapipe/solutions/vision/pose_landmarker",
+   "files": [
     {
-      "id": "pose-mp",
-      "task": "pose",
-      "name": "MediaPipe 포즈 (사진 → 인형 자세)",
-      "license": "Apache-2.0",
-      "commercial": "yes",
-      "source": "https://ai.google.dev/edge/mediapipe/solutions/vision/pose_landmarker",
-      "files": [
-        {
-          "name": "pose_landmarker_full.task",
-          "size": 9398198,
-          "url": "https://storage.googleapis.com/mediapipe-models/pose_landmarker/pose_landmarker_full/float16/latest/pose_landmarker_full.task"
-        }
-      ]
-    },
-    {
-      "id": "face-mp",
-      "task": "face",
-      "name": "MediaPipe 얼굴 (버튜버 얼굴 추적)",
-      "license": "Apache-2.0",
-      "commercial": "yes",
-      "source": "https://ai.google.dev/edge/mediapipe/solutions/vision/face_landmarker",
-      "files": [
-        {
-          "name": "face_landmarker.task",
-          "size": 3758596,
-          "url": "https://storage.googleapis.com/mediapipe-models/face_landmarker/face_landmarker/float16/latest/face_landmarker.task"
-        }
-      ]
-    },
-    {
-      "id": "hand-mp",
-      "task": "hand",
-      "name": "MediaPipe 손 (사진 → 손 모델 자세)",
-      "license": "Apache-2.0",
-      "commercial": "yes",
-      "source": "https://ai.google.dev/edge/mediapipe/solutions/vision/hand_landmarker",
-      "files": [
-        {
-          "name": "hand_landmarker.task",
-          "size": 7819105,
-          "url": "https://storage.googleapis.com/mediapipe-models/hand_landmarker/hand_landmarker/float16/latest/hand_landmarker.task"
-        }
-      ]
-    },
-    {
-      "id": "sam-mobile",
-      "task": "select",
-      "name": "MobileSAM (탭해서 물체 고르기, 빠름)",
-      "license": "Apache-2.0",
-      "commercial": "yes",
-      "source": "https://github.com/ChaoningZhang/MobileSAM",
-      "note": "설치 파일에 들어 있음 (공식 가중치를 ONNX 로 변환)",
-      "files": [
-        {
-          "name": "vision_encoder.onnx",
-          "size": 28052083
-        },
-        {
-          "name": "prompt_encoder_mask_decoder.onnx",
-          "size": 16435317
-        }
-      ]
-    },
-    {
-      "id": "sam-slim",
-      "task": "select",
-      "name": "SlimSAM (탭해서 물체 고르기)",
-      "license": "Apache-2.0",
-      "commercial": "yes",
-      "slow": "그림을 처음 읽을 때 노트북 내장 그래픽에서는 몇 분 걸릴 수 있습니다 (한 번 읽으면 탭은 1초 안쪽)",
-      "source": "https://huggingface.co/Xenova/slimsam-77-uniform",
-      "files": [
-        {
-          "name": "vision_encoder.onnx",
-          "url": "https://huggingface.co/Xenova/slimsam-77-uniform/resolve/main/onnx/vision_encoder.onnx",
-          "size": 23276014
-        },
-        {
-          "name": "prompt_encoder_mask_decoder.onnx",
-          "url": "https://huggingface.co/Xenova/slimsam-77-uniform/resolve/main/onnx/prompt_encoder_mask_decoder.onnx",
-          "size": 16557892
-        }
-      ]
-    },
-    {
-      "id": "seg-anime",
-      "task": "cutout",
-      "name": "애니 캐릭터 따기 (anime-segmentation ISNet)",
-      "license": "Apache-2.0",
-      "commercial": "yes",
-      "ep": "wasm",
-      "slow": "CPU 로 돌아 1분쯤 걸립니다 (그래픽 가속이 안 되는 연산이 있음)",
-      "source": "https://huggingface.co/skytnt/anime-seg",
-      "files": [
-        {
-          "name": "isnetis.onnx",
-          "url": "https://huggingface.co/skytnt/anime-seg/resolve/main/isnetis.onnx",
-          "size": 176069933
-        }
-      ]
-    },
-    {
-      "id": "seg-birefnet",
-      "task": "cutout",
-      "name": "배경 지우기 (BiRefNet lite, 무거움)",
-      "license": "MIT",
-      "commercial": "check",
-      "slow": "아주 무겁습니다. 전용 그래픽카드(VRAM 8GB 이상) PC 용이며, 노트북 내장 그래픽에서는 5분 넘게 걸리거나 메모리가 모자랄 수 있습니다",
-      "note": "저장소는 MIT. 학습된 모델 파일도 MIT 인지 묻는 질문에 공식 답이 아직 없습니다.",
-      "source": "https://huggingface.co/onnx-community/BiRefNet_lite-ONNX",
-      "files": [
-        {
-          "name": "model.onnx",
-          "url": "https://huggingface.co/onnx-community/BiRefNet_lite-ONNX/resolve/main/onnx/model.onnx",
-          "size": 224005088
-        }
-      ]
-    },
-    {
-      "id": "seg-rmbg14",
-      "task": "cutout",
-      "name": "배경 지우기 (BRIA RMBG-1.4)",
-      "license": "bria-rmbg-1.4 (비상업)",
-      "commercial": "no",
-      "note": "비상업용. 받으려면 BRIA 양식·약관에 직접 동의해야 해서 자동으로 받지 않습니다. 페이지에서 onnx/model.onnx 를 받아 '파일로 추가' 하세요.",
-      "source": "https://huggingface.co/briaai/RMBG-1.4",
-      "manual": true,
-      "files": [
-        {
-          "name": "model.onnx",
-          "size": 176153355
-        }
-      ]
-    },
-    {
-      "id": "line-manga",
-      "task": "lineart",
-      "name": "만화 선화 추출 (MangaLineExtraction)",
-      "license": "MIT",
-      "commercial": "check",
-      "note": "원 저장소(ljsabc/MangaLineExtraction_PyTorch)는 MIT. 학습된 모델 파일에 대한 별도 표기는 없습니다.",
-      "source": "https://huggingface.co/p1atdev/MangaLineExtraction-hf",
-      "files": [
-        {
-          "name": "model.onnx"
-        }
-      ],
-      "convert": {
-        "kind": "mle",
-        "from": [
-          {
-            "name": "model.safetensors",
-            "url": "https://huggingface.co/p1atdev/MangaLineExtraction-hf/resolve/main/model.safetensors",
-            "size": 86354074
-          }
-        ]
-      }
-    },
-    {
-      "id": "line-a2s",
-      "task": "lineart",
-      "name": "선화 추출 (Anime2Sketch)",
-      "license": "MIT",
-      "commercial": "check",
-      "note": "저장소(Mukosame/Anime2Sketch)는 MIT. 학습된 모델 파일에 대한 별도 표기는 없습니다.",
-      "source": "https://github.com/Mukosame/Anime2Sketch",
-      "files": [
-        {
-          "name": "model.onnx"
-        }
-      ],
-      "convert": {
-        "kind": "a2s",
-        "from": [
-          {
-            "name": "netG.pth",
-            "url": "https://huggingface.co/public-data/Anime2Sketch/resolve/main/netG.pth",
-            "size": 217631959
-          }
-        ]
-      }
-    },
-    {
-      "id": "line-informative",
-      "task": "lineart",
-      "name": "사진 → 선화 (Informative Drawings)",
-      "license": "MIT",
-      "commercial": "check",
-      "note": "저장소(carolineec/informative-drawings)는 MIT. ONNX 변환본은 제3자(rocca)가 올린 것입니다.",
-      "source": "https://huggingface.co/rocca/informative-drawings-line-art-onnx",
-      "files": [
-        {
-          "name": "model.onnx",
-          "url": "https://huggingface.co/rocca/informative-drawings-line-art-onnx/resolve/main/model.onnx",
-          "size": 17193338
-        }
-      ]
-    },
-    {
-      "id": "depth-s",
-      "task": "depth",
-      "name": "깊이 추정 Small (Depth Anything V2)",
-      "license": "Apache-2.0",
-      "commercial": "yes",
-      "source": "https://huggingface.co/onnx-community/depth-anything-v2-small",
-      "files": [
-        {
-          "name": "model.onnx",
-          "url": "https://huggingface.co/onnx-community/depth-anything-v2-small/resolve/main/onnx/model.onnx",
-          "size": 99060839
-        }
-      ]
-    },
-    {
-      "id": "depth-b",
-      "task": "depth",
-      "name": "깊이 추정 Base (Depth Anything V2)",
-      "license": "CC-BY-NC-4.0",
-      "commercial": "no",
-      "source": "https://huggingface.co/onnx-community/depth-anything-v2-base",
-      "files": [
-        {
-          "name": "model.onnx",
-          "url": "https://huggingface.co/onnx-community/depth-anything-v2-base/resolve/main/onnx/model_quantized.onnx",
-          "size": 102391398
-        }
-      ]
-    },
-    {
-      "id": "depth-l",
-      "task": "depth",
-      "name": "깊이 추정 Large (Depth Anything V2)",
-      "license": "CC-BY-NC-4.0",
-      "commercial": "no",
-      "source": "https://huggingface.co/onnx-community/depth-anything-v2-large",
-      "files": [
-        {
-          "name": "model.onnx",
-          "url": "https://huggingface.co/onnx-community/depth-anything-v2-large/resolve/main/onnx/model_quantized.onnx",
-          "size": 347424978
-        }
-      ]
-    },
-    {
-      "id": "up-animevideo",
-      "task": "upscale",
-      "name": "크기 키우기 ×4 빠름 (Real-ESRGAN animevideov3)",
-      "license": "BSD-3-Clause",
-      "commercial": "yes",
-      "source": "https://github.com/xinntao/Real-ESRGAN",
-      "files": [
-        {
-          "name": "model.onnx"
-        }
-      ],
-      "convert": {
-        "kind": "srvgg",
-        "from": [
-          {
-            "name": "realesr-animevideov3.pth",
-            "url": "https://github.com/xinntao/Real-ESRGAN/releases/download/v0.2.5.0/realesr-animevideov3.pth",
-            "size": 2504012
-          }
-        ]
-      }
-    },
-    {
-      "id": "up-anime6b",
-      "task": "upscale",
-      "name": "크기 키우기 ×4 고품질 (Real-ESRGAN anime 6B)",
-      "license": "BSD-3-Clause",
-      "commercial": "yes",
-      "source": "https://github.com/xinntao/Real-ESRGAN",
-      "files": [
-        {
-          "name": "model.onnx"
-        }
-      ],
-      "convert": {
-        "kind": "rrdb6",
-        "from": [
-          {
-            "name": "RealESRGAN_x4plus_anime_6B.pth",
-            "url": "https://github.com/xinntao/Real-ESRGAN/releases/download/v0.2.2.4/RealESRGAN_x4plus_anime_6B.pth",
-            "size": 17938799
-          }
-        ]
-      }
+     "name": "pose_landmarker_full.task",
+     "size": 9398198,
+     "url": "https://storage.googleapis.com/mediapipe-models/pose_landmarker/pose_landmarker_full/float16/1/pose_landmarker_full.task",
+     "sha256": "5134a3aad27a58b93da0088d431f366da362b44e3ccfbe3462b3827a839011b1"
     }
-  ]
+   ]
+  },
+  {
+   "id": "face-mp",
+   "task": "face",
+   "name": "MediaPipe 얼굴 (버튜버 얼굴 추적)",
+   "license": "Apache-2.0",
+   "commercial": "yes",
+   "source": "https://ai.google.dev/edge/mediapipe/solutions/vision/face_landmarker",
+   "files": [
+    {
+     "name": "face_landmarker.task",
+     "size": 3758596,
+     "url": "https://storage.googleapis.com/mediapipe-models/face_landmarker/face_landmarker/float16/1/face_landmarker.task",
+     "sha256": "64184e229b263107bc2b804c6625db1341ff2bb731874b0bcc2fe6544e0bc9ff"
+    }
+   ]
+  },
+  {
+   "id": "hand-mp",
+   "task": "hand",
+   "name": "MediaPipe 손 (사진 → 손 모델 자세)",
+   "license": "Apache-2.0",
+   "commercial": "yes",
+   "source": "https://ai.google.dev/edge/mediapipe/solutions/vision/hand_landmarker",
+   "files": [
+    {
+     "name": "hand_landmarker.task",
+     "size": 7819105,
+     "url": "https://storage.googleapis.com/mediapipe-models/hand_landmarker/hand_landmarker/float16/1/hand_landmarker.task",
+     "sha256": "fbc2a30080c3c557093b5ddfc334698132eb341044ccee322ccf8bcf3607cde1"
+    }
+   ]
+  },
+  {
+   "id": "sam-mobile",
+   "task": "select",
+   "name": "MobileSAM (탭해서 물체 고르기, 빠름)",
+   "license": "Apache-2.0",
+   "commercial": "yes",
+   "source": "https://github.com/ChaoningZhang/MobileSAM",
+   "note": "설치 파일에 들어 있음 (공식 가중치를 ONNX 로 변환)",
+   "files": [
+    {
+     "name": "vision_encoder.onnx",
+     "size": 28052083
+    },
+    {
+     "name": "prompt_encoder_mask_decoder.onnx",
+     "size": 16435317
+    }
+   ]
+  },
+  {
+   "id": "sam-slim",
+   "task": "select",
+   "name": "SlimSAM (탭해서 물체 고르기)",
+   "license": "Apache-2.0",
+   "commercial": "yes",
+   "slow": "그림을 처음 읽을 때 노트북 내장 그래픽에서는 몇 분 걸릴 수 있습니다 (한 번 읽으면 탭은 1초 안쪽)",
+   "source": "https://huggingface.co/Xenova/slimsam-77-uniform",
+   "files": [
+    {
+     "name": "vision_encoder.onnx",
+     "url": "https://huggingface.co/Xenova/slimsam-77-uniform/resolve/5850ab45f587c112167512ffef949107115e26a0/onnx/vision_encoder.onnx",
+     "size": 23276014,
+     "sha256": "9f8433273a6750b587779baa0cf5508111001bf7e7acfcf585d370139fd366d0"
+    },
+    {
+     "name": "prompt_encoder_mask_decoder.onnx",
+     "url": "https://huggingface.co/Xenova/slimsam-77-uniform/resolve/5850ab45f587c112167512ffef949107115e26a0/onnx/prompt_encoder_mask_decoder.onnx",
+     "size": 16557892,
+     "sha256": "f4514391764fbd56e08e119060d874ecd7d52994bfb1968af159e12d4943b5bb"
+    }
+   ]
+  },
+  {
+   "id": "seg-anime",
+   "task": "cutout",
+   "name": "애니 캐릭터 따기 (anime-segmentation ISNet)",
+   "license": "Apache-2.0",
+   "commercial": "yes",
+   "ep": "wasm",
+   "slow": "CPU 로 돌아 1분쯤 걸립니다 (그래픽 가속이 안 되는 연산이 있음)",
+   "source": "https://huggingface.co/skytnt/anime-seg",
+   "files": [
+    {
+     "name": "isnetis.onnx",
+     "url": "https://huggingface.co/skytnt/anime-seg/resolve/493cb60893f47441b26ec4fb9a306bce9e342982/isnetis.onnx",
+     "size": 176069933,
+     "sha256": "f15622d853e8260172812b657053460e20806f04b9e05147d49af7bed31a6e99"
+    }
+   ]
+  },
+  {
+   "id": "seg-birefnet",
+   "task": "cutout",
+   "name": "배경 지우기 (BiRefNet lite, 무거움)",
+   "license": "MIT",
+   "commercial": "check",
+   "slow": "아주 무겁습니다. 전용 그래픽카드(VRAM 8GB 이상) PC 용이며, 노트북 내장 그래픽에서는 5분 넘게 걸리거나 메모리가 모자랄 수 있습니다",
+   "note": "저장소는 MIT. 학습된 모델 파일도 MIT 인지 묻는 질문에 공식 답이 아직 없습니다.",
+   "source": "https://huggingface.co/onnx-community/BiRefNet_lite-ONNX",
+   "files": [
+    {
+     "name": "model.onnx",
+     "url": "https://huggingface.co/onnx-community/BiRefNet_lite-ONNX/resolve/de15b22ba131738a16dff04aab8bdf8dc32e3ac1/onnx/model.onnx",
+     "size": 224005088,
+     "sha256": "5600024376f572a557870a5eb0afb1e5961636bef4e1e22132025467d0f03333"
+    }
+   ]
+  },
+  {
+   "id": "seg-rmbg14",
+   "task": "cutout",
+   "name": "배경 지우기 (BRIA RMBG-1.4)",
+   "license": "bria-rmbg-1.4 (비상업)",
+   "commercial": "no",
+   "note": "비상업용. 받으려면 BRIA 양식·약관에 직접 동의해야 해서 자동으로 받지 않습니다. 페이지에서 onnx/model.onnx 를 받아 '파일로 추가' 하세요.",
+   "source": "https://huggingface.co/briaai/RMBG-1.4",
+   "manual": true,
+   "files": [
+    {
+     "name": "model.onnx",
+     "size": 176153355
+    }
+   ]
+  },
+  {
+   "id": "line-manga",
+   "task": "lineart",
+   "name": "만화 선화 추출 (MangaLineExtraction)",
+   "license": "MIT",
+   "commercial": "check",
+   "note": "원 저장소(ljsabc/MangaLineExtraction_PyTorch)는 MIT. 학습된 모델 파일에 대한 별도 표기는 없습니다.",
+   "source": "https://huggingface.co/p1atdev/MangaLineExtraction-hf",
+   "files": [
+    {
+     "name": "model.onnx"
+    }
+   ],
+   "convert": {
+    "kind": "mle",
+    "from": [
+     {
+      "name": "model.safetensors",
+      "url": "https://huggingface.co/p1atdev/MangaLineExtraction-hf/resolve/3c815256f6f9be1ead162e8caaee63b489731d00/model.safetensors",
+      "size": 86354074,
+      "sha256": "ea2fd106f2217f4e06a5d20c300e30a64c26a2f1f9e8068e114d2e9e040d2fa0"
+     }
+    ]
+   }
+  },
+  {
+   "id": "line-a2s",
+   "task": "lineart",
+   "name": "선화 추출 (Anime2Sketch)",
+   "license": "MIT",
+   "commercial": "check",
+   "note": "저장소(Mukosame/Anime2Sketch)는 MIT. 학습된 모델 파일에 대한 별도 표기는 없습니다.",
+   "source": "https://github.com/Mukosame/Anime2Sketch",
+   "files": [
+    {
+     "name": "model.onnx"
+    }
+   ],
+   "convert": {
+    "kind": "a2s",
+    "from": [
+     {
+      "name": "netG.pth",
+      "url": "https://huggingface.co/public-data/Anime2Sketch/resolve/164c146ec001dc30fa7ffd4d90d2cbdcfc1285b4/netG.pth",
+      "size": 217631959,
+      "sha256": "ccabdcc3f5cf3c07cf65d58776acb21df7dfda825cdc70c9766a93fd62bfc488"
+     }
+    ]
+   }
+  },
+  {
+   "id": "line-informative",
+   "task": "lineart",
+   "name": "사진 → 선화 (Informative Drawings)",
+   "license": "MIT",
+   "commercial": "check",
+   "note": "저장소(carolineec/informative-drawings)는 MIT. ONNX 변환본은 제3자(rocca)가 올린 것입니다.",
+   "source": "https://huggingface.co/rocca/informative-drawings-line-art-onnx",
+   "files": [
+    {
+     "name": "model.onnx",
+     "url": "https://huggingface.co/rocca/informative-drawings-line-art-onnx/resolve/d38eccbd448cdcd228fb81d708506e5e60b41ccb/model.onnx",
+     "size": 17193338,
+     "sha256": "1fef40b8f7126d827e30fbebccf95ae9b0b391795df926bf9366a821bad4f498"
+    }
+   ]
+  },
+  {
+   "id": "depth-s",
+   "task": "depth",
+   "name": "깊이 추정 Small (Depth Anything V2)",
+   "license": "Apache-2.0",
+   "commercial": "yes",
+   "source": "https://huggingface.co/onnx-community/depth-anything-v2-small",
+   "files": [
+    {
+     "name": "model.onnx",
+     "url": "https://huggingface.co/onnx-community/depth-anything-v2-small/resolve/4472b7362082ad9968fee890ca0f1e5aca36b93d/onnx/model.onnx",
+     "size": 99060839,
+     "sha256": "afb6a5c28f3b6bf1618c6e43f02073ef9dfdc70e937502d51603e57b0a1df10c"
+    }
+   ]
+  },
+  {
+   "id": "depth-b",
+   "task": "depth",
+   "name": "깊이 추정 Base (Depth Anything V2)",
+   "license": "CC-BY-NC-4.0",
+   "commercial": "no",
+   "source": "https://huggingface.co/onnx-community/depth-anything-v2-base",
+   "files": [
+    {
+     "name": "model.onnx",
+     "url": "https://huggingface.co/onnx-community/depth-anything-v2-base/resolve/dd4557d492cd7b563738ac8d9ccff9094620983c/onnx/model_quantized.onnx",
+     "size": 102391398,
+     "sha256": "3a824ff306ee3e9d6771c2200c27ef41eb65c73e3f96382e75191b1cace70ddf"
+    }
+   ]
+  },
+  {
+   "id": "depth-l",
+   "task": "depth",
+   "name": "깊이 추정 Large (Depth Anything V2)",
+   "license": "CC-BY-NC-4.0",
+   "commercial": "no",
+   "source": "https://huggingface.co/onnx-community/depth-anything-v2-large",
+   "files": [
+    {
+     "name": "model.onnx",
+     "url": "https://huggingface.co/onnx-community/depth-anything-v2-large/resolve/1fa1591c7b080e98da9655827c3a33a3972a4a83/onnx/model_quantized.onnx",
+     "size": 347424978,
+     "sha256": "c73f04fb98dada374f06016152a8e604b92d4b0061358f5fba1acc40909fa6f1"
+    }
+   ]
+  },
+  {
+   "id": "up-animevideo",
+   "task": "upscale",
+   "name": "크기 키우기 ×4 빠름 (Real-ESRGAN animevideov3)",
+   "license": "BSD-3-Clause",
+   "commercial": "yes",
+   "source": "https://github.com/xinntao/Real-ESRGAN",
+   "files": [
+    {
+     "name": "model.onnx"
+    }
+   ],
+   "convert": {
+    "kind": "srvgg",
+    "from": [
+     {
+      "name": "realesr-animevideov3.pth",
+      "url": "https://github.com/xinntao/Real-ESRGAN/releases/download/v0.2.5.0/realesr-animevideov3.pth",
+      "size": 2504012,
+      "sha256": "b8a8376811077954d82ca3fcf476f1ac3da3e8a68a4f4d71363008000a18b75d"
+     }
+    ]
+   }
+  },
+  {
+   "id": "up-anime6b",
+   "task": "upscale",
+   "name": "크기 키우기 ×4 고품질 (Real-ESRGAN anime 6B)",
+   "license": "BSD-3-Clause",
+   "commercial": "yes",
+   "source": "https://github.com/xinntao/Real-ESRGAN",
+   "files": [
+    {
+     "name": "model.onnx"
+    }
+   ],
+   "convert": {
+    "kind": "rrdb6",
+    "from": [
+     {
+      "name": "RealESRGAN_x4plus_anime_6B.pth",
+      "url": "https://github.com/xinntao/Real-ESRGAN/releases/download/v0.2.2.4/RealESRGAN_x4plus_anime_6B.pth",
+      "size": 17938799,
+      "sha256": "f872d837d3c90ed2e05227bed711af5671a6fd1c9f7d7e91c911a61f155e99da"
+     }
+    ]
+   }
+  }
+ ]
 }

@@ -86,6 +86,17 @@ while ($true) {
     foreach ($p in $left) { Stop-Process -Id $p.ProcessId -Force -ErrorAction SilentlyContinue }
   }
 }
+# PC 종류에 맞는 Python 만 남기기: ARM 노트북이면 python-arm64 를 python 으로 (x64 Python 은 ARM 에서 느린 에뮬레이션)
+$arm = ($env:PROCESSOR_ARCHITECTURE -eq 'ARM64') -or ($env:PROCESSOR_ARCHITEW6432 -eq 'ARM64') -or `
+       (@(Get-CimInstance Win32_Processor -ErrorAction SilentlyContinue | Where-Object { $_.Architecture -eq 12 }).Count -gt 0)
+$pyX64 = Join-Path $Target 'python'; $pyArm = Join-Path $Target 'python-arm64'
+if (Test-Path $pyArm) {
+  if ($arm) {
+    if (Test-Path $pyX64) { Remove-Item $pyX64 -Recurse -Force }
+    Rename-Item $pyArm 'python'
+    Write-Host '  ARM PC: ARM64 용 Python 을 씁니다.' -ForegroundColor Green
+  } else { Remove-Item $pyArm -Recurse -Force }
+}
 foreach ($d in 'projects', 'assets', 'autosave', 'fonts', 'exports', 'config', 'trash', 'versions') {
   New-Item -ItemType Directory -Force (Join-Path $Target "data\$d") | Out-Null
 }

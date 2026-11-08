@@ -39,6 +39,7 @@ import { initAITools } from './ui/aitools.js';
 import { initAI } from './ui/aimodels.js';
 import { initBackup } from './ui/backup.js';
 import { initUpdate } from './ui/update.js';
+import { initReport } from './ui/report.js';
 import { initVtuber } from './ui/vtuber.js';
 import { initPSTools } from './ui/pstools.js';
 import { initSfx } from './tools/sfx.js';
@@ -137,8 +138,11 @@ function reportError(msg) {
   setTimeout(() => { lastErr = ''; }, 3000);
   app.toast('오류: ' + msg, 'error');
 }
-window.addEventListener('error', (e) => { console.error(e.error || e.message); reportError(e.message); });
-window.addEventListener('unhandledrejection', (e) => { console.error(e.reason); reportError(e.reason?.message || String(e.reason)); });
+// 최근 오류는 "문제 보내기" 에 붙일 수 있게 기억 (최근 30개, 이 화면 안에서만)
+app.errors = [];
+const keepErr = (msg, stack) => { app.errors.push({ t: new Date().toISOString(), msg: String(msg).slice(0, 500), stack: String(stack || '').slice(0, 1500) }); app.errors.splice(0, app.errors.length - 30); };
+window.addEventListener('error', (e) => { console.error(e.error || e.message); keepErr(e.message, e.error?.stack); reportError(e.message); });
+window.addEventListener('unhandledrejection', (e) => { console.error(e.reason); keepErr(e.reason?.message || String(e.reason), e.reason?.stack); reportError(e.reason?.message || String(e.reason)); });
 
 /** 서버가 없을 때 어디에 저장되는지 알려 주고, 폴더를 다시 허락받을 수 있게 */
 async function storageNotice() {
@@ -203,6 +207,7 @@ async function boot() {
   initAI();
   initBackup();
   initUpdate();
+  initReport();
   initVtuber();
   initPSTools();
   initSfx();

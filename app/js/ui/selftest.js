@@ -683,6 +683,95 @@ const TESTS = [
     app.history.redo(); const d1 = count(L);
     assert(c1 === a && d1 === b, `되돌리기 ${a}→${c1}, 다시 ${b}→${d1}`);
   }],
+  ['PSD 셰이프 저장 (말풍선·컷·벡터)', async () => {
+    const { Doc } = await import('../core/doc.js');
+    const P = await import('../core/psd.js');
+    const R = await import('../core/psdread.js');
+    const V = await import('../core/psdvector.js');
+    const C = await import('../tools/comic.js');
+    const W = 600, H = 400, d = new Doc(W, H, { name: 'psd-shape' });
+    const add = (o) => { const l = d.createLayer(o); d.layers.push(l); return l; };
+    const pl = add({ name: '컷', kind: 'panel', meta: { panels: [{ pts: [{ x: 20, y: 20 }, { x: 290, y: 20 }, { x: 290, y: 380 }, { x: 20, y: 380 }] }, { pts: [{ x: 310, y: 20 }, { x: 580, y: 20 }, { x: 580, y: 380 }, { x: 310, y: 380 }] }], line: 4, color: '#000000', maskOutside: true } });
+    C.renderPanels(pl);
+    const bl = add({ name: '풍선', kind: 'bubble', meta: { bubbles: [
+      { id: 'a', x: 60, y: 60, w: 160, h: 100, shape: 'ellipse', line: 3, fill: '#ffffff', stroke: '#000000', seed: 2, tail: { x: 120, y: 220 } },
+      { id: 'b', x: 340, y: 60, w: 180, h: 110, shape: 'cloud', line: 3, fill: '#ffffff', stroke: '#000000', seed: 3 },
+    ] } });
+    C.renderBubbles(bl);
+    const vl = add({ name: '펜', kind: 'vector', meta: { strokes: [{ color: '#000000', pts: [] }] } });
+    vl.ctx.lineWidth = 10; vl.ctx.beginPath(); vl.ctx.arc(150, 300, 50, 0, Math.PI * 2); vl.ctx.stroke();
+    const flat = document.createElement('canvas'); flat.width = W; flat.height = H;
+    const buf = await P.writePSD(d, flat).arrayBuffer();
+    // 레이어 기록마다 추가 정보 블록의 길이가 맞는지, 벡터 마스크 경로 레코드가 26바이트 단위인지
+    const v = new DataView(buf); let o = 26; o += 4 + v.getUint32(o); o += 4 + v.getUint32(o); o += 8;
+    const n = Math.abs(v.getInt16(o)); o += 2;
+    const keys = [], masks = [];
+    for (let i = 0; i < n; i++) {
+      o += 16; const nc = v.getUint16(o); o += 2 + nc * 6 + 12;
+      const exLen = v.getUint32(o); o += 4; const exEnd = o + exLen;
+      o += 4 + v.getUint32(o); o += 4 + v.getUint32(o);
+      const nl = v.getUint8(o); o += 1 + nl + ((4 - ((nl + 1) % 4)) % 4);
+      while (o + 12 <= exEnd) {
+        assert(String.fromCharCode(...new Uint8Array(buf, o, 4)) === '8BIM', '추가 정보 머리 이상');
+        const key = String.fromCharCode(...new Uint8Array(buf, o + 4, 4)), len = v.getUint32(o + 8);
+        keys.push(key);
+        if (key === 'vmsk') { assert((len - 8) % 26 === 0, '경로 레코드 길이 이상'); masks.push(new Uint8Array(buf, o + 12, len)); }
+        o += 12 + len;
+      }
+      assert(o === exEnd, `레이어 ${i} 추가 정보 길이가 맞지 않음`);
+    }
+    const count = (k) => keys.filter(x => x === k).length;
+    assert(count('SoCo') === 4 && count('vmsk') === 4 && count('vstk') === 3, `셰이프 블록 수 이상 (SoCo ${count('SoCo')}, vmsk ${count('vmsk')}, vstk ${count('vstk')})`);
+    // 펜 레이어 경로를 다시 칠하면 원래 고리 모양과 거의 같아야 (구멍 포함)
+    const c2 = document.createElement('canvas'); c2.width = W; c2.height = H;
+    const x2 = c2.getContext('2d'); x2.fill(V.pathsToPath2D(V.readVectorPaths(masks.at(-1), W, H)), 'evenodd');
+    const a = vl.ctx.getImageData(0, 0, W, H).data, b = x2.getImageData(0, 0, W, H).data;
+    let I = 0, U = 0; for (let p = 3; p < a.length; p += 4) { const s = a[p] >= 128, t = b[p] >= 128; if (s && t) I++; if (s || t) U++; }
+    assert(I / U > 0.95, `벡터 경로가 그림과 다름 (${(I / U * 100).toFixed(1)}%)`);
+    assert(b[(300 * W + 150) * 4 + 3] === 0, '고리 가운데 구멍이 메워짐');
+    // 다시 열기: 그림은 그대로
+    const back = await R.readPSD(buf, 'psd-shape');
+    const pen = back.layers.find(l => l.name === '펜');
+    assert(pen && pen.ctx.getImageData(150, 250, 1, 1).data[3] > 200, '다시 연 그림이 비어 있음');
+    return `레이어 ${n}개, 겹침 ${(I / U * 100).toFixed(1)}%`;
+  }],
+  ['PSD 열기: 레이어 효과·그라데이션 맵·색상 균형', async () => {
+    const { Doc } = await import('../core/doc.js');
+    const P = await import('../core/psd.js');
+    const R = await import('../core/psdread.js');
+    const V = await import('../core/psdvector.js');
+    const T = await import('../core/psdtext.js');
+    const W = 300, H = 200, d = new Doc(W, H, { name: 'psd-fx' });
+    const add = (o) => { const l = d.createLayer(o); d.layers.push(l); return l; };
+    const fxL = add({ name: '효과' }); fxL.ctx.fillRect(50, 50, 60, 60);
+    const gm = add({ name: '그맵', kind: 'adjust', meta: { type: 'gradmap', params: {} } });
+    const bal = add({ name: '균형', kind: 'adjust', meta: { type: 'balance', params: {} } });
+    const sh = add({ name: '셰이프' });
+    const rgb = (r, g, b) => ({ t: 'Objc', cls: 'RGBC', items: [['Rd  ', { t: 'doub', v: r }], ['Grn ', { t: 'doub', v: g }], ['Bl  ', { t: 'doub', v: b }]] });
+    const lfx = T.descriptorBlock('lfx2', 'null', [
+      ['Scl ', { t: 'UntF', unit: '#Prc', v: 100 }], ['masterFXSwitch', { t: 'bool', v: true }],
+      ['DrSh', { t: 'Objc', cls: 'DrSh', items: [['enab', { t: 'bool', v: true }], ['Clr ', rgb(0, 0, 0)], ['Opct', { t: 'UntF', unit: '#Prc', v: 50 }], ['uglg', { t: 'bool', v: false }], ['lagl', { t: 'UntF', unit: '#Ang', v: 90 }], ['Dstn', { t: 'UntF', unit: '#Pxl', v: 8 }], ['blur', { t: 'UntF', unit: '#Pxl', v: 4 }]] }],
+      ['FrFX', { t: 'Objc', cls: 'FrFX', items: [['enab', { t: 'bool', v: true }], ['Styl', { t: 'enum', type: 'FStl', v: 'OutF' }], ['Sz  ', { t: 'UntF', unit: '#Pxl', v: 3 }], ['Clr ', rgb(255, 255, 255)]] }],
+    ], (b) => b.u32(0));
+    const gb = new T.Buf(); gb.u16(1); gb.u8(0); gb.u8(0); gb.u32(0); gb.u16(2);
+    for (const [loc, c] of [[0, [0, 0, 0]], [4096, [65535, 65535, 65535]]]) { gb.u32(loc); gb.u32(50); gb.u16(0); gb.u16(c[0]); gb.u16(c[1]); gb.u16(c[2]); gb.u16(0); gb.u16(0); }
+    gb.u16(0);
+    const bb = new T.Buf(); for (const x of [10, 0, -10, 0, 0, 0, 0, 20, 0]) { const t = new Uint8Array(2); new DataView(t.buffer).setInt16(0, x); bb.push(t); } bb.u8(1); bb.u8(0);
+    const flat = document.createElement('canvas'); flat.width = W; flat.height = H;
+    const blob = P.writePSD(d, flat, null, { extra: {
+      [fxL.id]: [lfx], [gm.id]: [T.keyedBlock('grdm', gb.bytes())], [bal.id]: [T.keyedBlock('blnc', bb.bytes())],
+      [sh.id]: [V.socoBlock('#3366cc'), V.vmskBlock([{ pts: [20, 120, 120, 120, 120, 190, 20, 190], hole: false }], W, H)],
+    } });
+    const back = await R.readPSD(await blob.arrayBuffer(), 'psd-fx');
+    const L = (nm) => back.layers.find(l => l.name === nm);
+    const fx = L('효과').fx;
+    assert(fx?.shadow?.on && fx.shadow.dx === 0 && fx.shadow.dy === 8 && Math.abs(fx.shadow.opacity - 0.5) < 0.01, '그림자 효과 이상');
+    assert(fx?.stroke?.on && fx.stroke.size === 3 && fx.stroke.color === '#ffffff', '획 효과 이상');
+    assert(L('그맵').kind === 'adjust' && L('그맵').meta.type === 'gradmap' && L('그맵').meta.params.stops.at(-1).color === '#ffffff', '그라데이션 맵 이상');
+    assert(L('균형').meta.type === 'balance' && L('균형').meta.params.sr === 10 && L('균형').meta.params.hg === 20, '색상 균형 이상');
+    const px = [...L('셰이프').ctx.getImageData(70, 150, 1, 1).data].join();
+    assert(px === '51,102,204,255', `셰이프 칠 이상 (${px})`);
+  }],
 ];
 
 /** only: 이름에 이 글자가 들어간 항목만 (정규식 가능) */

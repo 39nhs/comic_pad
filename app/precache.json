@@ -1,7 +1,8 @@
 {
-"version": "0094374d15c6fa8b",
+"version": "7db98c9104d2fe03",
 "files": [
 "./",
+".nojekyll",
 "LICENSES.txt",
 "ai-models.json",
 "css/style.css",
@@ -48,6 +49,7 @@
 "js/core/psd.js",
 "js/core/psdread.js",
 "js/core/psdtext.js",
+"js/core/psdvector.js",
 "js/core/qr.js",
 "js/core/raster.js",
 "js/core/renderer.js",
@@ -115,6 +117,7 @@
 "js/ui/quickbar.js",
 "js/ui/radial.js",
 "js/ui/refine.js",
+"js/ui/report.js",
 "js/ui/scene3d.js",
 "js/ui/selftest.js",
 "js/ui/settings.js",

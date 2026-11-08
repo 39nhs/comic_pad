@@ -65,7 +65,10 @@ else {
   # 1) 함께 넣은 전체 설치본 (인터넷 없이)  2) 안 되면 작은 설치기 (인터넷 필요)
   $full = Join-Path $Root 'redist\MicrosoftEdgeWebView2RuntimeInstallerX64.exe'
   $small = Join-Path $Root 'redist\MicrosoftEdgeWebview2Setup.exe'
-  if ((Test-Path $full) -and [Environment]::Is64BitOperatingSystem -and $env:PROCESSOR_ARCHITECTURE -ne 'ARM64') {
+  $arm = ($env:PROCESSOR_ARCHITECTURE -eq 'ARM64') -or ($env:PROCESSOR_ARCHITEW6432 -eq 'ARM64') -or `
+         (@(Get-CimInstance Win32_Processor -ErrorAction SilentlyContinue | Where-Object { $_.Architecture -eq 12 }).Count -gt 0)
+  # 함께 넣은 전체 설치본은 x64 용. ARM PC 는 아래 작은 설치기가 ARM 용을 받아 설치 (Windows 11 ARM 에는 보통 이미 들어 있음)
+  if ((Test-Path $full) -and [Environment]::Is64BitOperatingSystem -and -not $arm) {
     Say '  WebView2 가 없어 설치합니다 (함께 넣은 마이크로소프트 전체 설치본, 인터넷 필요 없음)...' 'Yellow'
     try { Start-Process $full -ArgumentList '/silent', '/install' -Wait } catch { }
   }

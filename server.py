@@ -3,6 +3,7 @@
 표준 라이브러리만 사용. 앱 정적 파일을 제공하고, 프로젝트/에셋/설정을 G: 의
 data 폴더에 읽고 쓴다. 실행하면 Edge 앱 창으로 화면을 연다.
 """
+import hashlib
 import http.server
 import queue
 import secrets
@@ -72,6 +73,14 @@ def model_status():
     return out
 
 
+def file_sha256(path):
+    h = hashlib.sha256()
+    with open(path, "rb") as fh:
+        for b in iter(lambda: fh.read(1 << 20), b""):
+            h.update(b)
+    return h.hexdigest()
+
+
 def fetch_model(mid):
     m = model_registry()[mid]
     job = MODEL_JOBS[mid]
@@ -89,22 +98,35 @@ def fetch_model(mid):
         job["total"] = sum(f.get("size") or 0 for f in srcs)
         for f in srcs:
             dst = os.path.join(d, f["name"])
-            if os.path.isfile(dst) and (not f.get("size") or os.path.getsize(dst) == f["size"]):
+            want = (f.get("sha256") or "").lower()
+            if os.path.isfile(dst) and (not f.get("size") or os.path.getsize(dst) == f["size"])                     and (not want or file_sha256(dst) == want):
                 job["done"] += os.path.getsize(dst)
                 continue
+            if not f["url"].startswith("https://"):
+                raise RuntimeError(f"{f['name']}: https 주소가 아니어서 받지 않습니다")
             part = dst + ".part"
+            h = hashlib.sha256()
             req = urllib.request.Request(f["url"], headers={"User-Agent": "ComicPad"})
             with urllib.request.urlopen(req, timeout=60) as resp, open(part, "wb") as out:
                 if not f.get("size"):
                     job["total"] += int(resp.headers.get("Content-Length") or 0)
+                got = 0
                 while True:
                     chunk = resp.read(1 << 20)
                     if not chunk:
                         break
+                    got += len(chunk)
+                    if f.get("size") and got > f["size"]:
+                        raise RuntimeError(f"{f['name']} 가 예상보다 커서 중단했습니다")
                     out.write(chunk)
+                    h.update(chunk)
                     job["done"] += len(chunk)
             if f.get("size") and os.path.getsize(part) != f["size"]:
                 raise RuntimeError(f"{f['name']} 크기가 맞지 않습니다 (받다가 끊긴 것 같습니다)")
+            # 모델 목록(앱과 함께 서명되어 배포)에 적힌 SHA-256 과 같아야 씀
+            if want and h.hexdigest() != want:
+                os.remove(part)
+                raise RuntimeError(f"{f['name']} 가 원본과 다릅니다 (SHA-256 불일치). 받은 파일을 지웠습니다")
             os.replace(part, dst)
         if m.get("convert"):
             job["state"] = "convert"
@@ -517,7 +539,8 @@ def vtuple(v):
 
 def update_conf():
     u = read_conf().get("update") or {}
-    return {"auto": u.get("auto", True), "repo": u.get("repo") or UPDATE_REPO, "checked": u.get("checked", 0)}
+    return {"auto": u.get("auto", True), "repo": u.get("repo") or UPDATE_REPO, "checked": u.get("checked", 0),
+            "skip": u.get("skip", ""), "just": u.get("just") or None}
 
 
 def release_pubkeys():
@@ -666,6 +689,80 @@ def _put(src, dst):
     os.replace(src, dst)
 
 
+def _set_display_version(version):
+    """Windows "설치된 앱" 목록의 버전도 맞춰 둠 (설치기로 설치한 경우만)"""
+    try:
+        import winreg
+        with winreg.OpenKey(winreg.HKEY_CURRENT_USER, r"Software\Microsoft\Windows\CurrentVersion\Uninstall\ComicPad", 0,
+                            winreg.KEY_READ | winreg.KEY_SET_VALUE) as k:
+            loc = winreg.QueryValueEx(k, "InstallLocation")[0]
+            if os.path.normcase(os.path.abspath(loc)) == os.path.normcase(ROOT):
+                winreg.SetValueEx(k, "DisplayVersion", 0, winreg.REG_SZ, str(version))
+    except (OSError, ImportError):
+        pass
+
+
+def _update_record(**kw):
+    conf = read_conf()
+    u = conf.get("update") or {}
+    u.update(kw)
+    conf["update"] = u
+    write_conf(conf)
+
+
+def apply_zip(zpath, to_version):
+    """zip 안의 프로그램 파일로 바꾼다. 바꾸기 전 판은 ComicPad_이전판_<지금 버전>.zip 으로 남긴다. 바꾼 파일 수를 돌려줌."""
+    st = UPDATE_STATE
+    st.update(state="apply", done=0, total=0)
+    stage = os.path.join(UPDATE_DIR, "staging")
+    shutil.rmtree(stage, ignore_errors=True)
+    with zipfile.ZipFile(zpath) as z:
+        files = _update_files(z)
+        for name, rel in files:
+            out = safe_join(stage, rel)
+            os.makedirs(os.path.dirname(out), exist_ok=True)
+            with z.open(name) as src, open(out, "wb") as dst:
+                shutil.copyfileobj(src, dst)
+    rels = sorted((r for _n, r in files), key=lambda r: r == "VERSION")   # VERSION 은 맨 끝에
+    cur = app_version()
+    keep = os.path.join(UPDATE_DIR, f"ComicPad_이전판_{cur}.zip")
+    tmp_keep = keep + ".part"
+    with zipfile.ZipFile(tmp_keep, "w", zipfile.ZIP_DEFLATED) as kz:
+        for rel in rels:
+            full = os.path.join(ROOT, rel)
+            if os.path.isfile(full):
+                kz.write(full, rel)
+    os.replace(tmp_keep, keep)
+    st["total"] = len(rels)
+    done = []
+    try:
+        for rel in rels:
+            _put(safe_join(stage, rel), safe_join(ROOT, rel))
+            done.append(rel)
+            st["done"] = len(done)
+    except Exception:
+        # 중간에 실패하면 바꾼 것을 되돌린다 (새로 생긴 파일은 그대로 둬도 무해)
+        with zipfile.ZipFile(keep) as kz:
+            have = set(kz.namelist())
+            for rel in done:
+                if rel in have:
+                    tmp = safe_join(stage, rel + ".restore")
+                    with kz.open(rel) as src, open(tmp, "wb") as dst:
+                        shutil.copyfileobj(src, dst)
+                    _put(tmp, safe_join(ROOT, rel))
+        raise
+    shutil.rmtree(stage, ignore_errors=True)
+    olds = sorted((f for f in os.listdir(UPDATE_DIR) if f.startswith("ComicPad_이전판_") and f.endswith(".zip")),
+                  key=lambda f: os.path.getmtime(os.path.join(UPDATE_DIR, f)))
+    for f in olds[:-3]:   # 이전판은 최근 3개만
+        try:
+            os.remove(os.path.join(UPDATE_DIR, f))
+        except OSError:
+            pass
+    _set_display_version(to_version)
+    return cur, len(rels)
+
+
 def update_install():
     st = UPDATE_STATE
     try:
@@ -700,69 +797,45 @@ def update_install():
             raise ValueError("받은 파일이 손상되었습니다 (SHA-256 이 다름). 다시 시도하세요")
         os.replace(zpath + ".part", zpath)
         launcher = exe_changed(man)
-        # 2) 따로 풀어 두기
-        st.update(state="apply", done=0, total=0)
-        stage = os.path.join(UPDATE_DIR, "staging")
-        shutil.rmtree(stage, ignore_errors=True)
-        with zipfile.ZipFile(zpath) as z:
-            files = _update_files(z)
-            for name, rel in files:
-                out = safe_join(stage, rel)
-                os.makedirs(os.path.dirname(out), exist_ok=True)
-                with z.open(name) as src, open(out, "wb") as dst:
-                    shutil.copyfileobj(src, dst)
-        rels = sorted((r for _n, r in files), key=lambda r: r == "VERSION")   # VERSION 은 맨 끝에
-        # 3) 바꾸기 전 판을 zip 으로 남기고 하나씩 바꾸기
-        cur = app_version()
-        keep = os.path.join(UPDATE_DIR, f"ComicPad_이전판_{cur}.zip")
-        with zipfile.ZipFile(keep, "w", zipfile.ZIP_DEFLATED) as kz:
-            for rel in rels:
-                full = os.path.join(ROOT, rel)
-                if os.path.isfile(full):
-                    kz.write(full, rel)
-        st["total"] = len(rels)
-        done = []
-        try:
-            for rel in rels:
-                _put(safe_join(stage, rel), safe_join(ROOT, rel))
-                done.append(rel)
-                st["done"] = len(done)
-        except Exception:
-            # 중간에 실패하면 바꾼 것을 되돌린다 (새로 생긴 파일은 그대로 둬도 무해)
-            with zipfile.ZipFile(keep) as kz:
-                have = set(kz.namelist())
-                for rel in done:
-                    if rel in have:
-                        tmp = safe_join(stage, rel + ".restore")
-                        with kz.open(rel) as src, open(tmp, "wb") as dst:
-                            shutil.copyfileobj(src, dst)
-                        _put(tmp, safe_join(ROOT, rel))
-            raise
-        shutil.rmtree(stage, ignore_errors=True)
+        # 2) 적용 (바꾸기 전 판은 zip 으로 남김)
+        cur, n = apply_zip(zpath, man["version"])
         try:
             os.remove(zpath)
         except OSError:
             pass
-        olds = sorted((f for f in os.listdir(UPDATE_DIR) if f.startswith("ComicPad_이전판_")),
-                      key=lambda f: os.path.getmtime(os.path.join(UPDATE_DIR, f)))
-        for f in olds[:-3]:   # 이전판은 최근 3개만
-            try:
-                os.remove(os.path.join(UPDATE_DIR, f))
-            except OSError:
-                pass
-        try:   # Windows "설치된 앱" 목록의 버전도 맞춰 둠 (설치기로 설치한 경우만)
-            import winreg
-            with winreg.OpenKey(winreg.HKEY_CURRENT_USER, r"Software\Microsoft\Windows\CurrentVersion\Uninstall\ComicPad", 0,
-                                winreg.KEY_READ | winreg.KEY_SET_VALUE) as k:
-                loc = winreg.QueryValueEx(k, "InstallLocation")[0]
-                if os.path.normcase(os.path.abspath(loc)) == os.path.normcase(ROOT):
-                    winreg.SetValueEx(k, "DisplayVersion", 0, winreg.REG_SZ, str(man["version"]))
-        except (OSError, ImportError):
-            pass
-        st.update(state="done", applied={"from": cur, "to": str(man["version"]), "files": len(rels),
-                                         "launcher": launcher})
+        # 다음에 켤 때 "바뀐 점" 을 한 번 보여 주고, 문제가 있으면 이 업데이트만 되돌릴 수 있게 기록
+        _update_record(just={"from": cur, "to": str(man["version"]), "notes": str(man.get("notes") or "")[:4000]},
+                       last={"from": cur, "to": str(man["version"])}, skip="")
+        st.update(state="done", applied={"from": cur, "to": str(man["version"]), "files": n, "launcher": launcher})
     except Exception as e:   # noqa: BLE001 — 사용자에게 그대로 보여 줌
         st.update(state="error", error=str(e) if isinstance(e, ValueError) else f"업데이트 실패: {e}")
+
+
+def rollback_info():
+    """되돌릴 수 있는 업데이트: 마지막 업데이트가 지금 버전이고 그 전 판 zip 이 남아 있을 때만"""
+    last = (read_conf().get("update") or {}).get("last") or {}
+    if not last or last.get("to") != app_version():
+        return None
+    z = os.path.join(UPDATE_DIR, f"ComicPad_이전판_{last.get('from')}.zip")
+    return {"from": last["to"], "to": last["from"], "zip": z} if os.path.isfile(z) else None
+
+
+def update_rollback():
+    st = UPDATE_STATE
+    try:
+        rb = rollback_info()
+        if not rb:
+            raise ValueError("되돌릴 수 있는 업데이트가 없습니다")
+        cur, n = apply_zip(rb["zip"], rb["to"])
+        try:
+            os.remove(rb["zip"])
+        except OSError:
+            pass
+        # 되돌린 버전은 자동 알림에서 빼기 (업데이트 창에서 직접 다시 받을 수는 있음)
+        _update_record(last={}, just={}, skip=cur)
+        st.update(state="done", applied={"from": cur, "to": rb["to"], "files": n, "launcher": True, "rollback": True})
+    except Exception as e:   # noqa: BLE001
+        st.update(state="error", error=str(e) if isinstance(e, ValueError) else f"되돌리기 실패: {e}")
 
 
 def cleanup_old_files():
@@ -786,8 +859,40 @@ def safe_join(base, rel):
     return path
 
 
+SERVER_ERRORS = []      # 최근 서버 오류 (문제 보내기용, 최근 20개)
+
+
+def diag_report():
+    """문제 보내기에 붙일 정보: 버전·환경·최근 오류. 사용자 폴더 경로는 가림."""
+    import platform
+    home = os.path.expanduser("~")
+    hide = lambda t: t.replace(home, "%USERPROFILE%") if home and len(home) > 3 else t
+    log = ""
+    p = os.path.join(os.environ.get("LOCALAPPDATA", ""), "ComicPad", "error.log")
+    try:
+        with open(p, encoding="utf-8", errors="replace") as fh:
+            log = fh.read()[-4000:]
+    except OSError:
+        pass
+    return {
+        "version": app_version(), "python": platform.python_version(), "os": platform.platform(),
+        "arch": platform.machine(), "lan": LAN, "frozen_python": os.path.isdir(os.path.join(ROOT, "python")),
+        "server_errors": [hide(e) for e in SERVER_ERRORS[-10:]], "window_log": hide(log),
+    }
+
+
 class Handler(http.server.BaseHTTPRequestHandler):
     protocol_version = "HTTP/1.1"
+
+    def handle(self):
+        try:
+            super().handle()
+        except (ConnectionError, TimeoutError):
+            pass
+        except Exception:   # noqa: BLE001 — 기록만 하고 서버는 계속
+            import traceback
+            SERVER_ERRORS.append(time.strftime("%Y-%m-%d %H:%M:%S ") + traceback.format_exc()[-1500:])
+            del SERVER_ERRORS[:-20]
 
     def log_message(self, fmt, *args):
         pass
@@ -886,7 +991,7 @@ class Handler(http.server.BaseHTTPRequestHandler):
             return False
         if self.is_local():
             return True
-        if path in ("/api/open-folder", "/api/lan", "/api/info", "/api/drive/config", "/api/models/fetch", "/api/backup/now", "/api/backup/config", "/api/backup/restore") or path.startswith("/api/update") or path == "/api/shutdown":
+        if path in ("/api/open-folder", "/api/lan", "/api/info", "/api/drive/config", "/api/models/fetch", "/api/backup/now", "/api/backup/config", "/api/backup/restore") or path.startswith("/api/update") or path in ("/api/shutdown", "/api/diag"):
             self.send_json({"error": "PC 에서만 쓸 수 있는 기능입니다"}, 403)
             return False
         if path.startswith("/api/") or path.startswith("/data/"):
@@ -926,9 +1031,13 @@ class Handler(http.server.BaseHTTPRequestHandler):
         try:
             if path == "/api/ping":
                 return self.send_json({"ok": True, "root": ROOT if self.is_local() else "", "remote": not self.is_local(), "version": app_version()})
+            if path == "/api/diag":
+                return self.send_json(diag_report())
             if path == "/api/update":
                 st = {k: v for k, v in UPDATE_STATE.items() if not k.startswith("_")}
-                return self.send_json({"current": app_version(), "conf": update_conf(), "signed": bool(release_pubkey()), **st})
+                rb = rollback_info()
+                return self.send_json({"current": app_version(), "conf": update_conf(), "signed": bool(release_pubkey()),
+                                       "rollback": {"from": rb["from"], "to": rb["to"]} if rb else None, **st})
             if path == "/api/drive":
                 return self.send_json(DRIVE.status())
             if path == "/api/ai":
@@ -1063,6 +1172,14 @@ class Handler(http.server.BaseHTTPRequestHandler):
                 if UPDATE_STATE["state"] not in ("download", "apply"):
                     UPDATE_STATE.update(state="download", done=0, total=0, error="")
                     threading.Thread(target=update_install, daemon=True).start()
+                return self.send_json({"ok": True})
+            if path == "/api/update/rollback":
+                if UPDATE_STATE["state"] not in ("download", "apply"):
+                    UPDATE_STATE.update(state="apply", done=0, total=0, error="")
+                    threading.Thread(target=update_rollback, daemon=True).start()
+                return self.send_json({"ok": True})
+            if path == "/api/update/seen":
+                _update_record(just={})
                 return self.send_json({"ok": True})
             if path == "/api/update/config":
                 body = json.loads(self.read_body() or b"{}")

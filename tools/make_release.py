@@ -178,6 +178,7 @@ def cmd_build(args):
         f.write(sig.hex())
     print(f"v{version}: {zname} ({man['size'] / 1e6:.1f}MB, 파일 {n}개) + update.json + update.json.sig -> {out}")
     if args.upload:
+        check_pushed()
         upload(version, out, args)
 
 
@@ -197,6 +198,32 @@ def upload(version, out, args):
     subprocess.run(["gh", "release", "create", tag, "--repo", args.repo, "--title", f"ComicPad {version}",
                     "--notes", notes, "--latest", *files], check=True)
     print(f"올림: https://github.com/{args.repo}/releases/tag/{tag}")
+    if not args.no_pages:
+        deploy_pages(args.repo)
+
+
+def git(*a, check=True):
+    r = subprocess.run(["git", *a], cwd=ROOT, capture_output=True, text=True, encoding="utf-8", errors="replace")
+    if check and r.returncode:
+        sys.exit(f"git {' '.join(a)} 실패: {r.stderr.strip()}")
+    return r.stdout.strip()
+
+
+def check_pushed():
+    """릴리스는 GitHub 에 올라간 코드와 같아야 함 (휴대폰판도 같은 코드로)"""
+    if git("status", "--porcelain"):
+        sys.exit("커밋하지 않은 변경이 있습니다 (precache.json 포함). 커밋·푸시한 뒤 다시 실행하세요")
+    git("fetch", "-q", "origin")
+    if git("rev-parse", "HEAD") != git("rev-parse", "origin/main"):
+        sys.exit("main 을 GitHub 에 먼저 푸시하세요 (git push)")
+
+
+def deploy_pages(repo):
+    """휴대폰·태블릿판: app 폴더만 gh-pages 브랜치로 올림 → GitHub Pages (https://<계정>.github.io/<저장소>/)"""
+    sha = git("subtree", "split", "--prefix", "app", "HEAD").splitlines()[-1]
+    git("push", "-q", "-f", "origin", f"{sha}:refs/heads/gh-pages")
+    owner, name = repo.split("/")
+    print(f"휴대폰판 올림: https://{owner}.github.io/{name}/ (반영까지 1~2분)")
 
 
 def main():
@@ -210,6 +237,7 @@ def main():
     ap.add_argument("--with-models", action="store_true", help="models_bundled 도 넣기")
     ap.add_argument("--upload", action="store_true", help="GitHub 릴리스로 올리기 (gh 필요)")
     ap.add_argument("--installer", action="store_true", help="설치파일도 함께 올리기")
+    ap.add_argument("--no-pages", action="store_true", help="휴대폰판(GitHub Pages)은 올리지 않기")
     ap.add_argument("--repo", default=REPO)
     args = ap.parse_args()
     cmd_genkey(args) if args.genkey else cmd_build(args)
