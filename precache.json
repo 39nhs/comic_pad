@@ -1,5 +1,5 @@
 {
-"version": "e74be1dee4ddacf0",
+"version": "7f4bf784cbc3a021",
 "files": [
 "./",
 ".nojekyll",
@@ -42,6 +42,7 @@
 "js/core/localstore.js",
 "js/core/memsave.js",
 "js/core/motion.js",
+"js/core/nativepen.js",
 "js/core/net.js",
 "js/core/ops.js",
 "js/core/paper.js",

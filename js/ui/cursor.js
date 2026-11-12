@@ -2,6 +2,7 @@
 // 브러시류는 펜촉(클립스튜디오 기본과 비슷)·십자·점 중 하나를 시스템 커서로 쓰고, 크기 원은 화면에 따로 그린다.
 // (시스템 화살표 커서가 남아 있으면 YoloMouse 같은 커서 바꾸기 프로그램의 커서가 그대로 보이고 펜촉도 안 보였음)
 import { app } from '../app.js';
+import { sendNativeCursor } from '../core/nativepen.js';
 
 const svgUrl = (w, h, body) => `url("data:image/svg+xml;utf8,${encodeURIComponent(
   `<svg xmlns="http://www.w3.org/2000/svg" width="${w}" height="${h}" viewBox="0 0 ${w} ${h}">${body}</svg>`)}")`;
@@ -34,7 +35,12 @@ export function cursorFor(tool) {
 }
 
 export function initCursor(stage) {
-  const apply = () => { stage.style.cursor = cursorFor(app.tool); };
+  let lastCss = '';
+  const apply = () => {
+    const css = cursorFor(app.tool);
+    stage.style.cursor = css;
+    if (css !== lastCss) { lastCss = css; sendNativeCursor(css); }
+  };
   for (const e of ['tool:changed', 'tool:cursor', 'settings:changed']) app.bus.on(e, apply);
   apply();
   app.applyCursor = apply;

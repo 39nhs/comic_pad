@@ -80,6 +80,8 @@ export function settingsBody() {
       slider('필압 다듬기', { min: 0, max: 0.8, step: 0.05, get: () => s.penFeel?.pressureSmooth ?? 0, set: v => { s.penFeel = { ...s.penFeel, pressureSmooth: v }; save(); }, format: v => Math.round(v * 100) + '%' }),
       toggle('펜을 대는 순간 굵게 찍히는 것 줄이기 (선 시작이 늘 가늘어짐)', () => s.penFeel?.startRamp === true, v => { s.penFeel = { ...s.penFeel, startRamp: v }; save(); }),
       toggle('펜 위치 예측 (선이 덜 늦게 따라옴)', () => s.penFeel?.predict !== false, v => { s.penFeel = { ...s.penFeel, predict: v }; save(); }),
+      window.comicpadNative?.pen ? toggle('네이티브 펜 입력 (ComicPad 창: 펜의 모든 점·필압을 Windows 에서 직접, 펜 길게 누르기 오른쪽 클릭 없음)', () => s.nativePen !== false, v => { s.nativePen = v; save(); }) : null,
+      window.comicpadNative?.wintab ? segmented([['ink', 'Windows Ink (기본)'], ['wintab', 'Wintab (와콤 등, Ink 꺼 둔 경우)']], () => s.penApi || 'ink', v => { s.penApi = v; save(); }) : null,
       select('측면 버튼 누르고 그리기', [['eyedropper', '스포이트'], ['eraser', '지우개'], ['pan', '화면 이동'], ['radial', '원형 메뉴'], ['none', '사용 안 함']], () => s.penButton, v => { s.penButton = v; save(); }),
       select('두 번째 측면 버튼 (와콤 등)', [['pan', '화면 이동'], ['eyedropper', '스포이트'], ['eraser', '지우개'], ['radial', '원형 메뉴'], ['none', '사용 안 함']], () => s.penButton2 || 'pan', v => { s.penButton2 = v; save(); }),
       slider('펜을 뗀 뒤 터치 무시 시간', { min: 0, max: 1500, step: 50, get: () => s.palmGuardMs, set: v => { s.palmGuardMs = v; save(); }, format: v => v + 'ms' }),

@@ -793,6 +793,34 @@ const TESTS = [
       assert(got.join() === '0.9,0.9,0.3,0.05', `필압이 그대로가 아님 (${got})`);
     } finally { app.settings.penFeel = keep; }
   }],
+  ['네이티브 펜 점 묶음 (ComicPad 창)', async () => {
+    // 창 프로그램이 보내는 것과 같은 모양: 이벤트 하나에 점 여러 개(cpCoalesced) → 도구에 하나씩, 시각·필압 그대로
+    const B = await import('../tools/brush.js');
+    const keepPreset = app.settings.activePreset?.brush;
+    const keepTool = app.toolId;
+    B.setActivePreset('brush', 'gpen');
+    app.setTool('brush');
+    const t = app.tool, seen = [];
+    const om = t.move;
+    t.move = function (e) { seen.push([+e.pressure.toFixed(2), Math.round(e.time)]); return om.call(this, e); };
+    try {
+      const view = document.getElementById('view');
+      const r = view.getBoundingClientRect();
+      const s = app.view.toScreen(app.doc.width / 2, app.doc.height / 2);
+      const pt = (dx, p, time) => ({ clientX: r.left + s.x + dx + 0.25, clientY: r.top + s.y, pressure: p, buttons: 1, pointerType: 'pen', pointerId: 2999, cpTime: time, timeStamp: time });
+      const fire = (type, o, extra = {}) => { const ev = new PointerEvent(type, { ...o, bubbles: true, ...extra }); ev.cpTime = o.cpTime; if (extra.cpCoalesced) ev.cpCoalesced = extra.cpCoalesced; view.dispatchEvent(ev); };
+      fire('pointerdown', pt(0, 0.4, 1000), { button: 0 });
+      const batch = [pt(3, 0.5, 1004), pt(6, 0.6, 1008), pt(9, 0.7, 1012)];
+      fire('pointermove', batch[2], { cpCoalesced: batch });
+      fire('pointerup', { ...pt(9, 0, 1016), buttons: 0 }, { button: 0 });
+      assert(seen.length === 3, `점 ${seen.length}개만 도구에 감 (3개여야)`);
+      assert(seen.map(x => x[0]).join() === '0.5,0.6,0.7' && seen.map(x => x[1]).join() === '1004,1008,1012', `필압·시각 이상 ${JSON.stringify(seen)}`);
+    } finally {
+      t.move = om;
+      if (keepPreset) B.setActivePreset('brush', keepPreset);
+      app.setTool(keepTool);
+    }
+  }],
 ];
 
 /** only: 이름에 이 글자가 들어간 항목만 (정규식 가능) */

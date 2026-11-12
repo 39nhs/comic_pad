@@ -41,6 +41,7 @@ import { initBackup } from './ui/backup.js';
 import { initUpdate } from './ui/update.js';
 import { initReport } from './ui/report.js';
 import { initCursor } from './ui/cursor.js';
+import { initNativePen } from './core/nativepen.js';
 import { initVtuber } from './ui/vtuber.js';
 import { initPSTools } from './ui/pstools.js';
 import { initSfx } from './tools/sfx.js';
@@ -255,6 +256,7 @@ async function boot() {
   initRenderer(document.getElementById('view'), stage);
   initInput(stage);
   initCursor(stage);
+  initNativePen(stage);
   initShortcuts();
 
   // 첫 문서
