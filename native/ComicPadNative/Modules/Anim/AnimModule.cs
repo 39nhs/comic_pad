@@ -86,7 +86,7 @@ public sealed class AnimModule : IModule
             if (f >= 0) { d.Anim["frame"] = f; App.InvalidateAll(); AnimCore.Emit(); }
         };
         App.ColorChanged += PixelTools.OnColorChanged;
-        App.History.Changed += PixelTools.OnHistoryChanged;
+        PixelEdit.Finishing += PixelTools.OnPixelsFinishing;
         Application.AddMessageFilter(new AnimKeys());
     }
 }

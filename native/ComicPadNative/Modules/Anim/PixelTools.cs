@@ -2,7 +2,6 @@
 //  - 새 픽셀 작품 · 픽셀 격자 · 픽셀아트 보기 · 팔레트 고정 · 색 수 줄이기 · 팔레트 파일 · 팔레트 색 바꾸기
 //  - 픽셀 연필 도구: 1px(크기 조절), 픽셀 퍼펙트(L자 모서리 없애기), 디더 농도, 명암 잉크, 팔레트 고정. 많이 확대하면 픽셀 격자
 //  - 팔레트 고정 작품: 전경색을 팔레트의 가까운 색으로, 다른 도구로 그린 획도 끝나면 팔레트 색 + 반투명 없애기
-using System.Reflection;
 using System.Text.Json.Nodes;
 using ComicPadNative.Core;
 using ComicPadNative.UI;
@@ -66,43 +65,28 @@ public static class PixelTools
         try { App.SetColor(c); } finally { snapping = false; }
     }
 
-    static readonly FieldInfo undoField = typeof(History).GetField("undo", BindingFlags.NonPublic | BindingFlags.Instance);
-    static readonly FieldInfo afterField = typeof(PixelEdit).GetField("after", BindingFlags.NonPublic | BindingFlags.Instance);
-    static readonly FieldInfo layerField = typeof(PixelEdit).GetField("layer", BindingFlags.NonPublic | BindingFlags.Instance);
-    static readonly System.Runtime.CompilerServices.ConditionalWeakTable<IEdit, object> seen = new();
-
     /// <summary>
-    /// 새로 쌓인 그리기 기록이면 (팔레트 고정 작품) 바뀐 픽셀을 팔레트 색 + 반투명 없애기로 맞추고, 그 기록의 "후" 도 고쳐 둔다.
-    /// (Core 를 고치지 않으려고 History·PixelEdit 의 내부 값을 읽음 — Core 에 획 끝 훅이 생기면 그것으로 바꿀 것)
+    /// 그리기 기록을 확정하기 직전 (팔레트 고정 작품): 바뀐 픽셀을 팔레트 색 + 반투명 없애기로 맞춘다. (PixelEdit.Finishing 훅)
     /// </summary>
-    public static void OnHistoryChanged()
+    public static void OnPixelsFinishing(PixelEdit pe)
     {
-        try
+        var d = App.Doc;
+        if (d == null || !PixelArt.IsLocked(d)) return;
+        if (pe.Label == "지우기" || pe.Label == "색 수 줄이기" || pe.Label == "팔레트 색 바꾸기") return;
+        if (pe.Layer == null || pe.Layer.EditMask || pe.Target != pe.Layer.Px) return;
+        var pal = PixelArt.PaletteOf(d);
+        if (pal.Count == 0) return;
+        var s = pe.Target;
+        foreach (var ti in pe.TouchedTiles.ToList())
         {
-            if (undoField?.GetValue(App.History) is not List<IEdit> undo || undo.Count == 0) return;
-            var top = undo[^1];
-            if (seen.TryGetValue(top, out _)) return;
-            seen.Add(top, null);
-            var d = App.Doc;
-            if (top is not PixelEdit pe || d == null || !PixelArt.IsLocked(d) || App.History.CanRedo) return;
-            if (pe.Label == "지우기" || pe.Label == "색 수 줄이기" || pe.Label == "팔레트 색 바꾸기") return;
-            if (layerField?.GetValue(pe) is Layer l && l.EditMask) return;
-            var pal = PixelArt.PaletteOf(d);
-            if (pal.Count == 0 || afterField?.GetValue(pe) is not Dictionary<int, uint[]> after) return;
-            var s = pe.Target;
-            foreach (var ti in after.Keys.ToList())
-            {
-                var now = s.TileAt(ti);
-                if (now == null) continue;
-                var bt = pe.BeforeTile(ti);
-                PixelArt.SnapToPalette(now, pal, true, i => bt == null ? now[i] != 0 : now[i] != bt[i]);
-                bool any = false; foreach (var v in now) if (v != 0) { any = true; break; }
-                if (!any) s.SetTile(ti % s.TX, ti / s.TX, null);
-                after[ti] = any ? (uint[])now.Clone() : null;
-            }
-            App.Invalidate(pe.Dirty);
+            var now = s.TileAt(ti);
+            if (now == null) continue;
+            var bt = pe.BeforeTile(ti);
+            PixelArt.SnapToPalette(now, pal, true, i => bt == null ? now[i] != 0 : now[i] != bt[i]);
+            bool any = false; foreach (var v in now) if (v != 0) { any = true; break; }
+            if (!any) s.SetTile(ti % s.TX, ti / s.TX, null);
         }
-        catch { /* 내부 형식이 바뀌었으면 조용히 건너뜀 */ }
+        App.Invalidate(pe.Dirty);
     }
 
     // ---------------------------------------------------------------------

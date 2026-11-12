@@ -84,6 +84,12 @@ public sealed class PixelEdit : IEdit
     public uint[] BeforeTile(int ti) => before.TryGetValue(ti, out var t) ? t : s.TileAt(ti);
 
     public Surface Target => s;
+    public Layer Layer => layer;
+    /// <summary>이번 기록이 걸친 타일 번호들</summary>
+    public IReadOnlyCollection<int> TouchedTiles => before.Keys;
+
+    /// <summary>픽셀 기록을 확정하기 직전 (팔레트 고정 등 모듈이 바뀐 픽셀을 더 고칠 수 있음; 고친 결과가 "후" 로 기록됨)</summary>
+    public static event Action<PixelEdit> Finishing;
 
     public void Commit(string label = null) { if (Finish(label) != null) h.Push(this); }
 
@@ -93,6 +99,7 @@ public sealed class PixelEdit : IEdit
         if (done) return null;
         done = true;
         if (label != null) Label = label;
+        try { Finishing?.Invoke(this); } catch { }
         foreach (var ti in before.Keys.ToList())
         {
             var now = s.TileAt(ti);
