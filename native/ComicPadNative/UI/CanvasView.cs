@@ -170,6 +170,9 @@ public sealed class CanvasView : Control
         // 겹침 그림 (크기 원·도구 표시): 지난번 자리를 지우고 새로 그림
         var ov = OverlayRect();
         if (!lastOverlay.IsEmpty) RenderScreen(lastOverlay);
+        // 늘 그리는 겹침 그림(Registry.Overlays)은 다시 그린 부분에만 다시 얹음
+        var re = Rectangle.Union(Nz(dirty), Nz(lastOverlay));
+        if (!re.IsEmpty && Registry.Overlays.Count > 0) { using var g0 = Graphics.FromHdc(memDC); g0.SetClip(re); DrawGlobalOverlays(g0); }
         if (!ov.IsEmpty)
         {
             using var g = Graphics.FromHdc(memDC);
@@ -235,7 +238,25 @@ public sealed class CanvasView : Control
         V.PanX = (bw - d.W * V.Zoom) / 2; V.PanY = (bh - d.H * V.Zoom) / 2;
         RedrawAll();
     }
-    public void RedrawAll() { if (comp == null) App.InvalidateAll(); RenderScreen(new Rectangle(0, 0, bw, bh)); lastOverlay = Rectangle.Empty; Invalidate(); ViewChanged?.Invoke(); }
+    public void RedrawAll()
+    {
+        if (comp == null) App.InvalidateAll();
+        RenderScreen(new Rectangle(0, 0, bw, bh)); lastOverlay = Rectangle.Empty;
+        if (dib != IntPtr.Zero && App.Doc != null)
+        {
+            using var g = Graphics.FromHdc(memDC);
+            DrawGlobalOverlays(g);
+            var ov = OverlayRect();
+            if (!ov.IsEmpty && App.Tool != null) { g.SmoothingMode = System.Drawing.Drawing2D.SmoothingMode.AntiAlias; DrawOverlay(g); lastOverlay = ov; }
+        }
+        Invalidate(); ViewChanged?.Invoke();
+    }
+    void DrawGlobalOverlays(Graphics g)
+    {
+        if (App.Doc == null) return;
+        g.SmoothingMode = System.Drawing.Drawing2D.SmoothingMode.AntiAlias;
+        foreach (var o in Registry.Overlays) { try { o(g, V); } catch { } }
+    }
     public void ZoomAt(double f, double sx, double sy)
     {
         double nz = Math.Clamp(V.Zoom * f, 0.02, 64); f = nz / V.Zoom;
