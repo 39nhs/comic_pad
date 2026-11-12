@@ -173,6 +173,7 @@ static class Program
 class AppWindow : Form
 {
     WebView2 web = new WebView2();
+    PenOverlay pen;                       // 네이티브 펜 입력 (NativePen.cs)
     readonly bool main;
     bool closeOk;
     CoreWebView2NewWindowRequestedEventArgs pending;
@@ -273,6 +274,22 @@ class AppWindow : Form
             // (data:/blob: 처럼 출처가 다른 화면에는 주지 않음)
             if ((Program.IsApp(e.Uri) || e.Uri == "about:blank") && e.PermissionKind != CoreWebView2PermissionKind.Geolocation) e.State = CoreWebView2PermissionState.Allow;
         };
+        // 네이티브 펜 입력: 페이지가 "그림판 위에 펜" 을 알려 주면 그 영역만 덮어서 Windows Ink 펜 입력을 직접 받음
+        if (main && !PenOverlay.Disabled)
+        {
+            try
+            {
+                pen = new PenOverlay(this, web);
+                await c.AddScriptToExecuteOnDocumentCreatedAsync("window.comicpadNative={pen:1,version:1,wintab:" + (Wintab.Available ? "1" : "0") + "};");
+                c.WebMessageReceived += (s3, e3) =>
+                {
+                    string msg = null;
+                    try { msg = e3.TryGetWebMessageAsString(); } catch { }
+                    if (pen != null) pen.OnMessage(msg);
+                };
+            }
+            catch (Exception ex) { pen = null; try { File.AppendAllText(Path.Combine(Program.DataDir, "error.log"), DateTime.Now + " 네이티브 펜 입력 꺼짐: " + ex.Message + "\r\n"); } catch { } }
+        }
         if (pending != null)
         {
             pending.NewWindow = c;

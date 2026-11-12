@@ -72,7 +72,7 @@ export function initInput(stage) {
       x: d.x, y: d.y, sx, sy, pressure,
       type: e.pointerType, button: e.button, buttons: e.buttons,
       shift: e.shiftKey || app.modifiers?.shift, alt: e.altKey, ctrl: e.ctrlKey || e.metaKey,
-      tiltX, tiltY, twist: e.twist || 0, time: e.timeStamp,
+      tiltX, tiltY, twist: e.twist || 0, time: e.cpTime ?? e.timeStamp,
     };
   };
 
@@ -281,7 +281,8 @@ export function initInput(stage) {
           const pr = e.getPredictedEvents();
           app.predicted = pr.length ? pr.map(p => local(p)) : null;
         }
-        const list = e.getCoalescedEvents ? e.getCoalescedEvents() : [];
+        // 네이티브 펜(ComicPad.exe)은 지난번 이후의 모든 점을 cpCoalesced 로 보냄
+        const list = e.cpCoalesced || (e.getCoalescedEvents ? e.getCoalescedEvents() : []);
         if (list.length > 1) for (const ce of list) callTool('move', toolEvent(ce));
         else callTool('move', te);
       } else applyViewDrag(active, te);
