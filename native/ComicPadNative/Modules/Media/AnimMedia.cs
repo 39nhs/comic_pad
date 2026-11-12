@@ -1,6 +1,6 @@
 // 애니메이션 내보내기 — 웹 판 animexport.js(움직이는 WebP·MP4) + ui/anim.js 의 내보내기 창.
 // GIF·APNG·PNG 연번은 Anim 모듈(AnimExport)을 그대로 쓰고, 여기서는 WebP·MP4 를 더해 한 창에서 고른다.
-//  - WebP: 직접 짠 무손실 인코더 (화질 < 최고면 거의 무손실)
+//  - WebP: 직접 짠 인코더 (화질 최고 = 무손실 VP8L, 그 아래 = 손실 VP8 + 알파 ALPH)
 //  - MP4: Media Foundation H.264, 소리(WAV)가 붙어 있고 구간을 고르지 않았으면 AAC 로 함께 (웹 판처럼)
 //  - 짧은 애니(2초 미만)는 동영상에서 2초 이상 되도록 반복 (웹 판 exportWebM 과 같음)
 using System.Text.Json.Nodes;

@@ -1,8 +1,8 @@
 // WebP 만들기·읽기 (웹 판 animexport.js 의 움직이는 WebP, 정지 그림 WebP).
 // Windows 에는 WebP 인코더가 없어서 무손실(VP8L) 인코더를 직접 짬: 초록 빼기 + 예측 변환 + LZ77(해시 사슬) + 허프만.
 //  - 움직이는 WebP: VP8X + ANIM + ANMF (앞 프레임과 섞지 않고 바뀐 영역만 통째로 바꿈 — 웹 판과 같은 0x02)
-//  - "화질" 1 미만이면 거의 무손실: RGB 아래 비트를 반올림해서 버림 (크기가 줄어듦)
-// 읽기: 먼저 WIC (Windows 의 WebP 확장: 손실 VP8 포함) → 안 되면 직접 짠 VP8L 디코더 (무손실 파일만).
+//  - "화질" 1 미만이면 손실(VP8, 직접 짠 인코더 Vp8.cs) — 투명하면 알파는 ALPH 덩이(VP8L 무손실 압축)로 따로
+// 읽기: 먼저 WIC (Windows 의 WebP 확장) → 안 되면 직접 짠 디코더 (무손실 VP8L·손실 VP8 + ALPH 모두, 웹 판 브라우저가 만든 파일도).
 // 픽셀은 미리 곱하지 않은 ARGB (A<<24 | R<<16 | G<<8 | B).
 namespace ComicPadNative.Modules.Media;
 
@@ -650,11 +650,75 @@ public static class WebP
         return o;
     }
 
-    /// <summary>정지 그림 WebP (무손실)</summary>
+    /// <summary>손실로 만드는지 (화질 1 = 무손실)</summary>
+    public static bool IsLossy(double quality) => quality < 0.999;
+
+    /// <summary>그림 한 장의 덩이들 (무손실: VP8L / 손실: [ALPH] + "VP8 ")</summary>
+    static List<(string id, byte[] data)> EncodeImage(Argb im, double quality)
+    {
+        var o = new List<(string, byte[])>();
+        if (!IsLossy(quality)) { o.Add(("VP8L", EncodeVP8L(im))); return o; }
+        if (im.HasAlpha()) o.Add(("ALPH", EncodeAlph(im)));
+        o.Add(("VP8 ", Vp8.Encode(im, quality)));
+        return o;
+    }
+
+    /// <summary>ALPH 덩이: 머리 1바이트(압축 1 = VP8L, 거르기 없음) + 머리 없는 VP8L (알파는 초록 자리)</summary>
+    public static byte[] EncodeAlph(Argb im)
+    {
+        var g = new Argb(im.W, im.H);
+        for (int i = 0; i < g.P.Length; i++) g.P[i] = 0xff000000u | ((im.P[i] >> 24) << 8);
+        var v = EncodeVP8L(g);   // 서명 1 + 크기 4바이트를 떼면 바로 그림 줄기
+        var o = new byte[v.Length - 4];
+        o[0] = 0x01;
+        Array.Copy(v, 5, o, 1, v.Length - 5);
+        return o;
+    }
+
+    /// <summary>ALPH 덩이 → 알파 (w×h)</summary>
+    public static byte[] DecodeAlph(byte[] b, int off, int len, int w, int h)
+    {
+        if (len < 1) throw new InvalidDataException("ALPH 가 비었습니다");
+        int flags = b[off], method = flags & 3, filter = (flags >> 2) & 3;
+        var a = new byte[w * h];
+        if (method == 0) Array.Copy(b, off + 1, a, 0, Math.Min(a.Length, len - 1));
+        else if (method == 1)
+        {
+            var v = new byte[len - 1 + 5];
+            v[0] = 0x2f;
+            uint bits = (uint)(w - 1) | ((uint)(h - 1) << 14);
+            v[1] = (byte)bits; v[2] = (byte)(bits >> 8); v[3] = (byte)(bits >> 16); v[4] = (byte)(bits >> 24);
+            Array.Copy(b, off + 1, v, 5, len - 1);
+            var im = DecodeVP8L(v, 0, v.Length);
+            for (int i = 0; i < a.Length; i++) a[i] = (byte)(im.P[i] >> 8);
+        }
+        else throw new InvalidDataException("ALPH 압축 방식을 모릅니다");
+        if (filter != 0)
+            for (int y = 0; y < h; y++)
+                for (int x = 0; x < w; x++)
+                {
+                    int i = y * w + x, pred;
+                    if (x == 0 && y == 0) pred = 0;
+                    else if (y == 0) pred = a[i - 1];
+                    else if (x == 0) pred = a[i - w];
+                    else pred = filter == 1 ? a[i - 1] : filter == 2 ? a[i - w] : Math.Clamp(a[i - 1] + a[i - w] - a[i - w - 1], 0, 255);
+                    a[i] = (byte)(a[i] + pred);
+                }
+        return a;
+    }
+
+    /// <summary>정지 그림 WebP (화질 1 = 무손실, 그 아래는 손실 VP8)</summary>
     public static byte[] EncodeStill(Argb im, double quality = 1)
     {
         var body = new List<byte>();
-        Chunk(body, "VP8L", EncodeVP8L(NearLossless(im, LossyBits(quality))));
+        var parts = EncodeImage(im, quality);
+        if (parts.Count > 1)   // 알파 + VP8 → VP8X 필요
+        {
+            var vp8x = new List<byte> { 0x10, 0, 0, 0 };
+            Le24(vp8x, im.W - 1); Le24(vp8x, im.H - 1);
+            Chunk(body, "VP8X", vp8x);
+        }
+        foreach (var (id, data) in parts) Chunk(body, id, data);
         return Riff(body);
     }
 
@@ -662,14 +726,14 @@ public static class WebP
     public static byte[] EncodeAnimated(IList<(Argb img, int ms)> frames, int loop = 0, bool transparent = false, double quality = 1)
     {
         if (frames.Count == 0) throw new InvalidOperationException("프레임이 없습니다");
-        int W = frames[0].img.W, H = frames[0].img.H, bits = LossyBits(quality);
+        int W = frames[0].img.W, H = frames[0].img.H;
         if (frames.Any(f => f.img.W != W || f.img.H != H)) throw new ArgumentException("프레임 크기가 모두 같아야 합니다");
         var list = new List<(int x, int y, Argb part, int ms)>();
         uint[] canvas = null;
         bool alpha = transparent;
         foreach (var (src, ms0) in frames)
         {
-            var im = NearLossless(src, bits);
+            var im = src;
             int ms = Math.Max(1, ms0);
             if (canvas == null) { canvas = (uint[])im.P.Clone(); list.Add((0, 0, im, ms)); alpha |= im.HasAlpha(); continue; }
             int x0 = W, y0 = H, x1 = -1, y1 = -1;
@@ -685,8 +749,8 @@ public static class WebP
             alpha |= part.HasAlpha();
             list.Add((x0, y0, part, ms));
         }
-        var enc = new byte[list.Count][];
-        Parallel.For(0, list.Count, i => enc[i] = EncodeVP8L(list[i].part));
+        var enc = new List<(string id, byte[] data)>[list.Count];
+        Parallel.For(0, list.Count, i => enc[i] = EncodeImage(list[i].part, quality));
         var body = new List<byte>();
         var vp8x = new List<byte> { (byte)(0x02 | (alpha ? 0x10 : 0)), 0, 0, 0 };
         Le24(vp8x, W - 1); Le24(vp8x, H - 1);
@@ -695,10 +759,10 @@ public static class WebP
         for (int i = 0; i < list.Count; i++)
         {
             var (x, y, part, ms) = list[i];
-            var p = new List<byte>(enc[i].Length + 32);
+            var p = new List<byte>(enc[i].Sum(e => e.data.Length) + 48);
             Le24(p, x / 2); Le24(p, y / 2); Le24(p, part.W - 1); Le24(p, part.H - 1); Le24(p, Math.Min(0xffffff, ms));
             p.Add(0x02);   // 섞지 않고 바꿈, 지우지 않음
-            Chunk(p, "VP8L", enc[i]);
+            foreach (var (id, data) in enc[i]) Chunk(p, id, data);
             Chunk(body, "ANMF", p);
         }
         return Riff(body);
@@ -739,19 +803,38 @@ public static class WebP
         return info;
     }
 
-    /// <summary>무손실 WebP 를 직접 풀기: 프레임마다 합친 화면 + 시간(ms). 손실(VP8) 프레임이면 NotSupportedException</summary>
+    /// <summary>덩이 묶음(from~to)에서 그림 하나: VP8L, 또는 [ALPH] + "VP8 " (없으면 null)</summary>
+    static Argb DecodeImageChunks(byte[] b, int from, int to)
+    {
+        (int off, int len)? alph = null;
+        foreach (var (id, off, len) in Chunks(b, from, to))
+        {
+            if (id == "VP8L") return DecodeVP8L(b, off, len);
+            if (id == "ALPH") alph = (off, len);
+            if (id == "VP8 ")
+            {
+                var im = Vp8.Decode(b, off, len);
+                if (alph is (int ao, int al))
+                {
+                    var a = DecodeAlph(b, ao, al, im.W, im.H);
+                    for (int i = 0; i < im.P.Length; i++) im.P[i] = (im.P[i] & 0x00ffffffu) | ((uint)a[i] << 24);
+                }
+                return im;
+            }
+        }
+        return null;
+    }
+
+    /// <summary>WebP 를 직접 풀기 (무손실·손실 모두): 프레임마다 합친 화면 + 시간(ms)</summary>
     public static List<(Argb img, int ms)> DecodeFrames(byte[] b)
     {
         var info = Probe(b);
         var o = new List<(Argb, int)>();
         if (!info.Animated)
         {
-            foreach (var (id, off, len) in Chunks(b, 12, b.Length))
-            {
-                if (id == "VP8L") { o.Add((DecodeVP8L(b, off, len), 0)); return o; }
-                if (id == "VP8 ") throw new NotSupportedException("손실 압축(VP8) WebP 는 Windows 의 WebP 확장이 있어야 열 수 있습니다");
-            }
-            throw new InvalidDataException("WebP 그림 데이터가 없습니다");
+            var still = DecodeImageChunks(b, 12, b.Length) ?? throw new InvalidDataException("WebP 그림 데이터가 없습니다");
+            o.Add((still, 0));
+            return o;
         }
         var canvas = new uint[info.W * info.H];
         foreach (var (id, off, len) in Chunks(b, 12, b.Length))
@@ -759,12 +842,7 @@ public static class WebP
             if (id != "ANMF") continue;
             int fx = U24(b, off) * 2, fy = U24(b, off + 3) * 2, fw = U24(b, off + 6) + 1, fh = U24(b, off + 9) + 1, ms = U24(b, off + 12);
             bool noBlend = (b[off + 15] & 2) != 0, dispose = (b[off + 15] & 1) != 0;
-            Argb part = null;
-            foreach (var (cid, coff, clen) in Chunks(b, off + 16, off + len))
-            {
-                if (cid == "VP8L") part = DecodeVP8L(b, coff, clen);
-                else if (cid == "VP8 ") throw new NotSupportedException("손실 압축(VP8) WebP 는 Windows 의 WebP 확장이 있어야 열 수 있습니다");
-            }
+            Argb part = DecodeImageChunks(b, off + 16, off + len);
             if (part == null) continue;
             for (int y = 0; y < fh && fy + y < info.H; y++)
                 for (int x = 0; x < fw && fx + x < info.W; x++)
