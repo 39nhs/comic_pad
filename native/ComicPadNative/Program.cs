@@ -24,11 +24,12 @@ static class Program
             bmp.Save(args[2], System.Drawing.Imaging.ImageFormat.Png);
             return;
         }
-        // 모듈 자체 시험 (창 없이): --selftest brushes|3d 결과폴더  → 끝 코드 = 실패 수
+        // 모듈 자체 시험 (창 없이): --selftest brushes|3d|script 결과폴더  → 끝 코드 = 실패 수
         if (args.Length == 3 && args[0] == "--selftest")
         {
             InitModules();
             Directory.CreateDirectory(args[2]);
+            if (args[1] == "script") { Environment.ExitCode = Modules.Comic.ScriptTest.Run(args[2]); return; }
             if (args[1] == "3d") { Environment.ExitCode = Modules.Scene3D.SelfTest3D.Run(args[2]); return; }
             if (args[1] == "brushes")
             {

@@ -15,6 +15,7 @@ public sealed class ComicModule : IModule
         Registry.Tool(new PanelTool());
         Registry.Tool(new BubbleTool());
         Registry.Tool(new TextTool());
+        Registry.Tool(new ScriptTool());
         Registry.Tool(new SfxTool());
         Registry.Tool(new SpeedLinesTool());
         Registry.Tool(new MemoTool());
@@ -67,6 +68,7 @@ public sealed class ComicModule : IModule
         Registry.Menu("만화/컷 나누기 도구", () => App.SetTool("panel"), order: 12);
         Registry.Menu("만화/말풍선 도구", () => App.SetTool("bubble"), order: 13);
         Registry.Menu("만화/텍스트 도구", () => App.SetTool("text"), order: 14);
+        Registry.Menu("만화/대본 배치 도구 (대사를 한꺼번에)", () => App.SetTool("script"), order: 14);
         Registry.Menu("만화/효과음 글자 도구", () => App.SetTool("sfx"), order: 15);
         Registry.Menu("만화/-1", null, order: 20);
         Registry.Menu("만화/웹툰: 아래로 캔버스 늘리기", () => Run(CanvasOps.ExtendDown), Keys.None, HasDoc, order: 21);
