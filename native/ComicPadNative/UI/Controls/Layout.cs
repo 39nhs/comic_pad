@@ -4,6 +4,19 @@ using System.Windows.Forms.Layout;
 
 namespace ComicPadNative.UI.Controls;
 
+/// <summary>둥근 판 (웹 .setup-detail · .local-row: panel2 바탕, 둥근 10px) — 세로 쌓기</summary>
+public class WebBox : WebStack
+{
+    public Color Fill = Theme.Panel2;
+    public int Radius = 10;
+    public WebBox() { FillParent = false; BackColor = Theme.Panel2; }
+    protected override void OnPaintBackground(PaintEventArgs e)
+    {
+        e.Graphics.Clear(Web.ParentBack(this));
+        Web.Box(e.Graphics, ClientRectangle, Radius, Fill);
+    }
+}
+
 /// <summary>세로 쌓기 (웹 div/section 의 블록 흐름)</summary>
 public class WebStack : FlowLayoutPanel
 {
@@ -71,6 +84,12 @@ public class WebRow : FlowLayoutPanel
         SetStyle(ControlStyles.SupportsTransparentBackColor, true);
     }
     public override LayoutEngine LayoutEngine => RowLayout.Instance;
+    /// <summary>줄 안의 단추는 간격(gap)만으로 떨어짐 (웹 .row .btn 은 margin 없음)</summary>
+    protected override void OnControlAdded(ControlEventArgs e)
+    {
+        base.OnControlAdded(e);
+        if (e.Control is WebButton b && b.Margin == new Padding(0, 4, 6, 4)) b.Margin = Padding.Empty;
+    }
     public override Size GetPreferredSize(Size proposed)
     {
         int w = proposed.Width > 1 && proposed.Width < 100000 ? proposed.Width : int.MaxValue / 4;

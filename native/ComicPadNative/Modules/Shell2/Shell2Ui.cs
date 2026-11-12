@@ -8,6 +8,7 @@ namespace ComicPadNative.Modules.Shell2;
 
 public static class Shell2Ui
 {
+    [System.Runtime.InteropServices.DllImport("dwmapi.dll")] static extern int DwmSetWindowAttribute(IntPtr h, int attr, ref int v, int size);
     public static MainForm Main => App.Main as MainForm;
     public static CanvasView Canvas => Main?.Canvas;
     public static SplitContainer Side => App.Main == null ? null : U.All(App.Main).OfType<SplitContainer>().FirstOrDefault(s => s.Dock is DockStyle.Right or DockStyle.Left);
@@ -27,11 +28,14 @@ public static class Shell2Ui
     public static void Notify(string text, string button, Action run)
     {
         if (App.Main == null || App.Main.IsDisposed) return;
-        var f = new Form { FormBorderStyle = FormBorderStyle.None, ShowInTaskbar = false, StartPosition = FormStartPosition.Manual, BackColor = Opt.Bg2, ForeColor = Opt.Fg, Size = new Size(360, 64), Owner = App.Main, Font = new Font("Malgun Gothic", 9.5f) };
-        var l = new Label { Text = text, AutoSize = false, Location = new Point(10, 8), Size = new Size(250, 48), ForeColor = Opt.Fg };
-        var b = Opt.Button(button, () => { f.Close(); run(); }, true); b.Location = new Point(262, 16);
-        var x = new Label { Text = "×", Location = new Point(342, 2), AutoSize = true, Cursor = Cursors.Hand };
+        // 웹 .toast.has-actions: 어두운 둥근 알림 + [단추] [×]
+        var f = new Form { FormBorderStyle = FormBorderStyle.None, ShowInTaskbar = false, StartPosition = FormStartPosition.Manual, BackColor = Color.FromArgb(30, 30, 34), ForeColor = Opt.Fg, Size = new Size(380, 72), Owner = App.Main, Font = UI.Controls.Web.Body };
+        var l = new Label { Text = text, AutoSize = false, Location = new Point(16, 10), Size = new Size(230, 52), ForeColor = Opt.Fg, TextAlign = ContentAlignment.MiddleLeft };
+        var b = Opt.Button(button, () => { f.Close(); run(); }, true); b.Margin = Padding.Empty; b.Size = b.GetPreferredSize(Size.Empty); b.Location = new Point(f.Width - 54 - b.Width, (f.Height - b.Height) / 2);
+        var x = new UI.Controls.WebButton("×", UI.Controls.BtnKind.Normal) { Size = new Size(38, 38), AutoSize = false, Location = new Point(f.Width - 48, (f.Height - 38) / 2) };
         x.Click += (_, _) => f.Close();
+        f.Paint += (_, e) => UI.Controls.Web.Box(e.Graphics, new Rectangle(0, 0, f.Width, f.Height), 0, null, UI.Controls.Web.ModalLine);
+        f.HandleCreated += (_, _) => { try { int round = 2; DwmSetWindowAttribute(f.Handle, 33, ref round, 4); } catch { } };
         f.Controls.AddRange(new Control[] { l, b, x });
         var r = App.Main.RectangleToScreen(App.Main.ClientRectangle);
         f.Location = new Point(r.Right - f.Width - 16, r.Bottom - f.Height - 40);

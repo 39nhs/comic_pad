@@ -7,7 +7,8 @@ namespace ComicPadNative.UI.Controls;
 public class WebInput : Control, IWebBlock
 {
     public readonly TextBox Box;
-    public string Placeholder;
+    /// <summary>흐린 안내 글 (웹 placeholder)</summary>
+    public string Placeholder { get => Box?.PlaceholderText; set { if (Box != null) Box.PlaceholderText = value ?? ""; } }
     bool hover;
     public WebInput(string text = "", bool multiline = false)
     {
@@ -51,7 +52,7 @@ public class WebInput : Control, IWebBlock
         var g = e.Graphics;
         g.Clear(Web.ParentBack(this));
         Web.Box(g, ClientRectangle, 6, Web.Field, Box.Focused ? Web.Mix(Theme.Line, Theme.Accent, 0.7) : hover ? Web.Mix(Theme.Line, Theme.Text, 0.2) : Theme.Line);
-        if (Box.Text.Length == 0 && !string.IsNullOrEmpty(Placeholder) && !Box.Focused)
+        if (Box.Text.Length == 0 && !string.IsNullOrEmpty(Placeholder))
             Web.Text(g, Placeholder, Box.Font, new Rectangle(10, Box.Multiline ? 7 : 0, Width - 20, Box.Multiline ? Box.Font.Height + 4 : Height), Theme.Muted, Box.Multiline ? Web.Wrap : Web.Left);
     }
     public void SelectAll() { Box.Focus(); Box.SelectAll(); }

@@ -97,6 +97,8 @@ public class ModalForm : Form
         ContentWidth = width;
         Head = new ModalHead(title, () => { DialogResult = DialogResult.Cancel; Close(); }, closeButton);
         Body = new Panel { Dock = DockStyle.Fill, AutoScroll = true, Padding = new Padding(16, 12, 16, 12), BackColor = Theme.Panel }.DarkScroll();
+        // 가로 굴림은 쓰지 않음 (웹 .modal-body: overflow-y 만)
+        Body.AutoScroll = false; Body.HorizontalScroll.Maximum = 0; Body.HorizontalScroll.Enabled = false; Body.HorizontalScroll.Visible = false; Body.AutoScroll = true;
         Actions = new ModalActions { Visible = false };
         Controls.Add(Body); Controls.Add(Actions); Controls.Add(Head);
         FixedSize = height > 0;
@@ -159,6 +161,8 @@ public class ModalForm : Form
         var ps = content.GetPreferredSize(new Size(innerW, 0));
         int h = Head.Height + Body.Padding.Vertical + ps.Height + (Actions.Visible ? Actions.Height : 0) + 2;
         h = Math.Min(h, wa.Height - 32);
+        var ow = Owner ?? App.Main;
+        if (ow != null && ow.Visible && ow.WindowState != FormWindowState.Minimized) h = Math.Min(h, ow.ClientSize.Height - 32);   // 웹: max-height calc(100vh - 32px)
         ClientSize = new Size(ContentWidth + 2, Math.Max(120, h));
     }
 
@@ -173,6 +177,7 @@ public class ModalForm : Form
     protected override void OnShown(EventArgs e)
     {
         base.OnShown(e);
+        Modals.ShotHook(this);
         // 처음 입력 칸에 포커스 (웹: input, textarea, select)
         var first = Modals.FirstInput(Body);
         if (first != null) { if (first is WebInput wi) wi.SelectAll(); else first.Focus(); }
@@ -226,6 +231,42 @@ public static class Modals
         var wa = Screen.FromRectangle(area).WorkingArea;
         int x = area.X + (area.Width - f.Width) / 2, y = area.Y + (area.Height - f.Height) / 2;
         f.Location = new Point(Math.Clamp(x, wa.X, Math.Max(wa.X, wa.Right - f.Width)), Math.Clamp(y, wa.Y, Math.Max(wa.Y, wa.Bottom - f.Height)));
+    }
+
+    /// <summary>화면 비교 찍기 (COMICPAD_UI_SHOT): 대화상자가 뜨면 메인 창 + 어두운 뒤판 + 대화상자를 한 장으로 저장하고 끝냄.
+    /// (Program 의 찍기는 대화상자가 떠 있는 동안 기다리지 못하므로 여기서)</summary>
+    internal static void ShotHook(Form f)
+    {
+        string shot = Environment.GetEnvironmentVariable("COMICPAD_UI_SHOT");
+        if (string.IsNullOrEmpty(shot) || App.Main == null || !f.Modal) return;
+        var t = new System.Windows.Forms.Timer { Interval = 1200 };
+        t.Tick += (_, _) =>
+        {
+            t.Stop();
+            try
+            {
+                var main = App.Main;
+                using var bmp = new Bitmap(main.ClientSize.Width, main.ClientSize.Height);
+                using (var g = Graphics.FromImage(bmp))
+                {
+                    using (var mb = new Bitmap(main.Width, main.Height))
+                    {
+                        main.DrawToBitmap(mb, new Rectangle(0, 0, mb.Width, mb.Height));
+                        var off = main.PointToScreen(Point.Empty);
+                        g.DrawImage(mb, main.Left - off.X, main.Top - off.Y);
+                    }
+                    using (var dim = new SolidBrush(Color.FromArgb(115, 0, 0, 0))) g.FillRectangle(dim, 0, 0, bmp.Width, bmp.Height);
+                    using var db = new Bitmap(f.Width, f.Height);
+                    f.DrawToBitmap(db, new Rectangle(0, 0, db.Width, db.Height));
+                    var p = main.PointToClient(f.Location);
+                    g.DrawImage(db, p.X, p.Y);
+                }
+                bmp.Save(shot);
+            }
+            catch (Exception ex) { File.WriteAllText(shot + ".error.txt", ex.ToString()); }
+            Environment.Exit(0);
+        };
+        t.Start();
     }
 
     internal static Control FirstInput(Control root)
@@ -294,6 +335,7 @@ public static class Modals
             if (e.KeyCode == Keys.Escape && f.CancelButton == null && !e.Handled) { f.Close(); e.Handled = true; }
         };
         f.HandleCreated += (_, _) => Round(f.Handle);
+        f.Shown += (_, _) => ShotHook(f);
         return f;
     }
 
