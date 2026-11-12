@@ -358,7 +358,7 @@ public static class Setup
                     : changed.Count > 0 ? $"바뀌는 설정: {string.Join(", ", changed.Select(k => KeyLabel.GetValueOrDefault(k, k)))}. 적용 전 상태는 백업되어 \"되돌리기\" 한 번으로 돌아갑니다. 내가 만든 브러시·작업 화면·팔레트는 지우지 않습니다."
                     : "지금 설정과 같아서 바뀌는 것이 없습니다.",
             });
-            var nh = Opt.Help("네이티브 판에서 쓰이는 것: 도구 키·단축키, 펜 측면 버튼·손바닥 무시·두 손가락 회전, 오른쪽 패널, 새 작품 추천 크기. 나머지(화면 구성·아래 막대·브러시 이름 등)는 웹 판과 같은 값으로 저장만 해 둡니다.");
+            var nh = Opt.Help("네이티브 판에서도 모두 쓰입니다: 도구 키·단축키, 화면 구성(간단히/모든 기능)·아래 막대·퀵바·원형 메뉴·큰 버튼, 펜 측면 버튼·손가락 제스처·브러시 커서, 오른쪽 패널, 새 작품 추천 크기.");
             nh.MaximumSize = new Size(440, 0); nh.Margin = new Padding(0, 10, 0, 0);
             detail.Controls.Add(nh);
             detail.ResumeLayout();

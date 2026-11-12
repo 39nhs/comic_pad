@@ -21,6 +21,9 @@ public sealed class History
     public bool CanRedo => redo.Count > 0;
     public string UndoLabel => undo.Count > 0 ? undo[^1].Label : null;
     public string RedoLabel => redo.Count > 0 ? redo[^1].Label : null;
+    /// <summary>기록 패널용 (오래된 것 → 최근, 다시실행은 가까운 것이 끝)</summary>
+    public IReadOnlyList<IEdit> UndoItems => undo;
+    public IReadOnlyList<IEdit> RedoItems => redo;
 
     public void Push(IEdit e)
     {

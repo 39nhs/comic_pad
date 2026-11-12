@@ -117,7 +117,12 @@ public sealed class MainForm : Form
             };
         }
         foreach (var name in MenuOrder.Concat(tops.Keys.Except(MenuOrder))) if (tops.TryGetValue(name, out var t)) menu.Items.Add(t);
+        MenusBuilt?.Invoke(menu);
     }
+    /// <summary>메뉴를 (다시) 만든 뒤 (간단히 모드 등 메뉴를 거르는 모듈용)</summary>
+    public static event Action<MenuStrip> MenusBuilt;
+    /// <summary>도구 막대를 (다시) 만든 뒤</summary>
+    public static event Action<ToolStrip> ToolsBuilt;
     static bool IsValidShortcut(Keys k) => k != Keys.None && (k & (Keys.Control | Keys.Alt)) != 0 || (k >= Keys.F1 && k <= Keys.F24) || k == Keys.Delete;
 
     public static void Run(Action a, string name)
@@ -138,6 +143,7 @@ public sealed class MainForm : Form
             tools.Items.Add(b);
         }
         SyncTools();
+        ToolsBuilt?.Invoke(tools);
     }
     void SyncTools() { foreach (ToolStripItem i in tools.Items) if (i is ToolStripButton b) b.Checked = (string)b.Tag == App.Tool?.Id; }
 
@@ -189,7 +195,7 @@ public sealed class MainForm : Form
     protected override void OnKeyUp(KeyEventArgs e)
     {
         base.OnKeyUp(e);
-        if (e.KeyCode == Keys.Space) { Canvas.SpaceDown = false; Canvas.Cursor = App.Tool?.Cursor ?? Cursors.Cross; }
+        if (e.KeyCode == Keys.Space) { Canvas.SpaceDown = false; Canvas.Cursor = CanvasView.CursorOf(App.Tool); }
         Canvas.CtrlDown = e.Control; Canvas.ShiftDown = e.Shift;
     }
 

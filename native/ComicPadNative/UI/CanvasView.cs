@@ -29,11 +29,22 @@ public sealed class CanvasView : Control
     public double LatencyMs; public int PenRate; int samples; long secStart = Stopwatch.GetTimestamp();
     public event Action ViewChanged;
 
+    // ---- 확장 지점 (Shell2 모듈: 원형 메뉴·브러시 커서 모양 등) ----------------------------------
+    /// <summary>도구가 아닌 측면 버튼·오른쪽 버튼 동작(예: "radial")을 받아 처리하면, 그 접촉의 이동·뗌을 넘겨받을 것을 돌려줌</summary>
+    public interface IPointerGesture { void Move(PointerArgs a); void Up(PointerArgs a); }
+    public static Func<string, PointerArgs, IPointerGesture> TempAction;
+    /// <summary>도구 커서 바꾸기 (설정 brushCursor). null 이면 도구가 정한 커서</summary>
+    public static Func<ToolBase, Cursor> CursorOverride;
+    public static Cursor CursorOf(ToolBase t) => (t == null ? null : CursorOverride?.Invoke(t)) ?? t?.Cursor ?? Cursors.Cross;
+    IPointerGesture gesture;
+
     public CanvasView()
     {
         SetStyle(ControlStyles.Opaque | ControlStyles.AllPaintingInWmPaint | ControlStyles.UserPaint | ControlStyles.Selectable, true);
         App.Invalidated += r => { Recomposite(r); Present(); };
-        App.ToolChanged += () => { Cursor = App.Tool?.Cursor ?? Cursors.Cross; Present(); };
+        App.ToolChanged += () => { Cursor = CursorOf(App.Tool); Present(); };
+        App.SettingsChanged += () => { if (!SpaceDown && !panning) Cursor = CursorOf(App.Tool); };
+        longPress.Tick += (_, _) => LongPressTick();
         App.DocChanged += () => { comp = null; Fit(); };
     }
 
@@ -291,6 +302,7 @@ public sealed class CanvasView : Control
                 var p = PointToClient(new Point((short)((long)m.LParam & 0xFFFF), (short)((long)m.LParam >> 16)));
                 if ((ModifierKeys & Keys.Alt) != 0) RotateBy(delta > 0 ? -15 : 15, p.X, p.Y);
                 else if ((ModifierKeys & Keys.Shift) != 0) { V.PanX += delta / 2.0; RedrawAll(); }
+                else if ((ModifierKeys & Keys.Control) == 0 && App.Get("wheelMode", "zoom") == "scroll") { V.PanY += delta / 2.0; RedrawAll(); }   // 웹툰: 휠 = 위아래 스크롤 (Ctrl+휠 = 확대)
                 else ZoomAt(delta > 0 ? 1.15 : 1 / 1.15, p.X, p.Y);
                 return;
             }
@@ -326,6 +338,7 @@ public sealed class CanvasView : Control
         uint id = (uint)((long)m.WParam & 0xFFFF);
         if (!GetPointerType(id, out int type)) return false;
         if (type == PT_TOUCH) { if (Environment.TickCount64 - lastPenTick > App.Get("palmGuardMs", 350)) OnTouch(ref m, id); return true; }
+        if (type == PT_PEN && touchGesture != null) { touches.Clear(); EndTouchGesture(false); }   // 펜이 닿으면 손가락 제스처는 끝
         if (m.Msg == WM_POINTERLEAVE) { hoverSX = -1; Present(); return true; }
         if (m.Msg == WM_POINTERCAPTURECHANGED) { if (drawing) EndDraw(null); return true; }
         uint n = 1;
@@ -355,11 +368,12 @@ public sealed class CanvasView : Control
             {
                 if (!drawing && !panning) BeginInput(a);
                 else if (panning) PanMove(a);
+                else if (gesture != null) gesture.Move(a);
                 else App.Tool?.Move(a);
             }
             else
             {
-                if (panning) { panning = false; Cursor = App.Tool?.Cursor ?? Cursors.Cross; }
+                if (panning) { panning = false; Cursor = CursorOf(App.Tool); }
                 else if (drawing) EndDraw(a);
                 else App.Tool?.Hover(a);
             }
@@ -386,9 +400,12 @@ public sealed class CanvasView : Control
         // 마우스 오른쪽 = 스포이트 / 펜 측면 버튼 = 설정(스포이트) / 지우개 끝 = 지우개 / Alt = 스포이트
         string temp = null;
         if (a.EraserEnd) temp = "eraser";
+        else if ((a.Buttons & 2) != 0 && a.Type == "mouse") temp = App.Get("mouseRadial", true) && TempAction != null ? "radial" : App.Get("penButton", "eyedropper");   // 마우스 오른쪽 = 원형 메뉴 (웹 판과 같음)
         else if ((a.Buttons & 2) != 0) temp = App.Get("penButton", "eyedropper");
         else if (a.Alt && App.Tool?.Id != "eyedropper" && App.Tool?.AllowAltPick != false) temp = "eyedropper";
+        if (temp == "none" && (a.Buttons & 2) != 0) return;
         if (temp == "pan") { panning = true; panSX = a.SX; panSY = a.SY; panX0 = V.PanX; panY0 = V.PanY; panMode = "pan"; return; }
+        if (temp != null && !Registry.Tools.Any(t => t.Id == temp) && TempAction?.Invoke(temp, a) is IPointerGesture g) { gesture = g; drawing = true; return; }
         if (temp != null && Registry.Tools.Any(t => t.Id == temp)) { tempTool = App.Tool?.Id; App.SetTool(temp); }
         drawing = true;
         App.Tool?.Down(a);
@@ -397,6 +414,7 @@ public sealed class CanvasView : Control
     void EndDraw(PointerArgs a)
     {
         drawing = false;
+        if (gesture != null) { var g = gesture; gesture = null; g.Up(a); return; }
         if (a != null) App.Tool?.Up(a); else App.Tool?.Cancel();
         if (tempTool != null) { App.SetTool(tempTool); tempTool = null; }
     }
@@ -416,14 +434,91 @@ public sealed class CanvasView : Control
         RedrawAll();
     }
 
+    // ---- 손가락 제스처 (웹 core/input.js 와 같은 규칙): 두 손가락 탭 = 실행취소, 세 손가락 탭 = 다시실행, 네 손가락 탭 = 패널 숨기기,
+    //      한 손가락 길게 = 스포이트, 손가락으로 그리기(설정 fingerDraw) 켜면 한 손가락은 그리기
+    sealed class TouchGesture { public long T0; public int Max; public bool Moved, Used; public readonly Dictionary<uint, PointF> Start = new(); }
+    TouchGesture touchGesture;
+    uint fingerDrawId; bool fingerDrawing;
+    readonly System.Windows.Forms.Timer longPress = new() { Interval = 550 };
+    /// <summary>제스처로 실행할 명령 (Shell2 가 연결, 없으면 메뉴 경로로)</summary>
+    public static Action<string> GestureCommand;
+
+    void RunGesture(string webId, string path)
+    {
+        if (GestureCommand != null) { GestureCommand(webId); return; }
+        if (Registry.Commands.TryGetValue(path, out var run) && run != null) MainForm.Run(run, path);
+    }
+
+    void LongPressTick()
+    {
+        longPress.Stop();
+        var g = touchGesture;
+        if (g == null || g.Moved || touches.Count != 1 || fingerDrawing) return;
+        var p = touches.Values.First();
+        var t = Registry.Tools.Find(x => x.Id == "eyedropper");
+        if (t == null) return;
+        var (dx, dy) = V.ToDoc(p.X, p.Y);
+        var a = new PointerArgs { X = dx, Y = dy, SX = p.X, SY = p.Y, Type = "touch", Buttons = 1, Pressure = 1 };
+        try { t.Down(a); t.Up(a); } catch { }
+        g.Used = true;
+        Present();
+    }
+
+    void EndTouchGesture(bool allowTap)
+    {
+        var g = touchGesture; touchGesture = null; longPress.Stop();
+        if (g == null || !allowTap) return;
+        long dt = Environment.TickCount64 - g.T0;
+        if (g.Moved || g.Used || dt >= 320) return;
+        if (g.Max == 2 && App.Get("twoFingerUndo", true)) RunGesture("edit.undo", "편집/실행취소");
+        else if (g.Max == 3 && App.Get("threeFingerRedo", true)) RunGesture("edit.redo", "편집/다시실행");
+        else if (g.Max == 4) RunGesture("view.toggleUI", "보기/패널 모두 숨기기∕보이기");
+    }
+
+    PointerArgs TouchArgs(Point c, int buttons) { var (dx, dy) = V.ToDoc(c.X, c.Y); var mods = ModifierKeys; return new PointerArgs { X = dx, Y = dy, SX = c.X, SY = c.Y, Pressure = 1, Type = "touch", Buttons = buttons, Time = Environment.TickCount64, Shift = (mods & Keys.Shift) != 0, Ctrl = (mods & Keys.Control) != 0, Alt = (mods & Keys.Alt) != 0 }; }
+
     void OnTouch(ref Message m, uint id)
     {
         if (!GetPointerInfo(id, out var pi)) return;
         var c = PointToClient(new Point(pi.ptPixelLocation.X, pi.ptPixelLocation.Y));
-        if (m.Msg == WM_POINTERUP || m.Msg == WM_POINTERLEAVE || m.Msg == WM_POINTERCAPTURECHANGED) { touches.Remove(id); ResetPinch(); return; }
+        bool up = m.Msg == WM_POINTERUP || m.Msg == WM_POINTERLEAVE || m.Msg == WM_POINTERCAPTURECHANGED;
+        // 손가락으로 그리는 중
+        if (fingerDrawing && id == fingerDrawId)
+        {
+            if (up) { fingerDrawing = false; EndDraw(TouchArgs(c, 0)); Present(); }
+            else { App.Tool?.Move(TouchArgs(c, 1)); Present(); }
+            return;
+        }
+        if (up)
+        {
+            touches.Remove(id); ResetPinch();
+            if (touches.Count == 0) EndTouchGesture(true);
+            return;
+        }
         bool isNew = !touches.ContainsKey(id);
+        if (isNew && fingerDrawing)
+        {
+            // 손가락으로 그리던 중 두 번째 손가락 → 그리기 취소하고 제스처로
+            fingerDrawing = false; drawing = false; App.Tool?.Cancel();
+            if (tempTool != null) { App.SetTool(tempTool); tempTool = null; }
+            touches[fingerDrawId] = touches.TryGetValue(fingerDrawId, out var fp) ? fp : c;
+        }
+        else if (isNew && touches.Count == 0 && App.Get("fingerDraw", false) && !drawing && !panning)
+        {
+            fingerDrawing = true; fingerDrawId = id;
+            BeginInput(TouchArgs(c, 1));
+            if (panning) { fingerDrawing = false; panning = false; } else { Capture = true; Present(); return; }
+        }
         touches[id] = c;
-        if (isNew) { ResetPinch(); return; }
+        if (isNew)
+        {
+            if (touchGesture == null) { touchGesture = new TouchGesture { T0 = Environment.TickCount64 }; if (touches.Count == 1 && App.Get("longPressEyedropper", true) && !App.Get("fingerDraw", false)) { longPress.Stop(); longPress.Start(); } }
+            touchGesture.Start[id] = c;
+            touchGesture.Max = Math.Max(touchGesture.Max, touches.Count);
+            if (touches.Count > 1) longPress.Stop();
+            ResetPinch(); return;
+        }
+        if (touchGesture != null && touchGesture.Start.TryGetValue(id, out var s0) && Math.Abs(c.X - s0.X) + Math.Abs(c.Y - s0.Y) > 12) { touchGesture.Moved = true; longPress.Stop(); }
         var (cen, d, ang) = PinchInfo();
         if (touches.Count == 1) { V.PanX = pinchPanX0 + cen.X - pinchC0.X; V.PanY = pinchPanY0 + cen.Y - pinchC0.Y; RedrawAll(); return; }
         double nz = Math.Clamp(pinchZoom0 * d / Math.Max(1, pinchD0), 0.02, 64);

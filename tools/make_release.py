@@ -169,6 +169,14 @@ def cmd_build(args):
            "exe_sha256": sha256_file(exe) if os.path.exists(exe) else "", "notes": args.notes or "",
            "date": datetime.datetime.now(datetime.timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ"),
            "models": bool(args.with_models)}
+    if getattr(args, "installer", False):
+        # 네이티브 판 업데이트: 설치파일도 서명된 정보(이름·크기·SHA-256)에 넣는다 (GitHub 는 한글 이름을 바꾸므로 영문 이름으로)
+        inst = os.path.join(ROOT, "dist", "ComicPad 설치파일.exe")
+        if not os.path.exists(inst):
+            sys.exit("dist 에 설치파일이 없습니다 (installer\\build_setup.ps1 로 먼저 만들기)")
+        iname = f"ComicPad_Setup_{version}.exe"
+        shutil.copy2(inst, os.path.join(out, iname))
+        man["installer"] = {"file": iname, "size": os.path.getsize(os.path.join(out, iname)), "sha256": sha256_file(os.path.join(out, iname))}
     man_bytes = json.dumps(man, ensure_ascii=False, indent=1).encode("utf-8")
     with open(os.path.join(out, "update.json"), "wb") as f:
         f.write(man_bytes)
