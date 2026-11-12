@@ -29,6 +29,20 @@ static class Program
         {
             InitModules();
             Directory.CreateDirectory(args[2]);
+            if (args[1] == "icons")
+            {
+                var names = UI.Icons.Names.OrderBy(x => x, StringComparer.Ordinal).ToList();
+                int cols = 12, cell = 44;
+                using var sheet = new Bitmap(cols * cell, (names.Count + cols - 1) / cols * cell);
+                using (var g = Graphics.FromImage(sheet))
+                {
+                    g.Clear(UI.Theme.Panel);
+                    for (int i = 0; i < names.Count; i++) UI.Icons.Draw(g, names[i], new RectangleF(i % cols * cell + 11, i / cols * cell + 11, 22, 22), UI.Theme.Text);
+                }
+                sheet.Save(Path.Combine(args[2], "icons_native.png"));
+                File.WriteAllLines(Path.Combine(args[2], "icons_order.txt"), names);
+                return;
+            }
             if (args[1] == "script") { Environment.ExitCode = Modules.Comic.ScriptTest.Run(args[2]); return; }
             if (args[1] == "3d") { Environment.ExitCode = Modules.Scene3D.SelfTest3D.Run(args[2]); return; }
             if (args[1] == "brushes")
