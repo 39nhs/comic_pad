@@ -15,6 +15,8 @@ static class Program
     {
         // 시험용 (창 없이): --roundtrip 입력.cpad 출력.cpad / --render 입력.cpad 출력.png
         if (args.Length == 3 && args[0] == "--roundtrip") { var d = CpadIO.Load(args[1]); CpadIO.Save(d, args[2]); return; }
+        // 기능 지도 재료 (창 없이): --dump-features 결과.json → tools/feature_map.py 가 HTML 로
+        if (args.Length == 2 && args[0] == "--dump-features") { Registry.CaptureSource = true; InitModules(); UI.FeatureDump.Run(args[1]); return; }
         if (args.Length == 3 && args[0] == "--render")
         {
             InitModules();
