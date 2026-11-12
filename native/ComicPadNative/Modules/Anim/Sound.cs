@@ -1,6 +1,6 @@
 // 소리 (배경음·대사) — 웹 판 animx.js 의 소리 부분. doc.anim.audio = { name, data: "data:audio/...;base64,...", offset, volume }
-// 네이티브 판은 따로 코덱 없이 WAV(PCM 8/16/24/32비트, 32비트 실수)만 읽고 재생한다 (Windows winmm PlaySound).
-// mp3·ogg·m4a 가 든 작품은 소리 데이터를 그대로 보관만 하고 재생·분석은 하지 않는다.
+// WAV(PCM 8/16/24/32비트, 32비트 실수)는 직접 읽고, 그 밖의 형식(mp3·m4a·wma 등)은 ExtraDecoder(Media 모듈의 Media Foundation)로 풀어
+// 재생·분석·동영상에 쓴다 (Windows winmm PlaySound 로 재생). 풀 수 없는 형식은 데이터를 그대로 보관만 한다.
 using System.Runtime.InteropServices;
 using System.Text.Json.Nodes;
 using ComicPadNative.Core;
@@ -19,6 +19,26 @@ public static class Sound
 {
     static string cacheKey; static Pcm cache;
 
+    /// <summary>WAV 가 아닌 소리 풀기 (바이트, 확장자 ".mp3" 등) — Media 모듈이 Media Foundation 으로 채움. 못 풀면 null/예외</summary>
+    public static Func<byte[], string, Pcm> ExtraDecoder;
+
+    /// <summary>data URL 의 형식(또는 파일 이름) → 확장자</summary>
+    public static string ExtOf(string dataUrl, string name)
+    {
+        string mime = dataUrl != null && dataUrl.StartsWith("data:") ? dataUrl[5..Math.Max(5, dataUrl.IndexOf(';') < 0 ? 5 : dataUrl.IndexOf(';'))].ToLowerInvariant() : "";
+        string e = mime switch
+        {
+            "audio/mpeg" or "audio/mp3" => ".mp3", "audio/mp4" or "audio/x-m4a" or "audio/m4a" or "audio/aac" => ".m4a", "audio/ogg" or "audio/vorbis" => ".ogg",
+            "audio/opus" => ".opus", "audio/webm" => ".webm", "audio/x-ms-wma" => ".wma", "audio/flac" or "audio/x-flac" => ".flac", "audio/wav" or "audio/x-wav" or "audio/wave" => ".wav", _ => null,
+        };
+        return e ?? (string.IsNullOrEmpty(Path.GetExtension(name ?? "")) ? ".mp3" : Path.GetExtension(name).ToLowerInvariant());
+    }
+    static string MimeOf(string ext) => ext switch
+    {
+        ".mp3" => "audio/mpeg", ".m4a" or ".aac" or ".mp4" => "audio/mp4", ".ogg" or ".oga" => "audio/ogg", ".opus" => "audio/opus", ".webm" => "audio/webm",
+        ".wma" => "audio/x-ms-wma", ".flac" => "audio/flac", _ => "audio/wav",
+    };
+
     public static JsonObject Audio(Document d) => d == null ? null : AnimCore.A(d)["audio"] as JsonObject;
     public static bool HasAudio(Document d) => Audio(d)?["data"] != null;
 
@@ -34,7 +54,8 @@ public static class Sound
         try
         {
             int comma = data.IndexOf(',');
-            cache = ParseWav(Convert.FromBase64String(comma >= 0 ? data[(comma + 1)..] : data));
+            var bytes = Convert.FromBase64String(comma >= 0 ? data[(comma + 1)..] : data);
+            cache = ParseWav(bytes) ?? ExtraDecoder?.Invoke(bytes, ExtOf(data, J.S(a["name"])));
         }
         catch { cache = null; }
         return cache;
@@ -75,7 +96,7 @@ public static class Sound
         return o;
     }
 
-    /// <summary>소리 넣기 (WAV 파일 → 작품 안에 함께 저장)</summary>
+    /// <summary>소리 넣기 (WAV·MP3·M4A 등 → 원래 파일 그대로 작품 안에 함께 저장, 웹 판과 같은 data URL)</summary>
     public static void SetAudio(string path)
     {
         var d = App.Doc;
@@ -83,8 +104,10 @@ public static class Sound
         if (fi.Length > 30 * 1048576) { App.Toast("소리 파일이 너무 큽니다 (30MB 까지)"); return; }
         var bytes = File.ReadAllBytes(path);
         var pcm = ParseWav(bytes);
-        if (pcm == null) { App.Toast("이 소리 파일은 읽을 수 없습니다 (네이티브 판은 WAV 만)"); return; }
-        var next = new JsonObject { ["name"] = fi.Name, ["data"] = "data:audio/wav;base64," + Convert.ToBase64String(bytes), ["offset"] = 0, ["volume"] = 1 };
+        string ext = pcm != null ? ".wav" : fi.Extension.ToLowerInvariant();
+        if (pcm == null) { try { pcm = ExtraDecoder?.Invoke(bytes, ext); } catch { pcm = null; } }
+        if (pcm == null) { App.Toast("이 소리 파일은 읽을 수 없습니다 (WAV·MP3·M4A·WMA·FLAC — OGG·Opus 는 Windows 에 그 디코더가 있을 때만)"); return; }
+        var next = new JsonObject { ["name"] = fi.Name, ["data"] = $"data:{MimeOf(ext)};base64," + Convert.ToBase64String(bytes), ["offset"] = 0, ["volume"] = 1 };
         AnimCore.EditAnimOnly("소리 넣기", a => a["audio"] = next);
         App.Toast($"소리: {fi.Name} ({pcm.Duration:0.0}초)");
     }

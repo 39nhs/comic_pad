@@ -201,6 +201,8 @@ public static class PenSettings
         p.Controls.Add(BUI.Slider("필압 다듬기", 0, 0.8, () => BrushPreset.Num(Feel()["pressureSmooth"]) ?? 0, v => { Feel()["pressureSmooth"] = Math.Round(v, 2); Save(); }, BUI.Pct, step: 0.05));
         p.Controls.Add(BUI.Toggle("펜을 대는 순간 굵게 찍히는 것 줄이기 (선 시작이 늘 가늘어짐)", () => Feel()["startRamp"] is JsonNode n && BrushPreset.Bool(n), v => { Feel()["startRamp"] = v; Save(); }));
         p.Controls.Add(BUI.Select("측면 버튼 누르고 그리기", new[] { ("eyedropper", "스포이트"), ("eraser", "지우개"), ("pan", "화면 이동"), ("none", "사용 안 함") }, () => App.Get("penButton", "eyedropper"), v => { App.Set("penButton", v); Save(); }));
+        p.Controls.Add(BUI.Select("두 번째 측면 버튼 (와콤 등)", new[] { ("pan", "화면 이동"), ("eyedropper", "스포이트"), ("eraser", "지우개"), ("radial", "원형 메뉴"), ("none", "사용 안 함") }, () => App.Get("penButton2", "pan"), v => { App.Set("penButton2", v); Save(); }));
+        p.Controls.Add(BUI.Toggle("펜 위치 예측 (선보다 조금 앞을 흐리게 미리 보여 줌)", () => Feel()["predict"] is not JsonNode n || BrushPreset.Bool(n), v => { Feel()["predict"] = v; Save(); }));
         p.Controls.Add(BUI.Slider("펜을 뗀 뒤 터치 무시 시간", 0, 1500, () => N("palmGuardMs", 350), v => { App.Set("palmGuardMs", (int)v); Save(); }, v => $"{v:0}ms", step: 50));
         p.Controls.Add(BUI.Slider("마우스 필압", 0.05, 1, () => N("mousePressure", 1), v => { App.Set("mousePressure", Math.Round(v, 2)); Save(); }, BUI.Pct, step: 0.05));
         scroll.Controls.Add(p);

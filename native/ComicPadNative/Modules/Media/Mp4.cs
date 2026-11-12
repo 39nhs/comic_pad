@@ -185,6 +185,25 @@ public sealed unsafe class Mp4Writer : IDisposable
         }
     }
 
+    /// <summary>실시간 녹화용: 소리를 이어서 넣기 (생성할 때 audio 의 Data 를 비워 두고 형식만 알려 준 경우). interleaved 16비트, frameCount 개</summary>
+    public void AddAudio(short[] interleaved, int frameCount)
+    {
+        if (audio == null) throw new InvalidOperationException("소리 줄이 없습니다");
+        int ch = audio.Channels; const int Chunk = 4096;
+        for (int off = 0; off < frameCount; off += Chunk)
+        {
+            int n = Math.Min(Chunk, frameCount - off);
+            long t0 = audioDone * 10_000_000 / audio.Rate, t1 = (audioDone + n) * 10_000_000 / audio.Rate;
+            fixed (short* p = &interleaved[off * ch])
+            {
+                var s = Mf.Sample(new ReadOnlySpan<byte>(p, n * ch * 2), t0, t1 - t0);
+                try { Mf.Ck(((delegate* unmanaged[Stdcall]<IntPtr, uint, IntPtr, int>)Mf.Fn(writer, 6))(writer, aus, s), "소리 쓰기"); }
+                finally { Mf.Release(s); }
+            }
+            audioDone += n;
+        }
+    }
+
     public long Frames => frames;
 
     /// <summary>마무리하고 파일 이름을 제자리로</summary>

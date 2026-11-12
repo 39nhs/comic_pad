@@ -198,7 +198,7 @@ public sealed class AnimPanel : UserControl
         var items = new List<Control>
         {
             au != null ? Ui.Help($"♪ {J.S(au["name"])}" + (ok ? "" : " — 이 형식은 네이티브 판에서 재생할 수 없습니다 (WAV 만). 데이터는 그대로 보관됩니다.")) : Ui.Help("배경음·대사 녹음(WAV)을 넣으면 재생할 때 함께 나오고, 프레임마다 소리 크기 막대가 보여 입 모양 맞추기에 좋습니다."),
-            Ui.Row(Ui.Btn(au != null ? "다른 소리로" : "소리 넣기…", () => { using var od = new OpenFileDialog { Filter = "WAV 소리|*.wav" }; if (od.ShowDialog(App.Main) == DialogResult.OK) Sound.SetAudio(od.FileName); }), au != null ? Ui.Btn("빼기", Sound.RemoveAudio) : null),
+            Ui.Row(Ui.Btn(au != null ? "다른 소리로" : "소리 넣기…", () => { using var od = new OpenFileDialog { Filter = "소리|*.wav;*.mp3;*.m4a;*.aac;*.wma;*.flac;*.ogg;*.opus|모든 파일|*.*" }; if (od.ShowDialog(App.Main) == DialogResult.OK) Sound.SetAudio(od.FileName); }), au != null ? Ui.Btn("빼기", Sound.RemoveAudio) : null),
         };
         if (au != null)
         {

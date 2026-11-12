@@ -112,12 +112,13 @@ public static class MediaTest
         for (int i = 0; i < two.P.Length; i++) two.P[i] = (i / 37 % 2 == 0) ? 0xFF000000u : 0xFFFFFFFFu;
         var tb = WebP.EncodeStill(two);
         Ok(Same(two, WebP.DecodeFrames(tb)[0].img) && tb.Length < 4000, $"두 색 줄무늬 (LZ77 압축 {tb.Length}B)");
-        // 거의 무손실: 버린 비트만큼만 다름
+        // 화질 0.8 = 손실(VP8): 무손실보다 작고, 평평한 곳(가운데 1/3)은 거의 그대로 (자세한 화질 시험은 --selftest gaps)
         var src = Pattern(120, 80, 5, false);
-        var nl = WebP.DecodeFrames(WebP.EncodeStill(src, 0.8))[0].img;
+        var lossy = WebP.EncodeStill(src, 0.8);
+        var nl = WebP.DecodeFrames(lossy)[0].img;
         int maxD = 0;
-        for (int i = 0; i < src.P.Length; i++) for (int sh = 0; sh < 24; sh += 8) maxD = Math.Max(maxD, Math.Abs((int)((src.P[i] >> sh) & 255) - (int)((nl.P[i] >> sh) & 255)));
-        Ok(maxD <= 2 && WebP.EncodeStill(src, 0.8).Length < WebP.EncodeStill(src).Length, $"거의 무손실 화질 0.8 (최대 차이 {maxD})");
+        for (int y = 8; y < 72; y++) for (int x = 48; x < 72; x++) { int i = y * 120 + x; for (int sh = 0; sh < 24; sh += 8) maxD = Math.Max(maxD, Math.Abs((int)((src.P[i] >> sh) & 255) - (int)((nl.P[i] >> sh) & 255))); }
+        Ok(maxD <= 6 && WebP.Probe(lossy).Lossy && lossy.Length < WebP.EncodeStill(src).Length, $"손실 화질 0.8 ({lossy.Length}B, 평평한 곳 최대 차이 {maxD})");
         // WIC (Windows 의 WebP 확장) 로도 풀리는지
         var test = Pattern(157, 93, 3, false);
         string p = Path.Combine(outDir, "still.webp");

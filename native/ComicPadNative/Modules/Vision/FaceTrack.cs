@@ -16,6 +16,11 @@ public sealed class FaceMesh
 /// <summary>그물에서 잰 값 (사람·거리와 상관없게 얼굴 크기로 나눔)</summary>
 public readonly record struct FaceMeasure(double EarL, double EarR, double MouthOpen, double MouthWidth, double BrowL, double BrowR, double Yaw, double Pitch, double Roll)
 {
+    /// <summary>눈동자 위치 (Iris.cs): U = 눈꼬리→눈머리 축 위 0~1 (0.5 가운데, 그림 오른쪽이 +), V = 그 축에 수직(아래 +), 눈 너비로 나눔. HasGaze 가 거짓이면 없음</summary>
+    public double GazeU { get; init; }
+    public double GazeV { get; init; }
+    public bool HasGaze { get; init; }
+
     // 점 번호 (MediaPipe FaceMesh 468, "오른쪽" = 그 사람의 오른쪽 = 그림 왼쪽)
     public static FaceMeasure From(FaceMesh f)
     {
@@ -49,10 +54,18 @@ public sealed class FaceCalib
     int n; FaceMeasure sum;
     public bool Ready => n >= Frames;
     public int Frames = 12;
-    public void Reset() { n = 0; sum = default; }
+    public void Reset() { n = 0; sum = default; gn = 0; gsu = gsv = 0; }
+    // 눈동자 기준 (앞 몇 장 = 카메라를 본다고 봄)
+    public double GazeU0 = 0.5, GazeV0 = 0.0;
+    int gn; double gsu, gsv;
     /// <summary>앞 몇 장은 평균을 기준으로 (입은 다물고 앞을 본다고 봄)</summary>
     public void Feed(FaceMeasure m)
     {
+        if (m.HasGaze && gn < Frames)
+        {
+            gsu += m.GazeU; gsv += m.GazeV; gn++;
+            if (gn == Frames) { GazeU0 = gsu / gn; GazeV0 = gsv / gn; }
+        }
         if (Ready) return;
         sum = new(sum.EarL + m.EarL, sum.EarR + m.EarR, sum.MouthOpen + m.MouthOpen, sum.MouthWidth + m.MouthWidth, sum.BrowL + m.BrowL, sum.BrowR + m.BrowR, sum.Yaw + m.Yaw, sum.Pitch + m.Pitch, sum.Roll + m.Roll);
         n++;
@@ -71,13 +84,21 @@ public sealed class FaceCalib
         double smile = C01(wid / 0.16), funnel = C01(-wid / 0.16) * (open > 0.05 ? 1 : 0.7);
         double browR = (m.BrowR - b.BrowR) / Math.Max(1e-4, b.BrowR), browL = (m.BrowL - b.BrowL) / Math.Max(1e-4, b.BrowL);
         double up = C01((browL + browR) / 2 / 0.18), downL = C01(-browL / 0.15), downR = C01(-browR / 0.15);
-        return new Dictionary<string, double>
+        var o = new Dictionary<string, double>
         {
             ["eyeBlinkLeft"] = blink(m.EarL, b.EarL), ["eyeBlinkRight"] = blink(m.EarR, b.EarR),
             ["jawOpen"] = open, ["mouthSmileLeft"] = smile, ["mouthSmileRight"] = smile,
             ["mouthFunnel"] = funnel, ["mouthPucker"] = funnel,
             ["browInnerUp"] = up, ["browDownLeft"] = downL, ["browDownRight"] = downR,
         };
+        if (m.HasGaze)
+        {
+            // 눈동자: 눈 너비의 ±12% 가로·±7% 세로면 끝까지. MediaPipe 이름으로 (그림 오른쪽 = 그 사람 왼쪽 = LookOutLeft·LookInRight)
+            double gx = Math.Clamp((m.GazeU - GazeU0) / 0.12, -1, 1), gy = Math.Clamp((m.GazeV - GazeV0) / 0.07, -1, 1);
+            o["eyeLookOutLeft"] = o["eyeLookInRight"] = Math.Max(gx, 0); o["eyeLookInLeft"] = o["eyeLookOutRight"] = Math.Max(-gx, 0);
+            o["eyeLookDownLeft"] = o["eyeLookDownRight"] = Math.Max(gy, 0); o["eyeLookUpLeft"] = o["eyeLookUpRight"] = Math.Max(-gy, 0);
+        }
+        return o;
     }
 
     /// <summary>표정 + 고개 → 버튜버 상태. 고개 30° = 끝까지 (웹 판과 같음). mirror: 거울처럼</summary>

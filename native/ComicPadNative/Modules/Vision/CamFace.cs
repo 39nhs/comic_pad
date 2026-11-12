@@ -1,4 +1,4 @@
-// 버튜버 스튜디오의 "카메라 얼굴 추적": 웹캠 → 얼굴 그물 → 표정·고개 (뒤 스레드). 화면 타이머는 Poll 로 최근 값만 가져간다.
+// 버튜버 스튜디오의 "카메라 얼굴 추적": 웹캠 → 얼굴 그물 → 표정·고개 (+ 눈동자 모델이 있으면 눈동자, Iris.cs) (뒤 스레드). 화면 타이머는 Poll 로 최근 값만 가져간다.
 // 영상은 이 PC 안에서만 쓰고 저장·전송하지 않는다.
 using System.Diagnostics;
 using ComicPadNative.Modules.AI;
@@ -17,6 +17,7 @@ public sealed class CamFaceSource : IVFaceSource
     string status;
     Webcam cam;
     readonly AiModel model;
+    IrisTracker iris;
 
     /// <summary>스튜디오의 카메라 단추에서 (모델 확인·받기, 카메라 고르기). 취소면 null, 실패는 예외</summary>
     public static IVFaceSource Create()
@@ -24,6 +25,13 @@ public sealed class CamFaceSource : IVFaceSource
         var m = VisionModels.Get(VisionModels.Face);
         if (!VisionUi.EnsureModel(m, App.Main, "카메라 얼굴 추적")) return null;
         if (!AiFeatures.LicenseGate(m)) return null;
+        // 눈동자 추적 모델 (없어도 됨: 받지 않으면 눈동자는 마우스·슬라이더로)
+        var iris = VisionModels.Get(VisionModels.Iris);
+        if (iris != null && !iris.Installed && App.Get("vtIrisAsked", false) == false)
+        {
+            App.Set("vtIrisAsked", true);
+            VisionUi.EnsureModel(iris, App.Main, "눈동자 추적");
+        }
         var cams = Webcam.List();
         if (cams.Count == 0) throw new InvalidOperationException("카메라를 찾지 못했습니다 (연결·Windows 설정 > 개인 정보 > 카메라 권한을 확인하세요)");
         int idx = Math.Clamp(App.Get("vtCamIndex", 0), 0, cams.Count - 1);
@@ -63,6 +71,8 @@ public sealed class CamFaceSource : IVFaceSource
         FaceTracker tr;
         try { tr = new FaceTracker(model); }
         catch (Exception e) { Set("얼굴 추적 모델을 열지 못했습니다: " + e.Message); return; }
+        var im = VisionModels.Get(VisionModels.Iris);
+        if (im != null && im.Installed) { try { iris = new IrisTracker(im); } catch { iris = null; } }
         var sw = Stopwatch.StartNew(); int frames = 0; double lastReport = 0; bool lostShown = false;
         while (!stop)
         {
@@ -76,6 +86,7 @@ public sealed class CamFaceSource : IVFaceSource
             if (mesh != null)
             {
                 var me = FaceMeasure.From(mesh);
+                if (iris != null) { try { me = iris.With(me, f, mesh); } catch { } }
                 lock (lk) { calib.Feed(me); last = me; lastTick = Environment.TickCount64; }
                 lostShown = false;
             }

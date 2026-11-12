@@ -1,5 +1,5 @@
 // 정지 그림 내보내기·열기 — 웹 판 ui/files.js exportDialog + core/io.js exportImage (형식·배율·배경 빼기·재단선 범위),
-// WebP 저장(무손실 직접 인코더)·열기(.webp: WIC → 안 되면 직접 디코더), 작품 전체 내보내기에 PSD (웹 판 story.js exportStory).
+// WebP 저장(무손실·손실 직접 인코더)·열기(.webp: WIC → 안 되면 직접 디코더), 작품 전체 내보내기에 PSD (웹 판 story.js exportStory).
 using System.Drawing.Imaging;
 using ComicPadNative.Core;
 using ComicPadNative.Modules.Extras;
@@ -50,11 +50,12 @@ public static class StillExport
         return bmp;
     }
 
-    public static byte[] Encode(Argb im, string fmt, double quality = 0.92)
+    /// <summary>quality 를 안 주면 WebP 는 무손실, JPG 는 0.92</summary>
+    public static byte[] Encode(Argb im, string fmt, double quality = -1)
     {
-        if (fmt == "webp") return WebP.EncodeStill(im, quality);
+        if (fmt == "webp") return WebP.EncodeStill(im, quality < 0 ? 1 : quality);
         using var bmp = ToBitmap(im);
-        return fmt == "jpg" ? ImageIO.EncodeJpeg(bmp, quality) : ImageIO.EncodePng(bmp);
+        return fmt == "jpg" ? ImageIO.EncodeJpeg(bmp, quality < 0 ? 0.92 : quality) : ImageIO.EncodePng(bmp);
     }
 
     // ------------------------------------------------------------------ 이미지 내보내기 창
@@ -67,10 +68,10 @@ public static class StillExport
             Field.Segment("format", "형식", App.Get("exportFmt", "png"), ("png", "PNG"), ("jpg", "JPG"), ("webp", "WebP")),
             Field.Segment("scale", "배율", "1", ("0.25", "25%"), ("0.5", "50%"), ("1", "100%"), ("2", "200%")),
             Field.Check("transparent", "배경(용지) 빼기 — PNG·WebP 투명", !d.PaperVisible),
-            Field.Segment("quality", "WebP 화질", "1", ("1", "무손실"), ("0.9", "좋게"), ("0.8", "보통")),
+            Field.Segment("quality", "WebP 화질", "1", ("1", "무손실"), ("0.9", "좋게 (손실)"), ("0.8", "보통 (손실)"), ("0.6", "작게 (손실)")),
             Field.Check("pick", "저장할 곳 직접 고르기 (끄면 data/exports 에 저장)", false),
             print ? Field.Segment("area", "범위", "bleed", ("trim", "재단선 안"), ("bleed", "도련 포함"), ("all", "캔버스 전체")) : null,
-            Field.Info("밑그림(러프) 레이어와 숨긴 레이어, 메모 핀은 내보내지 않습니다. WebP 는 무손실(또는 거의 무손실)로 만듭니다."),
+            Field.Info("밑그림(러프) 레이어와 숨긴 레이어, 메모 핀은 내보내지 않습니다. WebP 는 무손실, 또는 화질을 낮추면 손실(VP8, 사진·채색에 작음 — 투명도는 그대로)로 만듭니다."),
         }, "내보내기");
         if (v == null) return;
         string fmt = (string)v["format"];

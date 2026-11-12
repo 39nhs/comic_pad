@@ -20,6 +20,8 @@ public static class Shell2Settings
             Opt.Row(Opt.Button("필압 곡선·흔들림 보정…", PenSettings.Show), Opt.Button("펜 필기감 진단…", () => WebIds.Run("pen.diagnose"))),
             Opt.Choice("브러시 커서 모양", new[] { ("nib", "펜촉 + 크기 원 (클립스튜디오식)"), ("circle", "크기 원 + 십자"), ("cross", "십자만"), ("dot", "점만") }, () => App.Get("brushCursor", "nib"), v => { App.Set("brushCursor", v); CursorLook.Apply(); }),
             Opt.Choice("측면 버튼 누르고 그리기", new[] { ("eyedropper", "스포이트"), ("eraser", "지우개"), ("pan", "화면 이동"), ("radial", "원형 메뉴"), ("none", "사용 안 함") }, () => App.Get("penButton", "eyedropper"), v => App.Set("penButton", v)),
+            Opt.Choice("두 번째 측면 버튼 (와콤 등)", new[] { ("pan", "화면 이동"), ("eyedropper", "스포이트"), ("eraser", "지우개"), ("radial", "원형 메뉴"), ("none", "사용 안 함") }, () => App.Get("penButton2", "pan"), v => App.Set("penButton2", v)),
+            Opt.Check("펜 위치 예측 (선보다 조금 앞을 흐리게 미리 보여 줌)", () => Modules.Gaps.PenPredict.Enabled(), v => { if (App.Settings["penFeel"] is not System.Text.Json.Nodes.JsonObject f) App.Settings["penFeel"] = f = new System.Text.Json.Nodes.JsonObject(); f["predict"] = v; App.SaveSettingsSoon(); }),
             Opt.Check("마우스 오른쪽 버튼 = 원형 메뉴", () => App.Get("mouseRadial", true), v => App.Set("mouseRadial", v)),
             Opt.Slider("펜을 뗀 뒤 터치 무시 (ms)", 0, 1500, () => App.Get("palmGuardMs", 350.0), v => App.Set("palmGuardMs", Math.Round(v / 50) * 50), step: 50),
             Opt.Slider("마우스 필압", 0.05, 1, () => App.Get("mousePressure", 1.0), v => App.Set("mousePressure", Math.Round(v, 2)), pct: true),

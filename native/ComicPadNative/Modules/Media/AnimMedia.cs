@@ -1,7 +1,8 @@
-// 애니메이션 내보내기 — 웹 판 animexport.js(움직이는 WebP·MP4) + ui/anim.js 의 내보내기 창.
+// 애니메이션 내보내기 — 웹 판 animexport.js(움직이는 WebP·MP4·WebM) + ui/anim.js 의 내보내기 창.
 // GIF·APNG·PNG 연번은 Anim 모듈(AnimExport)을 그대로 쓰고, 여기서는 WebP·MP4 를 더해 한 창에서 고른다.
-//  - WebP: 직접 짠 무손실 인코더 (화질 < 최고면 거의 무손실)
+//  - WebP: 직접 짠 인코더 (화질 최고 = 무손실 VP8L, 그 아래 = 손실 VP8 + 알파 ALPH)
 //  - MP4: Media Foundation H.264, 소리(WAV)가 붙어 있고 구간을 고르지 않았으면 AAC 로 함께 (웹 판처럼)
+//  - WebM: 직접 짠 VP8 + Vorbis (Webm.cs·Vp8.cs·Vorbis.cs), 붙인 소리는 MP3·M4A 등도 (MfAudio)
 //  - 짧은 애니(2초 미만)는 동영상에서 2초 이상 되도록 반복 (웹 판 exportWebM 과 같음)
 using System.Text.Json.Nodes;
 using ComicPadNative.Core;
@@ -15,11 +16,11 @@ public static class AnimMedia
     public static readonly (string id, string label)[] Formats =
     {
         ("gif", "GIF (어디서나 됨)"), ("webp", "WebP (작고 선명, 투명 가능)"), ("apng", "APNG (색 그대로·투명, 큼)"),
-        ("mp4", "MP4 동영상 (SNS 용)"), ("png", "PNG 연번 (프레임마다 파일)"),
+        ("mp4", "MP4 동영상 (SNS 용)"), ("webm", "WebM 동영상 (VP8, 소리는 Vorbis)"), ("png", "PNG 연번 (프레임마다 파일)"),
     };
     static readonly Dictionary<string, string> Tips = new()
     {
-        ["gif"] = " · 커뮤니티·메신저 어디나", ["webp"] = " · GIF 보다 훨씬 작고 색이 정확", ["apng"] = " · 색 손실 없음", ["mp4"] = " · 인스타·카톡 등 동영상만 올리는 곳용",
+        ["gif"] = " · 커뮤니티·메신저 어디나", ["webp"] = " · GIF 보다 훨씬 작고 색이 정확", ["apng"] = " · 색 손실 없음", ["mp4"] = " · 인스타·카톡 등 동영상만 올리는 곳용", ["webm"] = " · 웹·디스코드용, 직접 짠 VP8 (같은 그림이 이어지면 거의 0바이트)",
     };
     static bool Still(string f) => f is "gif" or "webp" or "apng";
 
@@ -123,6 +124,43 @@ public static class AnimMedia
         return outPath;
     }
 
+    // ------------------------------------------------------------------ WebM
+    /// <summary>WebM 만들기 → 저장 경로. 프레임마다 제 길이 그대로 (가변 빠르기), 소리가 있고 구간을 안 골랐으면 Vorbis 로 함께.
+    /// 소리가 없고 짧으면 2초 이상 되도록 반복 (MP4 와 같음)</summary>
+    public static string ExportWebm(Document d, double scale, int? tag, double quality, string outPath = null, bool withAudio = true)
+    {
+        var order = AnimCore.ExportOrder(d, tag);
+        if (order.Count == 0) throw new InvalidOperationException("프레임이 없습니다");
+        var durs = order.Select(f => Math.Max(1, (int)Math.Round(AnimCore.FrameMs(f, d)))).ToList();
+        long total = durs.Sum(x => (long)x);
+        PcmAudio audio = null;
+        if (withAudio && tag == null && Sound.HasAudio(d))
+        {
+            audio = AudioFor(d, total / 1000.0);
+            if (audio == null) App.Toast("붙인 소리를 읽지 못해 동영상에 넣지 못했습니다");
+        }
+        int loops = audio != null ? 1 : Math.Max(1, (int)Math.Ceiling(2000.0 / Math.Max(1, total)));
+        var (w, h) = WebmExport.FitSize(d.W * scale, d.H * scale);
+        outPath ??= Path.Combine(AnimExport.ExportsDir, $"{J.SafeName(d.Name)}_{J.Stamp()}.webm");
+        var cache = new Dictionary<int, uint[]>();
+        IEnumerable<(uint[], long)> Frames()
+        {
+            long t = 0;
+            for (int k = 0; k < loops; k++)
+                for (int i = 0; i < order.Count; i++)
+                {
+                    int f = order[i];
+                    if (!cache.TryGetValue(f, out var px)) { if (cache.Count > 64) cache.Clear(); cache[f] = px = VideoFrame(d, f, w, h); }
+                    yield return (px, t);
+                    t += durs[i];
+                }
+        }
+        WebmExport.Write(outPath, w, h, Frames(), total * loops, IsLossyQ(quality), audio, AnimCore.Fps(d));
+        return outPath;
+    }
+    /// <summary>WebP 화질 칸(1 = 무손실)을 동영상 화질로 (무손실은 없으니 아주 좋게)</summary>
+    static double IsLossyQ(double q) => q >= 0.999 ? 0.95 : q;
+
     // ------------------------------------------------------------------ 내보내기 (형식별)
     public static string Export(Document d, ExportOpts o, double quality)
     {
@@ -134,6 +172,12 @@ public static class AnimMedia
                 string path = Path.Combine(AnimExport.ExportsDir, $"{J.SafeName(d.Name)}_{J.Stamp()}.webp");
                 File.WriteAllBytes(path, bytes);
                 App.Toast($"WEBP 저장: {path} ({bytes.Length / 1024}KB)");
+                return path;
+            }
+            case "webm":
+            {
+                string path = ExportWebm(d, o.Scale, o.Tag, quality);
+                App.Toast($"동영상 저장: {path} ({new FileInfo(path).Length / 1024}KB)");
                 return path;
             }
             case "mp4":
@@ -201,6 +245,13 @@ public static class AnimMedia
                 var label = Formats.First(x => x.id == oo.Fmt).label + Tips.GetValueOrDefault(oo.Fmt, "");
                 string sz = $"{Math.Round(d.W * oo.Scale)}×{Math.Round(d.H * oo.Scale)} · {cnt}장";
                 if (oo.Fmt == "png") { live.Text = $"{label}\n{sz} · 프레임마다 PNG 파일로 저장합니다"; return; }
+                if (oo.Fmt == "webm")
+                {
+                    var (ww, wh) = WebmExport.FitSize(d.W * oo.Scale, d.H * oo.Scale);
+                    string snd = oo.Tag == null && Sound.HasAudio(d) ? (Sound.Decode(d) != null ? " · 붙인 소리 포함 (Vorbis)" : " · 붙인 소리를 읽지 못함") : "";
+                    live.Text = $"{label}\n{ww}×{wh} · {cnt}장 · VP8{snd} · 화질은 WebP 화질 칸을 따름";
+                    return;
+                }
                 if (oo.Fmt == "mp4")
                 {
                     var (mw, mh) = Mp4Writer.FitSize(Math.Round(d.W * oo.Scale / 2) * 2, Math.Round(d.H * oo.Scale / 2) * 2);
@@ -216,7 +267,7 @@ public static class AnimMedia
         if (v == null) return;
         var (opts, qual) = Read(v);
         App.Set("animExport", new JsonObject { ["fmt"] = opts.Fmt, ["scale"] = opts.Scale, ["loop"] = opts.Loop, ["transparent"] = opts.Transparent, ["dither"] = opts.Dither, ["colors"] = opts.Colors, ["quality"] = qual });
-        AUi.Busy(opts.Fmt == "mp4" ? "동영상 만들기" : "움짤 만들기", () => Export(d, opts, qual));
+        AUi.Busy(opts.Fmt is "mp4" or "webm" ? "동영상 만들기" : "움짤 만들기", () => Export(d, opts, qual));
     }
 
     /// <summary>움짤 만들기: 묻지 않고 지난 설정으로 바로 (GIF·WebP·APNG 만, 아니면 GIF)</summary>

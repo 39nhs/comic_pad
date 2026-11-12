@@ -26,6 +26,10 @@ public static class WebIds
         ["edit.flipH"] = "편집/레이어 좌우 반전", ["edit.flipV"] = "편집/레이어 상하 반전", ["edit.canvasSize"] = "편집/캔버스 크기…", ["edit.extendDown"] = "편집/웹툰: 아래로 캔버스 늘리기",
         ["edit.meshWarp"] = "편집/원근·격자 왜곡 (여러 면)", ["edit.puppet"] = "편집/퍼펫 왜곡 (핀으로 휘기)", ["macro.open"] = "편집/자동 액션 (기록·실행·일괄)…", ["macro.record"] = "편집/자동 액션 기록 시작/멈추기",
         ["color.swap"] = "편집/전경∕배경색 바꾸기",
+        // 다른 모듈(Vision·Media)이 만든 메뉴 — 웹 id 로도 부를 수 있게 (Gaps 작업에서 더함)
+        ["edit.contentAwareFill"] = "편집/내용 인식 채우기 (선택한 곳을 주변으로 메우기)…", ["edit.heal"] = "편집/복구 브러시 (잡티 지우기)",
+        ["ai.pose"] = "AI/사진에서 인형 자세 (3D 소재 창)…", ["ai.img2img"] = "AI/이미지 AI 로 그리기 (이 PC 의 SD WebUI)…", ["ai.check"] = "AI/이미지 AI 연결 확인",
+        ["ai.setup"] = "AI/AI 기능 고르기·받기…", ["view.spread"] = "보기/펼침면 미리보기 (책처럼 보기)",
         // 레이어
         ["layer.new"] = "레이어/새 레이어", ["layer.newRough"] = "레이어/새 러프 레이어 (의견 색, 밑그림)", ["layer.newLine"] = "레이어/새 펜선 레이어", ["layer.newColor"] = "레이어/새 채색 레이어 (아래 레이어에 클리핑)",
         ["layer.newVector"] = "레이어/새 벡터 레이어 (선 굵기·지우기 나중에 수정)", ["vector.width"] = "레이어/벡터: 선 굵기 일괄 조정…", ["vector.color"] = "레이어/벡터: 선 색을 지금 색으로", ["vector.toRaster"] = "레이어/벡터를 일반 레이어로",
@@ -76,7 +80,7 @@ public static class WebIds
         ["anim.add"] = "애니/빈 프레임 추가", ["anim.dup"] = "애니/현재 프레임 복제", ["anim.link"] = "애니/연결된 프레임 추가 (같은 그림 이어 쓰기)", ["anim.unlink"] = "애니/칸 연결 끊기 (따로 고치기)",
         ["anim.clearCell"] = "애니/칸 비우기", ["anim.delete"] = "애니/프레임 삭제", ["anim.prev"] = "애니/이전 프레임", ["anim.next"] = "애니/다음 프레임", ["anim.play"] = "애니/재생 / 정지",
         ["anim.onion"] = "애니/어니언 스킨 켜기/끄기", ["anim.light"] = "애니/라이트 테이블에 올리기/내리기 (지금 칸)", ["anim.tag"] = "애니/태그(구간) 만들기…", ["anim.timesheet"] = "애니/타임시트 (노출표) 보기·고치기…",
-        ["anim.export"] = "애니/애니메이션 내보내기 (GIF·APNG·PNG)…", ["anim.gifQuick"] = "애니/움짤 만들기 (바로, GIF)", ["anim.motion"] = "애니/모션 경로 도구 (트윈)", ["anim.bake"] = "애니/모션을 그림으로 굳히기",
+        ["anim.export"] = "애니/애니메이션 내보내기 (GIF·WebP·APNG·MP4·PNG)…", ["anim.gifQuick"] = "애니/움짤 만들기 (바로, GIF)", ["anim.motion"] = "애니/모션 경로 도구 (트윈)", ["anim.bake"] = "애니/모션을 그림으로 굳히기",
         ["anim.sheet"] = "애니/스프라이트 시트 내보내기 (PNG + JSON)…", ["anim.importSheet"] = "애니/스프라이트 시트 가져오기…", ["anim.importAse"] = "애니/Aseprite 파일 열기 (.aseprite/.ase)…", ["anim.exportAse"] = "애니/Aseprite 파일로 저장 (.aseprite)",
         // AI
         ["ai.lineart"] = "AI/AI 선화 추출…", ["ai.cutout"] = "AI/AI 캐릭터·배경 따기…", ["ai.select"] = "AI/AI 고르기 (탭)", ["ai.depth"] = "AI/AI 깊이 추정…", ["ai.upscale"] = "AI/AI 크기 키우기…", ["ai.models"] = "AI/AI 모델 관리…",

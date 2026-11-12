@@ -1,6 +1,7 @@
 // 버튜버 모드 (웹 판 ui/vtuber.js 이식): 그린 캐릭터의 부위(레이어)를 정하고, 마우스·슬라이더·마이크로 움직여 방송 창·사진으로 내보낸다.
 //  - 부위 정하기: doc.Extra["vtuber"].parts = { 레이어 id: { role, depth?, key } } (웹 판과 같은 형식, 실행취소 가능)
 //  - 스튜디오: 숨쉬기·자동 깜빡임·머리카락 흔들림, 고개 yaw/pitch/roll 시차, 입 모양, 표정 키(1~9)
+//  - 녹화: Media.VtRecorder (MP4 H.264+AAC / WebM VP8+Vorbis, 마이크를 켜 두었으면 목소리도)
 //  - 얼굴 추적(웹캠)은 Vtuber.FaceSourceFactory (Vision 모듈: Media Foundation 카메라 + ONNX 얼굴 그물) — 없으면 마우스로 고개·눈동자, Space/오른쪽 버튼으로 말하기
 using System.Diagnostics;
 using System.Drawing.Drawing2D;
@@ -149,8 +150,10 @@ public static class Vtuber
         bool autoBlink = true, idle = true, follow, talkKey, talkMouse;
         VMic mic;
         IVFaceSource face;
-        System.Windows.Forms.Button micBtn, camBtn;
+        System.Windows.Forms.Button micBtn, camBtn, recBtn;
         BroadcastForm popup;
+        Media.VtRecorder rec;                  // 녹화 중 (Media 모듈: MP4·WebM, 마이크 켜 두면 소리도)
+        string recFmt = App.Get("vtRecFmt", "mp4");
         string Bg { get => rig.Bg; set => rig.Bg = value; }
 
         public StudioForm(VRigData rig, Document doc)
@@ -205,8 +208,9 @@ public static class Vtuber
             side.Controls.Add(ui.Section("방송·녹화", Ui3.Help("배경 색"),
                 ui.Segmented(new[] { ("green", "초록"), ("magenta", "자홍"), ("blue", "파랑"), ("none", "투명") }, () => Bg, v => Bg = v),
                 Ui3.Row(Ui3.Button("방송 창 열기 (OBS 창 캡처용)", OpenPopup)),
-                Ui3.Row(Ui3.Button("녹화 시작", () => SetStatus("녹화는 네이티브 판에서 아직 지원하지 않습니다. 방송 창을 OBS 로 녹화하거나 웹 판을 쓰세요.")), Ui3.Button("사진 저장", Snap)),
-                Ui3.Help("방송 창은 캐릭터만 보입니다. OBS 의 \"창 캡처\"로 잡고 색 키로 배경을 빼세요.")));
+                ui.Segmented(new[] { ("mp4", "MP4 (소리 AAC)"), ("webm", "WebM (소리 Vorbis)") }, () => recFmt, v => { recFmt = v; App.Settings["vtRecFmt"] = v; App.SaveSettingsSoon(); }),
+                Ui3.Row(recBtn = Ui3.Button("녹화 시작", ToggleRec), Ui3.Button("사진 저장", Snap)),
+                Ui3.Help("방송 창은 캐릭터만 보입니다. OBS 의 \"창 캡처\"로 잡고 색 키로 배경을 빼세요. 녹화는 30fps 로 data/exports 에 저장되고, 마이크를 켜 두었으면 목소리도 함께 담깁니다 (투명 배경은 동영상에 없어 초록으로).")));
 
             side.Controls.Add(ui.Section("아바타", Ui3.Row(
                 doc != null ? Ui3.Button("부위 다시 정하기", () => { Close(); App.Main?.BeginInvoke(SetupDialog); }) : null,
@@ -330,7 +334,43 @@ public static class Vtuber
             double sway = VRig.StepPhysics(ph, state, dt);
             view.Set(state, sway);
             if (popup != null && !popup.IsDisposed) popup.Set(state, sway);
+            if (rec != null && rec.Due())
+            {
+                using var bmp = VRig.RenderBitmap(rig, state, sway, (double)rec.Width / rig.W, BgColor(Bg) ?? Color.FromArgb(0, 255, 0));
+                rec.Push(bmp);
+                recBtn.Text = $"■ 녹화 멈추고 저장 ({(int)rec.Seconds}초)";
+            }
         }
+
+        /// <summary>녹화 시작/멈춤 (웹 판 toggleRec)</summary>
+        void ToggleRec()
+        {
+            if (rec != null)
+            {
+                var r = rec; rec = null; recBtn.Text = "녹화 시작";
+                try
+                {
+                    string p = r.Stop();
+                    string msg = $"녹화 저장: data/exports/{Path.GetFileName(p)} ({r.Frames}장{(r.HasAudio ? ", 마이크 소리 포함" : "")}{(r.Dropped > 0 ? $", 인코더가 밀려 {r.Dropped}장 건너뜀" : "")})";
+                    SetStatus(msg); App.Toast(msg);
+                }
+                catch (Exception e) { SetStatus("녹화를 저장하지 못했습니다: " + e.Message); }
+                return;
+            }
+            try
+            {
+                double k = Math.Min(1, 1920.0 / Math.Max(rig.W, rig.H));
+                Media.IVtAudio a = null;
+                if (mic != null) { try { a = new Media.MicRecorder(); } catch (Exception e) { SetStatus("마이크 소리 없이 녹화합니다: " + e.Message); } }
+                string name = $"{SafeName(doc?.Name ?? "버튜버")}_버튜버_{Stamp()}.{recFmt}";
+                rec = new Media.VtRecorder(recFmt, Path.Combine(ExportsDir, name), (int)Math.Round(rig.W * k), (int)Math.Round(rig.H * k), a);
+                recBtn.Text = "■ 녹화 멈추고 저장";
+                SetStatus($"녹화 중 ({recFmt.ToUpperInvariant()}, {rec.Width}×{rec.Height}, 30fps{(a != null ? ", 마이크 소리 포함" : "")}) — 다시 누르면 저장");
+            }
+            catch (Exception e) { rec = null; SetStatus("녹화를 시작하지 못했습니다: " + e.Message); }
+        }
+        internal Media.VtRecorder TestRec => rec;
+        internal void TestToggleRec() => ToggleRec();
 
         void OpenPopup()
         {
@@ -361,6 +401,7 @@ public static class Vtuber
         void StopAll()
         {
             timer.Stop(); timer.Dispose();
+            if (rec != null) ToggleRec();   // 녹화 중에 닫으면 저장하고 닫음
             mic?.Dispose(); mic = null;
             face?.Dispose(); face = null;
             if (popup != null && !popup.IsDisposed) popup.Close();
