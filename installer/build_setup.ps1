@@ -1,5 +1,7 @@
 ﻿# ComicPad 설치 파일 만들기: dist\ComicPad 설치파일.exe (Windows 기본 도구 IExpress 사용, 따로 받을 것 없음)
 # 사용: powershell -ExecutionPolicy Bypass -File installer\build_setup.ps1
+#   -Native: 네이티브 판도 함께 넣기 (먼저 python tools/make_release.py --native 로 dist\native\ComicPadNative 를 만들어 둘 것)
+param([switch]$Native)
 $ErrorActionPreference = 'Stop'
 $Root = Split-Path -Parent $PSScriptRoot
 $dist = Join-Path $Root 'dist'
@@ -16,6 +18,13 @@ New-Item -ItemType Directory -Force (Join-Path $pkg 'installer') | Out-Null
 foreach ($f in 'install.ps1', 'uninstall.ps1') { Copy-Item (Join-Path $PSScriptRoot $f) (Join-Path $pkg 'installer') }
 foreach ($f in 'server.py', 'ComicPad.ico', 'README.md', 'LICENSE', 'NOTICE', 'VERSION', 'release_pubkey.json', 'ComicPad.exe', 'Microsoft.Web.WebView2.Core.dll', 'Microsoft.Web.WebView2.WinForms.dll') { Copy-Item (Join-Path $Root $f) $pkg }
 Get-ChildItem $Root -Filter '*.bat' | Copy-Item -Destination $pkg
+if ($Native) {
+  $nat = Join-Path $dist 'native\ComicPadNative'
+  if (-not (Test-Path (Join-Path $nat 'ComicPadNative.exe'))) { throw 'dist\native\ComicPadNative 가 없습니다 (python tools/make_release.py --native 로 먼저 만들기)' }
+  New-Item -ItemType Directory -Force (Join-Path $pkg 'native') | Out-Null
+  Copy-Item $nat (Join-Path $pkg 'native') -Recurse
+  Write-Host '  네이티브 판 넣음: native\ComicPadNative' -ForegroundColor Green
+}
 # 함께 설치할 프로그램: Python (내장형, 따로 설치하지 않고 ComicPad 폴더 안에서만 씀) + WebView2 설치기 (없는 PC 만)
 $redist = Join-Path $Root 'redist'
 $pyZip = Get-ChildItem $redist -Filter 'python-*-embed-amd64.zip' | Select-Object -First 1

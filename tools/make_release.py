@@ -8,6 +8,11 @@
     2) python tools/make_release.py --notes "바뀐 점"            -> dist/release/ 에 꾸러미·update.json·서명
     3) python tools/make_release.py --notes "바뀐 점" --upload   -> GitHub 릴리스 v<버전> 로 올림 (gh 필요)
        --installer 를 붙이면 dist 의 설치파일도 함께 올림, --with-models 는 내장 AI 모델도 꾸러미에 넣음
+       --native 를 붙이면 네이티브 판(native/ComicPadNative, .NET 8)을 dotnet publish 해서 꾸러미의 native/ComicPadNative/ 에 넣음
+         (기본: 자체 포함(self-contained) — PC 에 .NET 이 없어도 바로 실행. --native-framework 면 .NET 8 데스크톱 런타임이 필요한 작은 판)
+         같은 결과가 dist/native/ComicPadNative 에도 남아 installer\build_setup.ps1 -Native 가 설치파일에 넣을 수 있음
+시험(올리지 않음):  python tools/make_release.py --native --dry-run --out <임시 폴더>
+    서명 키·앱 파일 목록 갱신·업로드 없이 꾸러미 zip 과 서명 없는 update.json 만 만들어 배치를 확인 (기본 동작은 그대로)
 
 설치된 ComicPad 는 시작할 때(하루 한 번) 최신 릴리스의 update.json 서명을 공개키로 확인하고,
 맞을 때만 꾸러미를 받아 SHA-256 을 확인한 뒤 적용한다. 서명은 표준 라이브러리만으로 만드는 RSA-3072 (PKCS#1 v1.5, SHA-256).
@@ -124,9 +129,43 @@ def load_server_verify():
     return server.rsa_verify
 
 
+NATIVE_PROJ = os.path.join(ROOT, "native", "ComicPadNative")
+NATIVE_REL = "native/ComicPadNative"
+
+
+def build_native(stage, framework=False):
+    """네이티브 판 publish -> stage/native/ComicPadNative. (파일 목록, exe 경로)
+
+    기본은 자체 포함(win-x64, .NET 런타임 포함): 업데이트 꾸러미는 런타임을 설치할 수 없으므로 어느 PC 에서나 바로 실행되게.
+    ONNX Runtime(DirectML) 의 네이티브 DLL (onnxruntime.dll, DirectML.dll) 이 꼭 있어야 AI·얼굴 추적이 돌아감 → 확인."""
+    out = os.path.join(stage, *NATIVE_REL.split("/"))
+    if os.path.isdir(out):
+        shutil.rmtree(out)
+    cmd = ["dotnet", "publish", NATIVE_PROJ, "-c", "Release", "-r", "win-x64", "--self-contained", "false" if framework else "true",
+           "-p:DebugType=none", "-p:DebugSymbols=false", "-o", out, "-nologo", "-v", "q"]
+    print("네이티브 판 만들기:", " ".join(cmd))
+    subprocess.run(cmd, check=True, cwd=ROOT)
+    files = []
+    for dp, sub, fs in os.walk(out):
+        for fn in fs:
+            if fn.endswith(SKIP_EXT) or fn.endswith(".pdb"):
+                continue
+            files.append(os.path.join(dp, fn))
+    names = {os.path.basename(f).lower() for f in files}
+    exe = os.path.join(out, "ComicPadNative.exe")
+    missing = [n for n in ("comicpadnative.exe", "comicpadnative.dll", "onnxruntime.dll", "directml.dll") if n not in names]
+    if missing:
+        sys.exit("네이티브 판 publish 결과에 없는 파일: " + ", ".join(missing))
+    if not framework and "coreclr.dll" not in names:
+        sys.exit("자체 포함 publish 인데 .NET 런타임(coreclr.dll)이 없습니다")
+    return files, exe
+
+
 def cmd_build(args):
     with open(os.path.join(ROOT, "VERSION"), encoding="utf-8") as f:
         version = f.read().strip()
+    if args.dry_run:
+        return cmd_dry_run(args, version)
     key_path = args.key or KEY_PATH
     if not os.path.exists(key_path):
         sys.exit("서명 비밀키가 없습니다. 먼저 python tools/make_release.py --genkey")
@@ -145,8 +184,11 @@ def cmd_build(args):
     zname = f"ComicPad_update_{version}.zip"
     zpath = os.path.join(out, zname)
     dirs = INCLUDE_DIRS + (["models_bundled"] if args.with_models else [])
+    native = build_native(os.path.join(ROOT, "dist"), args.native_framework) if args.native else None
     n = 0
     with zipfile.ZipFile(zpath, "w", zipfile.ZIP_DEFLATED, compresslevel=6) as z:
+        if native:
+            n += add_native(z, native[0], os.path.join(ROOT, "dist"))
         for d in dirs:
             for dp, sub, files in os.walk(os.path.join(ROOT, d)):
                 sub[:] = [s for s in sub if s != "__pycache__"]
@@ -169,6 +211,8 @@ def cmd_build(args):
            "exe_sha256": sha256_file(exe) if os.path.exists(exe) else "", "notes": args.notes or "",
            "date": datetime.datetime.now(datetime.timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ"),
            "models": bool(args.with_models)}
+    if native:
+        man["native"] = native_info(native[1], args.native_framework)
     if getattr(args, "installer", False):
         # 네이티브 판 업데이트: 설치파일도 서명된 정보(이름·크기·SHA-256)에 넣는다 (GitHub 는 한글 이름을 바꾸므로 영문 이름으로)
         inst = os.path.join(ROOT, "dist", "ComicPad 설치파일.exe")
@@ -234,6 +278,56 @@ def deploy_pages(repo):
     print(f"휴대폰판 올림: https://{owner}.github.io/{name}/ (반영까지 1~2분)")
 
 
+def add_native(z, files, stage):
+    for full in files:
+        z.write(full, os.path.relpath(full, stage).replace("\\", "/"))
+    return len(files)
+
+
+def native_info(exe, framework):
+    return {"exe": NATIVE_REL + "/ComicPadNative.exe", "exe_sha256": sha256_file(exe), "self_contained": not framework}
+
+
+def cmd_dry_run(args, version):
+    """올리지 않는 시험: 서명 키·precache·업로드 없이 zip + 서명 없는 update.json 을 --out 에"""
+    if args.upload:
+        sys.exit("--dry-run 과 --upload 는 함께 쓸 수 없습니다")
+    out = args.out or os.path.join(ROOT, "dist", "release_dryrun")
+    os.makedirs(out, exist_ok=True)
+    stage = os.path.join(out, "_stage")
+    native = build_native(stage, args.native_framework) if args.native else None
+    zname = f"ComicPad_update_{version}.zip"
+    zpath = os.path.join(out, zname)
+    dirs = INCLUDE_DIRS + (["models_bundled"] if args.with_models else [])
+    n = 0
+    with zipfile.ZipFile(zpath, "w", zipfile.ZIP_DEFLATED, compresslevel=6) as z:
+        if native:
+            n += add_native(z, native[0], stage)
+        for d in dirs:
+            for dp, sub, files in os.walk(os.path.join(ROOT, d)):
+                sub[:] = [s for s in sub if s != "__pycache__"]
+                for fn in files:
+                    if fn.endswith(SKIP_EXT):
+                        continue
+                    full = os.path.join(dp, fn)
+                    z.write(full, os.path.relpath(full, ROOT).replace("\\", "/"))
+                    n += 1
+        for fn in INCLUDE_FILES + [f for f in os.listdir(ROOT) if f.endswith((".bat", ".md")) and f not in INCLUDE_FILES]:
+            full = os.path.join(ROOT, fn)
+            if os.path.isfile(full):
+                z.write(full, fn)
+                n += 1
+    man = {"product": "ComicPad", "version": version, "file": zname, "size": os.path.getsize(zpath), "sha256": sha256_file(zpath),
+           "notes": args.notes or "", "dry_run": True, "models": bool(args.with_models)}
+    if native:
+        man["native"] = native_info(native[1], args.native_framework)
+    with open(os.path.join(out, "update.json"), "w", encoding="utf-8") as f:
+        json.dump(man, f, ensure_ascii=False, indent=1)
+    print(f"[시험] v{version}: {zname} ({man['size'] / 1e6:.1f}MB, 파일 {n}개) + update.json (서명 없음) -> {out}")
+    if native:
+        print(f"[시험] 네이티브 판: {os.path.join(stage, *NATIVE_REL.split('/'))} ({'자체 포함' if not args.native_framework else '.NET 8 런타임 필요'})")
+
+
 def main():
     ap = argparse.ArgumentParser(description="ComicPad 업데이트 꾸러미 만들기")
     ap.add_argument("--genkey", action="store_true", help="서명 키 만들기 (처음 한 번)")
@@ -247,6 +341,9 @@ def main():
     ap.add_argument("--installer", action="store_true", help="설치파일도 함께 올리기")
     ap.add_argument("--no-pages", action="store_true", help="휴대폰판(GitHub Pages)은 올리지 않기")
     ap.add_argument("--repo", default=REPO)
+    ap.add_argument("--native", action="store_true", help="네이티브 판(.NET 8)을 publish 해서 꾸러미 native/ComicPadNative/ 에 넣기")
+    ap.add_argument("--native-framework", action="store_true", help="네이티브 판을 자체 포함 대신 .NET 8 런타임이 필요한 작은 판으로")
+    ap.add_argument("--dry-run", action="store_true", help="시험: 서명·업로드 없이 --out 에 꾸러미만 (기본 dist/release_dryrun)")
     args = ap.parse_args()
     cmd_genkey(args) if args.genkey else cmd_build(args)
 
