@@ -17,3 +17,7 @@ __pycache__/
 *.cpold
 # 서명 비밀키는 절대 넣지 말 것 (보통 %USERPROFILE%\.comicpad 에 있음)
 release_key.json
+
+# 네이티브 시제품 빌드 결과
+native/**/bin/
+native/**/obj/

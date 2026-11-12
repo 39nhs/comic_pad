@@ -1,0 +1,18 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <!-- ComicPad 네이티브 앱 시제품 (네이티브_재작성_계획.md 의 단계 0). 외부 패키지 없이 .NET 8 + WinForms 창 + 직접 짠 그리기 엔진 -->
+  <PropertyGroup>
+    <OutputType>WinExe</OutputType>
+    <TargetFramework>net8.0-windows</TargetFramework>
+    <UseWindowsForms>true</UseWindowsForms>
+    <Nullable>disable</Nullable>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
+    <ApplicationManifest>app.manifest</ApplicationManifest>
+    <ApplicationHighDpiMode>PerMonitorV2</ApplicationHighDpiMode>
+    <ApplicationIcon>..\..\ComicPad.ico</ApplicationIcon>
+    <AssemblyName>ComicPadNative</AssemblyName>
+    <RootNamespace>ComicPadNative</RootNamespace>
+    <Optimize>true</Optimize>
+    <InvariantGlobalization>true</InvariantGlobalization>
+  </PropertyGroup>
+</Project>
