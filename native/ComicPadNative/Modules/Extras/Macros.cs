@@ -149,6 +149,7 @@ public static class Macros
         {
             var step = (JsonObject)stepNode;
             string cmd = (string)step["cmd"];
+            cmd = KeyMap.ResolveCmd(cmd) ?? cmd;   // 웹 판 명령 id 로 기록된 것도 (예: "layer.newRough")
             if (!Registry.Commands.TryGetValue(cmd, out var run) || run == null) { App.Toast($"없는 명령이라 건너뜀: {cmd}"); continue; }
             var queue = ((step["forms"] as JsonArray) ?? new JsonArray()).Select(x => (JsonObject)x.DeepClone()).ToList();
             JsonObject Take(string title)

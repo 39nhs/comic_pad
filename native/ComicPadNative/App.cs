@@ -152,7 +152,8 @@ public static class App
     }
 
     // ---- 설정 (%APPDATA%\ComicPad\native-settings.json) ---------------------------------
-    static string SettingsPath => Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData), "ComicPad", "native-settings.json");
+    static string SettingsPath => Environment.GetEnvironmentVariable("COMICPAD_SETTINGS") is { Length: > 0 } sp ? sp   // 시험용으로 다른 설정 파일
+        : Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData), "ComicPad", "native-settings.json");
     public static void LoadSettings()
     {
         try { if (File.Exists(SettingsPath)) Settings = JsonNode.Parse(File.ReadAllText(SettingsPath)) as JsonObject ?? new(); } catch { Settings = new(); }
