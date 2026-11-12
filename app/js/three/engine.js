@@ -105,7 +105,7 @@ export function capsuleMesh(r = 0.5, len = 0, seg = 20, rings = 12, r2 = r) {
   }
   for (let i = 0; i < rows.length - 1; i++) for (let j = 0; j < seg; j++) {
     const a = rows[i][j], b = rows[i][j + 1], c = rows[i + 1][j], d = rows[i + 1][j + 1];
-    idx.push(a, c, b, b, c, d);
+    idx.push(a, b, c, b, d, c);   // 바깥에서 볼 때 반시계 (= 앞면, 상자와 같음)
   }
   return mesh(pos, nrm, idx);
 }
