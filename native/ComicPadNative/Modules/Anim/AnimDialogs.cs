@@ -103,9 +103,14 @@ public static class AnimDialogs
         });
     }
 
+    /// <summary>다른 모듈이 내보내기 창·바로 만들기를 대신할 때 (Media 모듈: WebP·MP4 가 든 창)</summary>
+    public static Action<string> ExportOverride;
+    public static Action QuickOverride;
+
     // ---- 내보내기 창: 형식·크기·반복·투명·색 수·디더링, 크기 미리 짐작 ----
     public static void Export(string preset = null)
     {
+        if (ExportOverride != null) { ExportOverride(preset); return; }
         var d = App.Doc;
         if (AnimCore.FrameCount(d) < 1) { App.Toast("애니메이션 프레임이 없습니다"); return; }
         var o = LastOpts(d);
@@ -162,6 +167,7 @@ public static class AnimDialogs
     /// <summary>움짤 만들기: 묻지 않고 지난 설정(처음엔 GIF 50% 무한 반복)으로 바로</summary>
     public static void QuickGif()
     {
+        if (QuickOverride != null) { QuickOverride(); return; }
         var d = App.Doc;
         if (AnimCore.FrameCount(d) < 2) { App.Toast("프레임이 2장 이상 있어야 움짤이 됩니다"); return; }
         var o = LastOpts(d);

@@ -44,7 +44,9 @@ public static class MediaTest
             T("펼침면", TestSpread);
             T("이미지 내보내기·WebP 열기", TestStill);
             T("전자책 (작품 전체)", TestEbook);
+            T("대화상자 (자동 입력)", TestDialogs);
             T("메뉴", TestMenus);
+            if (Environment.GetEnvironmentVariable("COMICPAD_MEDIA_PERF") == "1") T("큰 그림 (참고)", TestBig);
         }
         catch (Exception ex) { Ok(false, "시험 실행 오류: " + ex); }
         log.AppendLine(fail == 0 ? "모두 통과" : $"실패 {fail}개");
@@ -410,6 +412,77 @@ public static class MediaTest
         Ok(names[0] == "mimetype" && z.Entries[0].CompressedLength == z.Entries[0].Length && names.Contains("META-INF/container.xml") && names.Count(n => n.EndsWith(".xhtml")) == 4, $"EPUB 구조 (mimetype 맨 앞·압축 없음, 쪽 3 + 목차)");
         string opf = new StreamReader(z.GetEntry("OEBPS/content.opf").Open()).ReadToEnd();
         Ok(System.Text.RegularExpressions.Regex.Matches(opf, "<itemref ").Count == 3 && opf.Contains("page-progression-direction=\"ltr\""), "EPUB spine 3쪽");
+    }
+
+    // ------------------------------------------------------------------ 대화상자 (자동 액션처럼 값을 넣어 실행)
+    static void TestDialogs()
+    {
+        Dlg.FormAuto = title => title switch
+        {
+            "이미지 내보내기" => new JsonObject { ["format"] = "webp", ["scale"] = "0.5", ["transparent"] = true, ["quality"] = "1", ["pick"] = false },
+            "타임랩스 동영상 만들기" => new JsonObject { ["fmt"] = "mp4", ["sec"] = 1, ["hold"] = 0 },
+            "작품 전체 내보내기" => new JsonObject { ["fmt"] = "psd", ["scale"] = "1" },
+            _ => null,
+        };
+        try
+        {
+            var d = new Document(200, 120) { Name = "대화상자시험" };
+            var l = new Layer(d, "그림"); d.Layers.Add(l);
+            l.Px.Write(new Rect(0, 0, 50, 50), Enumerable.Repeat(0xFF000000u, 2500).ToArray());
+            App.SetDoc(d);
+            StillExport.Dialog();
+            var f = Directory.GetFiles(U.ExportsDir, "대화상자시험_*.webp").SingleOrDefault();
+            Ok(f != null && WebP.Probe(File.ReadAllBytes(f)) is var wi && wi.W == 100 && wi.H == 60 && wi.Alpha, "이미지 내보내기 창 → data/exports/*.webp (50%·투명)");
+            // 타임랩스: 장면 폴더에 그림을 두고 창으로 MP4
+            d.Extra["timelapse"] = new JsonObject { ["id"] = "tl시험", ["on"] = false };
+            string fd = Extras.Timelapse.FramesDir("tl시험"); Directory.CreateDirectory(fd);
+            for (int i = 0; i < 4; i++)
+            {
+                using var b = new Bitmap(160, 120);
+                using (var g = Graphics.FromImage(b)) { g.Clear(Color.White); g.FillRectangle(Brushes.Red, 0, 0, 40 * (i + 1), 60); }
+                b.Save(Path.Combine(fd, $"{i:000000}.jpg"), System.Drawing.Imaging.ImageFormat.Jpeg);
+            }
+            TimelapseMedia.Export();
+            var mp = Directory.GetFiles(U.ExportsDir, "대화상자시험_타임랩스_*.mp4").SingleOrDefault();
+            var r = mp != null ? Mp4Probe.Read(mp) : null;
+            Ok(r != null && r.Frames == 30 && r.W == 160, $"타임랩스 창 → MP4 ({r?.Frames}장)");
+            // 작품 전체 내보내기 (PSD)
+            var page = CpadIO.Load(Story.Full("인쇄시험/p001.cpad"));
+            page.FilePath = Story.Full("인쇄시험/p001.cpad"); page.Modified = false;
+            App.SetDoc(page);
+            StillExport.ExportStory();
+            string od = Path.Combine(U.ExportsDir, "인쇄시험_내보내기");
+            Ok(Directory.Exists(od) && Directory.GetFiles(od, "*.psd").Length == 3, "작품 전체 내보내기 창 → PSD 3개");
+            // 애니 패널 버튼도 새 창으로 이어지는지
+            Ok(AnimDialogs.ExportOverride != null && AnimDialogs.QuickOverride != null, "애니 패널 버튼 → 새 내보내기 창");
+        }
+        finally { Dlg.FormAuto = null; }
+    }
+
+    // ------------------------------------------------------------------ 큰 그림 (참고: 시간·H.264 크기 한도)
+    static void TestBig()
+    {
+        foreach (var (w, h) in new[] { (1240, 1754), (1080, 1920), (2304, 4096), (2480, 3508), (4096, 2304) })
+        {
+            var px = new uint[w * h];
+            var pat = Pattern(w, h, 2, false);
+            for (int i = 0; i < px.Length; i++) px[i] = pat.P[i];
+            var sw = System.Diagnostics.Stopwatch.StartNew();
+            string p = Path.Combine(outDir, $"big_{w}x{h}.mp4");
+            try
+            {
+                using (var mp = new Mp4Writer(p, w, h, 12, 1, 8_000_000)) { mp.AddFrame(px); mp.AddFrame(px); mp.Finish(); }
+                var r = Mp4Probe.Read(p);
+                Note($"MP4 {w}×{h}: {(r.Frames == 2 && r.W == w && r.H == h ? "됨" : $"이상 ({r.W}×{r.H}, {r.Frames}장)")} {sw.ElapsedMilliseconds}ms");
+            }
+            catch (Exception ex) { Note($"MP4 {w}×{h}: 안 됨 — {ex.Message}"); }
+        }
+        var big = Pattern(1240, 1754, 7, true);
+        var t = System.Diagnostics.Stopwatch.StartNew();
+        var enc = WebP.EncodeStill(big);
+        long te = t.ElapsedMilliseconds; t.Restart();
+        var dec = WebP.DecodeFrames(enc)[0].img;
+        Note($"WebP 1240×1754: 만들기 {te}ms, 풀기 {t.ElapsedMilliseconds}ms, {enc.Length / 1024}KB, 같음 {Same(big, dec)}");
     }
 
     // ------------------------------------------------------------------ 메뉴

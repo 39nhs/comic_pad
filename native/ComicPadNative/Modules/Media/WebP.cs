@@ -663,6 +663,7 @@ public static class WebP
     {
         if (frames.Count == 0) throw new InvalidOperationException("프레임이 없습니다");
         int W = frames[0].img.W, H = frames[0].img.H, bits = LossyBits(quality);
+        if (frames.Any(f => f.img.W != W || f.img.H != H)) throw new ArgumentException("프레임 크기가 모두 같아야 합니다");
         var list = new List<(int x, int y, Argb part, int ms)>();
         uint[] canvas = null;
         bool alpha = transparent;

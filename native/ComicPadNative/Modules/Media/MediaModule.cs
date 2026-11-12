@@ -33,6 +33,8 @@ public sealed class MediaModule : IModule
         Registry.Menu("애니/애니메이션 내보내기 (GIF·WebP·APNG·MP4·PNG)…", () => AnimMedia.Dialog(), Keys.None, HasFrames, order: 210);
         Registry.Menu("애니/동영상으로 내보내기 (MP4)…", () => AnimMedia.Dialog("mp4"), Keys.None, HasFrames, order: 212);
         Replace("애니/움짤 만들기 (바로, GIF)", AnimMedia.Quick, enabled: HasFrames, order: 200);
+        AnimDialogs.ExportOverride = p => AnimMedia.Dialog(p);   // 애니 패널의 "내보내기 (형식 고르기)" 버튼도 새 창으로
+        AnimDialogs.QuickOverride = AnimMedia.Quick;
 
         // ---- 타임랩스: MP4·GIF ----
         Replace("보기/타임랩스 동영상 만들기…", TimelapseMedia.Export, enabled: HasDoc, order: 802);
