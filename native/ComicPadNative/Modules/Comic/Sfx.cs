@@ -365,7 +365,7 @@ public sealed class SfxTool : ToolBase
         IEnumerable<Control> Items()
         {
             yield return Opt.Title("새 효과음");
-            var row = new FlowLayoutPanel { AutoSize = true, MaximumSize = new Size(270, 0), BackColor = Opt.Bg };
+            var row = new UI.Controls.WebRow();
             foreach (var (name, _) in Sfx.Presets) { var nm = name; row.Controls.Add(Opt.Button(nm, () => { PresetName = nm; host.Rebuild(); }, nm == PresetName)); }
             yield return row;
             yield return Opt.Choice("글꼴", Fonts.List(), () => Font, v => Font = v);

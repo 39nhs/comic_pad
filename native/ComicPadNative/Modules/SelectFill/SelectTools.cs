@@ -158,7 +158,7 @@ public sealed class SelectTool : ToolBase
     // ---- 옵션 -----------------------------------------------------------------------------
     public override Control BuildOptions()
     {
-        var host = new FlowLayoutPanel { FlowDirection = FlowDirection.TopDown, WrapContents = false, AutoSize = true, BackColor = Opt.Bg };
+        var host = (FlowLayoutPanel)Opt.Panel();
         void Rebuild()
         {
             foreach (Control c in host.Controls) c.Dispose();

@@ -87,11 +87,11 @@ public sealed class FillTool : ToolBase
         Opt.Title("채우기"),
         Ui.Segmented(new[] { ("all", "모든 레이어"), ("ref", "참조 레이어"), ("layer", "현재 레이어") }, () => Source, v => { Source = v; SelUtil.Put("fill.source", v); }),
         Opt.Slider("색 허용 오차", 0, 255, () => Tolerance, v => { Tolerance = v; SelUtil.Put("fill.tolerance", v); }, step: 1),
-        Opt.Slider("틈 막기 (이 너비까지 빈틈은 선으로)", 0, 50, () => Gap, v => { Gap = v; SelUtil.Put("fill.gap", v); }, step: 1),
+        Opt.Slider("틈 막기 (이 너비까지 빈틈은 선으로)", 0, 50, () => Gap, v => { Gap = v; SelUtil.Put("fill.gap", v); }, step: 1, fmt: v => v > 0 ? $"{v:0}px" : "끔"),
         Opt.Help("선이 살짝 끊겨 있어도 이 너비 이하의 빈틈은 막힌 것으로 보고, 틈 너머로는 칠하지 않습니다. 선이 많이 끊긴 러프는 10~20px."),
-        Opt.Slider("영역 확장", 0, 10, () => Expand, v => { Expand = v; SelUtil.Put("fill.expand", v); }, step: 1),
+        Opt.Slider("영역 확장", 0, 10, () => Expand, v => { Expand = v; SelUtil.Put("fill.expand", v); }, step: 1, fmt: v => $"{v:0}px"),
         Opt.Help("선 아래까지 칠하려면 \"영역 확장\"을 1~3px로. 선이 살짝 끊겨 있으면 \"틈 닫기\"를 올리세요."),
-        Opt.Slider("디더 무늬 (칠하는 칸 비율)", 0, 1, () => Dither, v => { Dither = v >= 1 ? 0 : v; SelUtil.Put("fill.dither", Dither); }, pct: true, step: 0.0625),
+        Opt.Slider("디더 무늬 (칠하는 칸 비율)", 0, 1, () => Dither, v => { Dither = v >= 1 ? 0 : v; SelUtil.Put("fill.dither", Dither); }, pct: true, step: 0.0625, fmt: v => v > 0 && v < 1 ? $"{v * 100:0}%" : "끔"),
         Ui.Segmented(new[] { (2, "2×2"), (4, "4×4") }, () => DitherSize, v => { DitherSize = v; SelUtil.Put("fill.ditherSize", v); }));
 }
 

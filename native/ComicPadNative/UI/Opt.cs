@@ -39,9 +39,9 @@ public static class Opt
     public static Label Help(string t) => new WebHelp(t);
 
     /// <summary>이름 + 끌어서 바꾸는 막대 + 숫자 (웹 slider)</summary>
-    public static Control Slider(string label, double min, double max, Func<double> get, Action<double> set, bool pct = false, bool log = false, double step = 0, Action onEnd = null)
+    public static Control Slider(string label, double min, double max, Func<double> get, Action<double> set, bool pct = false, bool log = false, double step = 0, Action onEnd = null, Func<double, string> fmt = null)
     {
-        Func<double, string> fmt = pct ? v => $"{v * 100:0}%" : null;
+        fmt ??= pct ? v => $"{v * 100:0}%" : null;
         var s = new WebSlider(label, min, max, get, v => { set(v); App.NotifySettings(); }, step, log, fmt) { OnEnd = onEnd };
         Action sync = () => { if (!s.IsDisposed && !s.Capture) s.Sync(); };
         App.SettingsChanged += sync;
