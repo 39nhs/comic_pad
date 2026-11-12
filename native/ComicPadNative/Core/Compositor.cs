@@ -30,6 +30,8 @@ public static class Hooks
     public static Func<Layer, Document, Surface> Tone = (l, _) => l.Px;
     /// <summary>용지를 buf 에 (색·질감). 기본: 단색</summary>
     public static Action<uint[], Rect, Document> Paper = (buf, r, d) => Array.Fill(buf, Px.FromHex(d.PaperColor, 0xFFFFFFFF));
+    /// <summary>그림 위에 얹는 용지 결 (질감 "그림 위에도"). 기본: 없음</summary>
+    public static Action<uint[], Rect, Document> PaperOver = (_, _, _) => { };
     /// <summary>애니 트랙 폴더(meta.anim) 그리기: true 를 돌려주면 처리한 것. 기본: 보통 폴더처럼</summary>
     public static Func<Compositor, uint[], Rect, Layer, Document, RenderOptions, int, bool> AnimFolder = (_, _, _, _, _, _, _) => false;
 
@@ -54,6 +56,7 @@ public sealed class Compositor
         bool paperInLevel = paper && roots.Any(l => l.IsAdjust && !l.Clip && l.Visible);
         if (paper && !paperInLevel) Hooks.Paper(buf, r, d);
         RenderList(buf, r, roots, 0, paperInLevel);
+        if (paper) Hooks.PaperOver(buf, r, d);
         return buf;
     }
 
