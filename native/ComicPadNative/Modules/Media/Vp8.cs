@@ -1370,10 +1370,14 @@ public sealed class Vp8Video
     public Vp8Video(double quality, int keyEvery, bool fast = false) { qi = Vp8.QIndex(quality); this.keyEvery = Math.Max(1, keyEvery); this.fast = fast; }
     /// <summary>디코더가 지금 장에서 보게 될 그림 (시험용)</summary>
     public Vp8Planes Last => last;
+    bool force;
+    /// <summary>다음 장을 키 프레임으로</summary>
+    public void ForceKey() => force = true;
     public (byte[] data, bool key) Encode(Argb frame) => Encode(Vp8.FromArgb(frame));
     public (byte[] data, bool key) Encode(Vp8Planes p)
     {
-        bool key = last == null || n % keyEvery == 0 || last.W != p.W || last.H != p.H;
+        bool key = force || last == null || n % keyEvery == 0 || last.W != p.W || last.H != p.H;
+        force = false;
         var d = Vp8.EncodePlanes(p, qi, out var rec, key ? null : last, fast);
         last = rec; n++;
         return (d, key);

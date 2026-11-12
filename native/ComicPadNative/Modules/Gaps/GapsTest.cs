@@ -45,6 +45,8 @@ public static partial class GapsTest
         yield return ("VP8 참고 파일 (libwebp 가 만든 것)", TestVp8Reference);
         yield return ("WebM 기본", TestWebmBasic);
         yield return ("WebM 사이 프레임", TestWebmInter);
+        yield return ("Vorbis 소리", TestVorbis);
+        yield return ("MF 소리 풀기", TestMfAudio);
     }
 
     // ------------------------------------------------------------------ 시험 그림
