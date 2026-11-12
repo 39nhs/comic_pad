@@ -440,7 +440,7 @@ public static class Vp8
         for (int k = 0; k < n; k++, i += along) if (Needs(p, i, s, t2)) Filter2(p, i, s);
     }
 
-    static FInfo FilterInfo(int level, int sharp, bool inner)
+    static FInfo FilterInfo(int level, int sharp, bool inner, bool key = true)
     {
         var f = new FInfo { Inner = inner };
         level = Clip(level, 0, 63);
@@ -448,7 +448,7 @@ public static class Vp8
         int il = level;
         if (sharp > 0) { il >>= sharp > 4 ? 2 : 1; if (il > 9 - sharp) il = 9 - sharp; }
         if (il < 1) il = 1;
-        f.ILevel = il; f.Limit = 2 * level + il; f.Hev = level >= 40 ? 2 : level >= 15 ? 1 : 0;
+        f.ILevel = il; f.Limit = 2 * level + il; f.Hev = key ? (level >= 40 ? 2 : level >= 15 ? 1 : 0) : (level >= 40 ? 3 : level >= 20 ? 2 : level >= 15 ? 1 : 0);
         return f;
     }
 
@@ -902,7 +902,7 @@ public static class Vp8
     {
         public int YMode, UvMode; public int[] BModes = new int[16];
         public short[] Zz = new short[25 * 16];   // 0~15 Y, 16~19 U, 20~23 V, 24 Y2
-        public bool Skip;
+        public bool Skip, Inter;
     }
 
     /// <summary>양자화 (차이 계수 → 지그재그 정수, 되돌린 값은 deq 에 자연 순서로)</summary>
@@ -933,26 +933,68 @@ public static class Vp8
     /// <summary>그림 → VP8 키 프레임 (RIFF 없이 프레임 데이터만)</summary>
     public static byte[] Encode(Argb im, double quality) => EncodePlanes(FromArgb(im), QIndex(quality), out _);
 
-    /// <summary>Y·U·V → VP8 키 프레임. recon = 디코더가 보게 될 그림 (필터까지)</summary>
-    public static byte[] EncodePlanes(Vp8Planes src, int qi, out Vp8Planes recon)
+    // 사이 프레임(키 프레임이 아닌 것)에서 쓰는 고정 확률 (RFC 16)
+    internal static readonly sbyte[] YTree = { -DC, 2, 4, 6, -VP, -HP, -TM, -BP };
+    internal static readonly byte[] YProbInter = { 112, 86, 140, 37 };
+    internal static readonly byte[] UvProbInter = { 162, 101, 204 };
+    static readonly byte[] ModeContexts = { 7, 1, 1, 143, 14, 18, 14, 107, 135, 64, 57, 68, 60, 56, 128, 65, 159, 134, 128, 34, 234, 188, 128, 28 };
+    static readonly byte[] MvUpdate =
+    {
+        237, 246, 253, 253, 254, 254, 254, 254, 254, 254, 254, 254, 254, 254, 250, 250, 252, 254, 254,
+        231, 243, 245, 253, 254, 254, 254, 254, 254, 254, 254, 254, 254, 254, 251, 251, 254, 254, 254,
+    };
+
+    /// <summary>Y·U·V → VP8 프레임. reference 가 있으면 사이 프레임 (매크로블록마다: 앞 장 그대로(움직임 0) 또는 화면 안 16×16),
+    /// 없으면 키 프레임. fast = 4×4 모드 안 씀 (빠름). recon = 디코더가 보게 될 그림 (필터까지, 다음 장의 참조)</summary>
+    public static byte[] EncodePlanes(Vp8Planes src, int qi, out Vp8Planes recon, Vp8Planes reference = null, bool fast = false)
     {
         int mbw = src.MbW, mbh = src.MbH, ys = src.Ys, cs = src.Cs;
+        bool key = reference == null;
         var q = new Quant(qi, 0, 0, 0, 0, 0);
         var rec = new Vp8Planes(src.W, src.H);
         var mbs = new Mb[mbw * mbh];
         double lambda = 0.11 * q.Y1Ac * q.Y1Ac + 1;
         const double acBias = 0.36, dcBias = 0.45;
-        var probs = Vp8Tab.CoefDefault;
-        var tok = new Tok { Probs = probs, Mode = 0 };
+        var tok = new Tok { Probs = Vp8Tab.CoefDefault, Mode = 0 };
         var topB = new int[mbw * 4]; var topNz = new int[mbw]; var topNzDc = new int[mbw];
         var pred = new byte[256]; var predUv = new byte[64]; var predV = new byte[64];
         var coefs = new short[25 * 16]; var deq = new short[25 * 16];
-        var recI16 = new byte[256];
-        var zz16 = new short[25 * 16]; var zz4 = new short[16 * 16];
+        var recI16 = new byte[256]; var recInt = new byte[256]; var predInt = new byte[256];
+        var zz16 = new short[25 * 16]; var zzInt = new short[25 * 16]; var zz4 = new short[16 * 16];
         int[] A = new int[9], L = new int[4], B4 = new int[16], E = new int[9], diff = new int[16], dcs = new int[16];
-        var bestB = new short[16]; var bestZ = new short[16]; var tmpC = new short[16]; var tmpZ = new short[16]; var tmpD = new short[16];
+        var bestZ = new short[16]; var tmpC = new short[16]; var tmpZ = new short[16]; var tmpD = new short[16];
         var blk = new byte[16]; var bestBlk = new byte[16];
         var modes4 = new int[16]; var leftB = new int[4]; var tb = new int[4]; var lb = new int[4];
+        double modeInter = Cost1[30] + 0.2, modeIntraBase = key ? 0 : Cost0[30];
+
+        // 16×16 예측 블록 → 차이 부호화 (Y2 포함). 돌려주는 값 = 왜곡 + λ·비트
+        double CodeY16(byte[] pb, short[] zz, byte[] recOut, int mx, int yo, int leftNz, int leftNzDc)
+        {
+            for (int k = 0; k < 16; k++)
+            {
+                int bx = (k & 3) * 4, by = (k >> 2) * 4;
+                for (int r = 0; r < 4; r++) for (int c = 0; c < 4; c++) diff[r * 4 + c] = src.Y[yo + (by + r) * ys + bx + c] - pb[(by + r) * 16 + bx + c];
+                Fdct(diff, coefs, k * 16);
+                dcs[k] = coefs[k * 16];
+            }
+            Fwht(dcs, coefs, 24 * 16);
+            Array.Clear(zz);
+            Quantize(coefs, 24 * 16, 0, q.Y2Dc, q.Y2Ac, dcBias, dcBias, zz, 24 * 16, deq, 24 * 16);
+            for (int k = 0; k < 16; k++) Quantize(coefs, k * 16, 1, q.Y1Dc, q.Y1Ac, dcBias, acBias, zz, k * 16, deq, k * 16);
+            InvWht(deq, 24 * 16, deq);
+            Array.Copy(pb, recOut, 256);
+            for (int k = 0; k < 16; k++) if (!Zero(deq, k * 16)) IdctAdd(deq, k * 16, recOut, (k >> 2) * 64 + (k & 3) * 4, 16);
+            double d = Sse(src.Y, yo, ys, recOut, 0, 16, 16, 16);
+            tok.Mode = 0; tok.Cost = 0;
+            int tnz = topNz[mx], lnz = leftNz;
+            tok.Write(1, topNzDc[mx] + leftNzDc, zz, 24 * 16, 0);
+            for (int y = 0; y < 4; y++)
+            {
+                int l = (lnz >> y) & 1;
+                for (int x = 0; x < 4; x++) { int t = (tnz >> x) & 1; int fl = tok.Write(0, l + t, zz, (y * 4 + x) * 16, 1); l = fl; tnz = (tnz & ~(1 << x)) | (fl << x); }
+            }
+            return d + lambda * tok.Cost;
+        }
 
         for (int my = 0; my < mbh; my++)
         {
@@ -961,46 +1003,56 @@ public static class Vp8
             {
                 var mb = new Mb(); mbs[my * mbw + mx] = mb;
                 int x0 = mx * 16, y0 = my * 16, yo = y0 * ys + x0;
-                // ---------- 16×16: 예측이 가장 가까운 모드 → 끝까지 부호화
+                int cx = mx * 8, cy = my * 8, co = cy * cs + cx;
+                // ---------- 사이 프레임: 앞 장과 거의 같으면 바로 건너뛰기 (빠른 길)
+                if (!key)
+                {
+                    long sY = Sse(src.Y, yo, ys, reference.Y, yo, ys, 16, 16), sUv = Sse(src.U, co, cs, reference.U, co, cs, 8, 8) + Sse(src.V, co, cs, reference.V, co, cs, 8, 8);
+                    if (sY + sUv < q.Y1Ac * q.Y1Ac * 2)
+                    {
+                        mb.Inter = true; mb.Skip = true; mb.YMode = DC;
+                        for (int r = 0; r < 16; r++) Array.Copy(reference.Y, yo + r * ys, rec.Y, yo + r * ys, 16);
+                        for (int r = 0; r < 8; r++) { Array.Copy(reference.U, co + r * cs, rec.U, co + r * cs, 8); Array.Copy(reference.V, co + r * cs, rec.V, co + r * cs, 8); }
+                        for (int i = 0; i < 4; i++) { topB[mx * 4 + i] = 0; leftB[i] = 0; }
+                        UpdateCtx(mb, ref topNz[mx], ref leftNz, ref topNzDc[mx], ref leftNzDc);
+                        continue;
+                    }
+                }
+                // ---------- 화면 안 16×16: 예측이 가장 가까운 모드 → 끝까지 부호화
                 int m16 = 0; double best = double.MaxValue;
                 for (int m = 0; m < 4; m++)
                 {
                     PredBig(rec.Y, ys, x0, y0, 16, m, pred);
-                    double j = Sse(src.Y, yo, ys, pred, 0, 16, 16, 16) + lambda * ModeCostY(m);
+                    double j = Sse(src.Y, yo, ys, pred, 0, 16, 16, 16) + lambda * (key ? ModeCostY(m) : ModeCostYInter(m));
                     if (j < best) { best = j; m16 = m; }
                 }
                 PredBig(rec.Y, ys, x0, y0, 16, m16, pred);
-                for (int k = 0; k < 16; k++)
+                double j16 = CodeY16(pred, zz16, recI16, mx, yo, leftNz, leftNzDc) + lambda * (modeIntraBase + (key ? ModeCostY(m16) : ModeCostYInter(m16)));
+                // 색차 화면 안 예측 (사이 프레임에서는 앞 장과 비교하려고 미리)
+                int muv = 0; double uvIntra = double.MaxValue;
+                for (int m = 0; m < 4; m++)
                 {
-                    int bx = (k & 3) * 4, by = (k >> 2) * 4;
-                    for (int r = 0; r < 4; r++) for (int c = 0; c < 4; c++) diff[r * 4 + c] = src.Y[yo + (by + r) * ys + bx + c] - pred[(by + r) * 16 + bx + c];
-                    Fdct(diff, coefs, k * 16);
-                    dcs[k] = coefs[k * 16];
+                    PredBig(rec.U, cs, cx, cy, 8, m, predUv); PredBig(rec.V, cs, cx, cy, 8, m, predV);
+                    double j = Sse(src.U, co, cs, predUv, 0, 8, 8, 8) + Sse(src.V, co, cs, predV, 0, 8, 8, 8) + lambda * (key ? ModeCostUv(m) : ModeCostUvInter(m));
+                    if (j < uvIntra) { uvIntra = j; muv = m; }
                 }
-                Fwht(dcs, coefs, 24 * 16);
-                Array.Clear(zz16);
-                bool y2nz = Quantize(coefs, 24 * 16, 0, q.Y2Dc, q.Y2Ac, dcBias, dcBias, zz16, 24 * 16, deq, 24 * 16);
-                for (int k = 0; k < 16; k++) Quantize(coefs, k * 16, 1, q.Y1Dc, q.Y1Ac, dcBias, acBias, zz16, k * 16, deq, k * 16);
-                InvWht(deq, 24 * 16, deq);
-                Array.Copy(pred, recI16, 256);
-                for (int k = 0; k < 16; k++) if (!Zero(deq, k * 16)) IdctAdd(deq, k * 16, recI16, (k >> 2) * 64 + (k & 3) * 4, 16);
-                double d16 = Sse(src.Y, yo, ys, recI16, 0, 16, 16, 16);
-                tok.Mode = 0; tok.Cost = 0;
-                {
-                    int tnz = topNz[mx], lnz = leftNz;
-                    tok.Write(1, topNzDc[mx] + leftNzDc, zz16, 24 * 16, 0);
-                    for (int y = 0; y < 4; y++)
-                    {
-                        int l = (lnz >> y) & 1;
-                        for (int x = 0; x < 4; x++) { int t = (tnz >> x) & 1; int fl = tok.Write(0, l + t, zz16, (y * 4 + x) * 16, 1); l = fl; tnz = (tnz & ~(1 << x)) | (fl << x); }
-                    }
-                }
-                double j16 = d16 + lambda * (tok.Cost + ModeCostY(m16));
 
-                // ---------- 4×4: 블록마다 10가지 모드 중 비용이 가장 적은 것
-                double j4 = lambda * Cost0[KfYProb[0]];   // B_PRED 고르는 값
-                bool i4ok = true;
+                // ---------- 사이 프레임: 앞 장 같은 자리 (움직임 0)
+                double jInt = double.MaxValue;
+                if (!key)
                 {
+                    for (int r = 0; r < 16; r++) Array.Copy(reference.Y, yo + r * ys, predInt, r * 16, 16);
+                    double uvInt = Sse(src.U, co, cs, reference.U, co, cs, 8, 8) + Sse(src.V, co, cs, reference.V, co, cs, 8, 8);
+                    jInt = CodeY16(predInt, zzInt, recInt, mx, yo, leftNz, leftNzDc) + lambda * modeInter + uvInt;
+                    j16 += uvIntra;
+                }
+
+                // ---------- 4×4 (키 프레임만): 블록마다 10가지 모드 중 비용이 가장 적은 것
+                bool useI4 = false;
+                if (key && !fast)
+                {
+                    double j4 = lambda * Cost0[KfYProb[0]];
+                    bool i4ok = true;
                     int tnz = topNz[mx], lnz = leftNz;
                     for (int i = 0; i < 4; i++) { tb[i] = topB[mx * 4 + i]; lb[i] = leftB[i]; }
                     for (int k = 0; k < 16 && i4ok; k++)
@@ -1031,8 +1083,8 @@ public static class Vp8
                         tb[bx] = bm; lb[by] = bm;
                         tnz = (tnz & ~(1 << bx)) | (bfl << bx); lnz = (lnz & ~(1 << by)) | (bfl << by);
                     }
+                    useI4 = i4ok && j4 < j16;
                 }
-                bool useI4 = i4ok && j4 < j16;
                 Array.Clear(mb.Zz);
                 if (useI4)
                 {
@@ -1042,26 +1094,21 @@ public static class Vp8
                 }
                 else
                 {
-                    mb.YMode = m16;
-                    for (int r = 0; r < 16; r++) Array.Copy(recI16, r * 16, rec.Y, yo + r * ys, 16);
-                    int bmc = BOfY[m16];
+                    bool inter = jInt < j16;
+                    mb.Inter = inter; mb.YMode = inter ? DC : m16;
+                    var rsrc = inter ? recInt : recI16;
+                    for (int r = 0; r < 16; r++) Array.Copy(rsrc, r * 16, rec.Y, yo + r * ys, 16);
+                    int bmc = BOfY[mb.YMode];
                     for (int i = 0; i < 4; i++) { topB[mx * 4 + i] = bmc; leftB[i] = bmc; }
-                    Array.Copy(zz16, mb.Zz, 25 * 16);
+                    Array.Copy(inter ? zzInt : zz16, mb.Zz, 25 * 16);
                 }
                 // ---------- 색차
-                int cx = mx * 8, cy = my * 8, co = cy * cs + cx;
-                int muv = 0; best = double.MaxValue;
-                for (int m = 0; m < 4; m++)
-                {
-                    PredBig(rec.U, cs, cx, cy, 8, m, predUv); PredBig(rec.V, cs, cx, cy, 8, m, predV);
-                    double j = Sse(src.U, co, cs, predUv, 0, 8, 8, 8) + Sse(src.V, co, cs, predV, 0, 8, 8, 8) + lambda * ModeCostUv(m);
-                    if (j < best) { best = j; muv = m; }
-                }
                 mb.UvMode = muv;
                 for (int ch = 0; ch < 2; ch++)
                 {
                     var sp = ch == 0 ? src.U : src.V; var rp = ch == 0 ? rec.U : rec.V;
-                    PredBig(rp, cs, cx, cy, 8, muv, predUv);
+                    if (mb.Inter) { var refp = ch == 0 ? reference.U : reference.V; for (int r = 0; r < 8; r++) Array.Copy(refp, co + r * cs, predUv, r * 8, 8); }
+                    else PredBig(rp, cs, cx, cy, 8, muv, predUv);
                     for (int r = 0; r < 8; r++) Array.Copy(predUv, r * 8, rp, co + r * cs, 8);
                     for (int k = 0; k < 4; k++)
                     {
@@ -1079,14 +1126,15 @@ public static class Vp8
             }
         }
 
-        // ---------- 루프 필터 세기: 몇 가지를 실제로 걸어 보고 원본과 가장 가까운 것
+        // ---------- 루프 필터 세기: 몇 가지를 실제로 걸어 보고 원본과 가장 가까운 것 (빠르게는 하나만)
         int baseLv = Clip((int)Math.Round(q.Y1Ac * 0.35), 0, 63);
-        var levels = new[] { 0, baseLv / 2, baseLv, Math.Min(63, baseLv * 3 / 2), Math.Min(63, baseLv * 2) }.Distinct().ToArray();
+        var levels = (fast ? new[] { baseLv } : new[] { 0, baseLv / 2, baseLv, Math.Min(63, baseLv * 3 / 2), Math.Min(63, baseLv * 2) }).Distinct().ToArray();
         int bestLv = 0; long bestE = long.MaxValue; Vp8Planes bestRec = rec;
         foreach (int lv in levels)
         {
-            var tr = lv == 0 ? rec : rec.Clone();
-            if (lv > 0) LoopFilter(tr, FilterMap(mbs, mbw, mbh, lv), false);
+            var tr = lv == 0 || levels.Length == 1 ? rec : rec.Clone();
+            if (lv > 0) LoopFilter(tr, FilterMap(mbs, lv, key), false);
+            if (levels.Length == 1) { bestLv = lv; bestRec = tr; break; }
             long e = 0;
             for (int y = 0; y < src.H; y++) e += Sse(src.Y, y * ys, ys, tr.Y, y * ys, ys, src.W, 1);
             if (e < bestE) { bestE = e; bestLv = lv; bestRec = tr; }
@@ -1109,20 +1157,35 @@ public static class Vp8
             double cost = 8 + Cost1[Vp8Tab.CoefUpdate[i]] - Cost0[Vp8Tab.CoefUpdate[i]];
             if (save > cost) { newProbs[i] = (byte)np; upd[i] = true; }
         }
-        int nSkip = mbs.Count(m => m.Skip);
+        int nSkip = mbs.Count(m => m.Skip), nIntra = mbs.Count(m => !m.Inter);
         int skipP = Clip((int)Math.Round(256.0 * (mbs.Length - nSkip) / mbs.Length), 1, 255);
+        int intraP = Clip((int)Math.Round(256.0 * nIntra / mbs.Length), 1, 255);
 
         // ---------- 첫 파티션: 머리 + 모드
         var e1 = new Vp8BoolEnc();
-        e1.Lit(0, 1); e1.Lit(0, 1);            // 색 공간, 자르기 필요
+        if (key) { e1.Lit(0, 1); e1.Lit(0, 1); }   // 색 공간, 자르기 필요
         e1.Lit(0, 1);                           // 구역 없음
         e1.Lit(0, 1); e1.Lit(bestLv, 6); e1.Lit(0, 3);   // 보통 필터, 세기, 선명도 0
         e1.Lit(0, 1);                           // 필터 차이값 없음
         e1.Lit(0, 2);                           // 토큰 파티션 1개
         e1.Lit(qi, 7); for (int i = 0; i < 5; i++) e1.Lit(0, 1);
-        e1.Lit(0, 1);                           // 확률 되돌리기
+        if (key) e1.Lit(0, 1);                  // 확률 되돌리기 (이 장의 갱신은 이 장에만)
+        else
+        {
+            e1.Lit(0, 1); e1.Lit(0, 1);         // 골든·대체 프레임 갱신 안 함
+            e1.Lit(0, 2); e1.Lit(0, 2);         // 복사 안 함
+            e1.Lit(0, 1); e1.Lit(0, 1);         // 부호 치우침 없음
+            e1.Lit(0, 1);                       // 확률 되돌리기
+            e1.Lit(1, 1);                       // 이 장을 다음 참조로
+        }
         for (int i = 0; i < 1056; i++) { e1.Put(Vp8Tab.CoefUpdate[i], upd[i] ? 1 : 0); if (upd[i]) e1.Lit(newProbs[i], 8); }
         e1.Lit(1, 1); e1.Lit(skipP, 8);
+        if (!key)
+        {
+            e1.Lit(intraP, 8); e1.Lit(255, 8); e1.Lit(128, 8);   // 화면 안 확률, 앞 장(last) 확률, 골든 확률
+            e1.Lit(0, 1); e1.Lit(0, 1);                         // 모드 확률 갱신 없음
+            foreach (var p in MvUpdate) e1.Put(p, 0);           // 움직임 확률 갱신 없음
+        }
         {
             var tbm = new int[mbw * 4]; var lbm = new int[4];
             for (int my = 0; my < mbh; my++)
@@ -1132,16 +1195,38 @@ public static class Vp8
                 {
                     var mb = mbs[my * mbw + mx];
                     e1.Put(skipP, mb.Skip ? 1 : 0);
-                    e1.Tree(KfYTree, KfYProb, mb.YMode);
-                    if (mb.YMode == BP)
-                        for (int k = 0; k < 16; k++)
+                    if (key)
+                    {
+                        e1.Tree(KfYTree, KfYProb, mb.YMode);
+                        if (mb.YMode == BP)
+                            for (int k = 0; k < 16; k++)
+                            {
+                                int m = mb.BModes[k];
+                                e1.Tree(BTree, Vp8Tab.KfBmode, m, (tbm[mx * 4 + (k & 3)] * 10 + lbm[k >> 2]) * 9);
+                                tbm[mx * 4 + (k & 3)] = m; lbm[k >> 2] = m;
+                            }
+                        else { int bm = BOfY[mb.YMode]; for (int i = 0; i < 4; i++) { tbm[mx * 4 + i] = bm; lbm[i] = bm; } }
+                        e1.Tree(UvTree, UvProb, mb.UvMode);
+                    }
+                    else
+                    {
+                        e1.Put(intraP, mb.Inter ? 1 : 0);
+                        if (mb.Inter)
                         {
-                            int m = mb.BModes[k];
-                            e1.Tree(BTree, Vp8Tab.KfBmode, m, (tbm[mx * 4 + (k & 3)] * 10 + lbm[k >> 2]) * 9);
-                            tbm[mx * 4 + (k & 3)] = m; lbm[k >> 2] = m;
+                            e1.Put(255, 0);   // 앞 장(last)
+                            // 움직임 모드 문맥: 위·왼쪽(2)·왼쪽 위(1) 가 사이 블록이면 (모두 움직임 0)
+                            int cnt0 = 0;
+                            if (my > 0 && mbs[(my - 1) * mbw + mx].Inter) cnt0 += 2;
+                            if (mx > 0 && mbs[my * mbw + mx - 1].Inter) cnt0 += 2;
+                            if (my > 0 && mx > 0 && mbs[(my - 1) * mbw + mx - 1].Inter) cnt0 += 1;
+                            e1.Put(ModeContexts[cnt0 * 4], 0);   // ZEROMV
                         }
-                    else { int bm = BOfY[mb.YMode]; for (int i = 0; i < 4; i++) { tbm[mx * 4 + i] = bm; lbm[i] = bm; } }
-                    e1.Tree(UvTree, UvProb, mb.UvMode);
+                        else
+                        {
+                            e1.Tree(YTree, YProbInter, mb.YMode);
+                            e1.Tree(UvTree, UvProbInter, mb.UvMode);
+                        }
+                    }
                 }
             }
         }
@@ -1152,14 +1237,29 @@ public static class Vp8
         WalkTokens(mbs, mbw, mbh, tok);
         var toks = e2.Finish();
 
-        var o = new byte[10 + first.Length + toks.Length];
-        int tag = (first.Length << 5) | (1 << 4);   // 키 프레임, 판 0, 보임
+        int head = key ? 10 : 3;
+        var o = new byte[head + first.Length + toks.Length];
+        int tag = (first.Length << 5) | (1 << 4) | (key ? 0 : 1);   // 키/사이, 판 0, 보임
         o[0] = (byte)tag; o[1] = (byte)(tag >> 8); o[2] = (byte)(tag >> 16);
-        o[3] = 0x9d; o[4] = 0x01; o[5] = 0x2a;
-        o[6] = (byte)src.W; o[7] = (byte)(src.W >> 8); o[8] = (byte)src.H; o[9] = (byte)(src.H >> 8);
-        Array.Copy(first, 0, o, 10, first.Length);
-        Array.Copy(toks, 0, o, 10 + first.Length, toks.Length);
+        if (key)
+        {
+            o[3] = 0x9d; o[4] = 0x01; o[5] = 0x2a;
+            o[6] = (byte)src.W; o[7] = (byte)(src.W >> 8); o[8] = (byte)src.H; o[9] = (byte)(src.H >> 8);
+        }
+        Array.Copy(first, 0, o, head, first.Length);
+        Array.Copy(toks, 0, o, head + first.Length, toks.Length);
         return o;
+    }
+
+    static double ModeCostYInter(int m)
+    {
+        double c = 0; foreach (var (node, bit) in Path(YTree, m)) c += bit != 0 ? Cost1[YProbInter[node >> 1]] : Cost0[YProbInter[node >> 1]];
+        return c;
+    }
+    static double ModeCostUvInter(int m)
+    {
+        double c = 0; foreach (var (node, bit) in Path(UvTree, m)) c += bit != 0 ? Cost1[UvProbInter[node >> 1]] : Cost0[UvProbInter[node >> 1]];
+        return c;
     }
 
     static double ModeCostY(int m)
@@ -1237,19 +1337,19 @@ public static class Vp8
         }
     }
 
-    static FInfo[] FilterMap(Mb[] mbs, int mbw, int mbh, int level)
+    static FInfo[] FilterMap(Mb[] mbs, int level, bool key)
     {
         var o = new FInfo[mbs.Length];
         for (int i = 0; i < mbs.Length; i++)
         {
-            bool i4 = mbs[i].YMode == BP;
-            o[i] = FilterInfo(level, 0, i4);
+            bool i4 = mbs[i].YMode == BP && !mbs[i].Inter;
+            o[i] = FilterInfo(level, 0, i4, key);
             o[i].Inner = i4 || !mbs[i].Skip;
         }
         return o;
     }
 
-    /// <summary>PSNR (Y·U·V 를 4:1:1 무게로, 두 그림 크기는 같아야 함)</summary>
+    /// <summary>RGB PSNR (두 그림 크기는 같아야 함)</summary>
     public static double Psnr(Argb a, Argb b)
     {
         double s = 0; long n = 0;
@@ -1259,5 +1359,23 @@ public static class Vp8
             for (int sh = 0; sh < 24; sh += 8) { int d = (int)((x >> sh) & 255) - (int)((y >> sh) & 255); s += d * d; n++; }
         }
         return s == 0 ? 99 : 10 * Math.Log10(255.0 * 255 * n / s);
+    }
+}
+
+/// <summary>VP8 동영상 부호기: keyEvery 장마다 키 프레임, 그 사이는 앞 장을 참조하는 사이 프레임 (움직임 0 + 화면 안 16×16)</summary>
+public sealed class Vp8Video
+{
+    readonly int qi, keyEvery; readonly bool fast;
+    Vp8Planes last; int n;
+    public Vp8Video(double quality, int keyEvery, bool fast = false) { qi = Vp8.QIndex(quality); this.keyEvery = Math.Max(1, keyEvery); this.fast = fast; }
+    /// <summary>디코더가 지금 장에서 보게 될 그림 (시험용)</summary>
+    public Vp8Planes Last => last;
+    public (byte[] data, bool key) Encode(Argb frame) => Encode(Vp8.FromArgb(frame));
+    public (byte[] data, bool key) Encode(Vp8Planes p)
+    {
+        bool key = last == null || n % keyEvery == 0 || last.W != p.W || last.H != p.H;
+        var d = Vp8.EncodePlanes(p, qi, out var rec, key ? null : last, fast);
+        last = rec; n++;
+        return (d, key);
     }
 }

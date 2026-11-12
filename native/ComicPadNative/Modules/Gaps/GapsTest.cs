@@ -43,6 +43,8 @@ public static partial class GapsTest
         yield return ("VP8 손실 WebP", TestVp8);
         yield return ("VP8 libwebp 참고 파일 (내장)", TestVp8Embedded);
         yield return ("VP8 참고 파일 (libwebp 가 만든 것)", TestVp8Reference);
+        yield return ("WebM 기본", TestWebmBasic);
+        yield return ("WebM 사이 프레임", TestWebmInter);
     }
 
     // ------------------------------------------------------------------ 시험 그림
