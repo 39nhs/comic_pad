@@ -132,10 +132,10 @@ public static class SelUtil
     {
         using var path = new GraphicsPath(FillMode.Winding);
         path.AddPolygon(pts.ToArray());
-        g.FillPath(Brushes.White, path);
+        g.FillPath(System.Drawing.Brushes.White, path);
     });
 
-    public static byte[] EllipseShape(Rect r, double x, double y, double w, double h) => RasterShape(r, g => g.FillEllipse(Brushes.White, (float)x, (float)y, (float)w, (float)h));
+    public static byte[] EllipseShape(Rect r, double x, double y, double w, double h) => RasterShape(r, g => g.FillEllipse(System.Drawing.Brushes.White, (float)x, (float)y, (float)w, (float)h));
 
     public static Rect PointsBounds(IEnumerable<PointF> pts, int pad = 0)
     {

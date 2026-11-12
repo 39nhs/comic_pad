@@ -238,7 +238,7 @@ public sealed class GradientTool : ToolBase
         using var w = new Pen(Color.White, 3); using var bl = new Pen(Color.FromArgb(47, 124, 246), 1.5f);
         g.DrawLine(w, (float)ax, (float)ay, (float)bx, (float)by);
         g.DrawLine(bl, (float)ax, (float)ay, (float)bx, (float)by);
-        foreach (var (x, y) in new[] { (ax, ay), (bx, by) }) { g.FillEllipse(Brushes.White, (float)x - 5, (float)y - 5, 10, 10); g.DrawEllipse(bl, (float)x - 5, (float)y - 5, 10, 10); }
+        foreach (var (x, y) in new[] { (ax, ay), (bx, by) }) { g.FillEllipse(System.Drawing.Brushes.White, (float)x - 5, (float)y - 5, 10, 10); g.DrawEllipse(bl, (float)x - 5, (float)y - 5, 10, 10); }
     }
     public override Rectangle OverlayBounds(ViewXf v)
     {
