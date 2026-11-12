@@ -71,6 +71,36 @@ static class Program
             if (open != null) FileCommands.OpenPath(open);
             else App.SetDoc(Document.New(App.Get("newW", 2480), App.Get("newH", 3508)));
         };
+        // 화면 비교용 (웹 판 스크린샷과 맞춰 보기): COMICPAD_UI_SHOT=결과.png → 1600×900 창으로 띄워 2초 뒤 창을 그림으로 저장하고 끝냄.
+        //   COMICPAD_UI_SHOT_RUN="메뉴 경로" 를 주면 찍기 전에 그 명령을 실행 (도구 바꾸기 "tool:select" 도 됨). 반드시 COMICPAD_SETTINGS·COMICPAD_DATA 를 임시로.
+        string shot = Environment.GetEnvironmentVariable("COMICPAD_UI_SHOT");
+        if (!string.IsNullOrEmpty(shot))
+        {
+            form.WindowState = FormWindowState.Normal; form.StartPosition = FormStartPosition.Manual; form.Location = new Point(0, 0);
+            form.ClientSize = new Size(1600, 900);
+            var t = new System.Windows.Forms.Timer { Interval = 2000 };
+            t.Tick += (_, _) =>
+            {
+                t.Stop();
+                try
+                {
+                    string run = Environment.GetEnvironmentVariable("COMICPAD_UI_SHOT_RUN");
+                    if (!string.IsNullOrEmpty(run))
+                    {
+                        if (run.StartsWith("tool:")) App.SetTool(run[5..]);
+                        else if (Registry.Commands.TryGetValue(run, out var cmd)) form.BeginInvoke(cmd);
+                        for (int i = 0; i < 30; i++) { Application.DoEvents(); Thread.Sleep(30); }
+                    }
+                    var target = Form.ActiveForm ?? form;
+                    using var bmp = new Bitmap(target.Width, target.Height);
+                    target.DrawToBitmap(bmp, new Rectangle(0, 0, bmp.Width, bmp.Height));
+                    bmp.Save(shot);
+                }
+                catch (Exception ex) { File.WriteAllText(shot + ".error.txt", ex.ToString()); }
+                Environment.Exit(0);
+            };
+            form.Shown += (_, _) => t.Start();
+        }
         var auto = new System.Windows.Forms.Timer { Interval = Math.Max(1, App.Get("autosaveMin", 3)) * 60_000 };
         auto.Tick += (_, _) => FileCommands.Autosave();
         auto.Start();
