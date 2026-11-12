@@ -151,7 +151,7 @@ public static class Engine3D
             for (int j = 0; j < seg; j++)
             {
                 int a = i * (seg + 1) + j, b = a + 1, c = a + seg + 1, d = c + 1;
-                idx.AddRange(new[] { a, c, b, b, c, d });
+                idx.AddRange(new[] { a, b, c, b, d, c });   // 바깥에서 볼 때 반시계 (= 앞면)
             }
         return Make(pos, nrm, idx);
     }
