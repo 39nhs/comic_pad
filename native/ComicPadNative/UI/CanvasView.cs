@@ -363,7 +363,7 @@ public sealed class CanvasView : Control
         string temp = null;
         if (a.EraserEnd) temp = "eraser";
         else if ((a.Buttons & 2) != 0) temp = App.Get("penButton", "eyedropper");
-        else if (a.Alt && App.Tool?.Id != "eyedropper") temp = "eyedropper";
+        else if (a.Alt && App.Tool?.Id != "eyedropper" && App.Tool?.AllowAltPick != false) temp = "eyedropper";
         if (temp == "pan") { panning = true; panSX = a.SX; panSY = a.SY; panX0 = V.PanX; panY0 = V.PanY; panMode = "pan"; return; }
         if (temp != null && Registry.Tools.Any(t => t.Id == temp)) { tempTool = App.Tool?.Id; App.SetTool(temp); }
         drawing = true;

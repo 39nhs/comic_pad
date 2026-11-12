@@ -41,6 +41,8 @@ public abstract class ToolBase
     public virtual void Hover(PointerArgs e) { }
     public virtual void Cancel() { }
     public virtual bool Busy => false;
+    /// <summary>Alt 를 누르면 잠깐 스포이트로 바꿀지 (선택·올가미처럼 Alt 를 다른 뜻으로 쓰는 도구는 false)</summary>
+    public virtual bool AllowAltPick => true;
     /// <summary>그림판 위에 그릴 것 (화면 좌표, GDI+). 그 범위는 OverlayBounds</summary>
     public virtual void DrawOverlay(Graphics g, ViewXf v) { }
     public virtual Rectangle OverlayBounds(ViewXf v) => Rectangle.Empty;
