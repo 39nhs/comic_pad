@@ -456,6 +456,7 @@ public static class FilterOps
         var stack = new int[ink.Length];
         var comp = new List<int>();
         int removed = 0;
+        var nb = new int[8];   // 이웃 8방향 (루프 밖에서 한 번만 만듦)
         for (int s = 0; s < ink.Length; s++)
         {
             if (ink[s] == 0 || seen[s] != 0) continue;
@@ -465,7 +466,8 @@ public static class FilterOps
             {
                 int i = stack[--sp]; comp.Add(i);
                 int x = i % w;
-                Span<int> nb = stackalloc int[8] { i - w, i + w, x > 0 ? i - 1 : -1, x < w - 1 ? i + 1 : -1, x > 0 ? i - w - 1 : -1, x < w - 1 ? i - w + 1 : -1, x > 0 ? i + w - 1 : -1, x < w - 1 ? i + w + 1 : -1 };
+                nb[0] = i - w; nb[1] = i + w; nb[2] = x > 0 ? i - 1 : -1; nb[3] = x < w - 1 ? i + 1 : -1;
+                nb[4] = x > 0 ? i - w - 1 : -1; nb[5] = x < w - 1 ? i - w + 1 : -1; nb[6] = x > 0 ? i + w - 1 : -1; nb[7] = x < w - 1 ? i + w + 1 : -1;
                 foreach (int j in nb)
                 {
                     if (j < 0 || j >= ink.Length || seen[j] != 0 || ink[j] == 0) continue;
