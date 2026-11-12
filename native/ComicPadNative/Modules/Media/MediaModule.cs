@@ -32,6 +32,7 @@ public sealed class MediaModule : IModule
         Registry.Menus.RemoveAll(m => m.Path == oldAnim); Registry.Commands.Remove(oldAnim);
         Registry.Menu("애니/애니메이션 내보내기 (GIF·WebP·APNG·MP4·PNG)…", () => AnimMedia.Dialog(), Keys.None, HasFrames, order: 210);
         Registry.Menu("애니/동영상으로 내보내기 (MP4)…", () => AnimMedia.Dialog("mp4"), Keys.None, HasFrames, order: 212);
+        Registry.Menu("애니/동영상으로 내보내기 (WebM)…", () => AnimMedia.Dialog("webm"), Keys.None, HasFrames, order: 213);
         Replace("애니/움짤 만들기 (바로, GIF)", AnimMedia.Quick, enabled: HasFrames, order: 200);
         AnimDialogs.ExportOverride = p => AnimMedia.Dialog(p);   // 애니 패널의 "내보내기 (형식 고르기)" 버튼도 새 창으로
         AnimDialogs.QuickOverride = AnimMedia.Quick;
@@ -48,6 +49,13 @@ public sealed class MediaModule : IModule
         Replace("파일/이미지 가져오기 (새 레이어)…", StillExport.ImportImage, enabled: HasDoc, order: 46);
         Replace("만화/작품 전체 내보내기…", StillExport.ExportStory, enabled: InStory, order: 806);
         FileCommands.Openers[".webp"] = StillExport.OpenWebP;
+
+        // ---- 소리: WAV 가 아닌 것(MP3·M4A·WMA·FLAC …)은 Media Foundation 으로 풀기 ----
+        Sound.ExtraDecoder = (bytes, ext) =>
+        {
+            var (rate, ch, data) = MfAudio.DecodeBytes(bytes, ext);
+            return new Pcm { Rate = rate, Channels = ch, Ch = data, Mono = data[0] };
+        };
     }
 
     public void Init()

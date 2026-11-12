@@ -47,6 +47,8 @@ public static partial class GapsTest
         yield return ("WebM 사이 프레임", TestWebmInter);
         yield return ("Vorbis 소리", TestVorbis);
         yield return ("MF 소리 풀기", TestMfAudio);
+        yield return ("애니 WebM", TestAnimWebm);
+        yield return ("타임랩스 WebM", TestTimelapseWebm);
     }
 
     // ------------------------------------------------------------------ 시험 그림

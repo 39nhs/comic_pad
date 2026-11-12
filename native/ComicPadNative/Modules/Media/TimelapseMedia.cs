@@ -1,5 +1,5 @@
 // 타임랩스 동영상 (웹 판 ui/timelapse.js 의 exportTimelapse): 찍어 둔 장면(Extras 모듈이 data/timelapse/<id>/ 에 기록)을
-// MP4(H.264) · GIF · AVI(Motion-JPEG) 로. 웹 판과 같은 규칙: 30fps, 길이(초)×30 장, 마지막 완성 그림을 hold 초 더.
+// MP4(H.264) · WebM(VP8, 직접 짠 인코더) · GIF · AVI(Motion-JPEG) 로. 웹 판과 같은 규칙: 30fps, 길이(초)×30 장, 마지막 완성 그림을 hold 초 더.
 // 작품 파일의 doc.timelapse = { id, on } 은 Extras 모듈이 웹 판과 같은 모양으로 읽고 씀 (여기서는 읽기만).
 using System.Text.Json.Nodes;
 using ComicPadNative.Core;
@@ -55,6 +55,24 @@ public static class TimelapseMedia
         mp.Finish();
     }
 
+    /// <summary>WebM (VP8, 웹 판 타임랩스와 같은 형식). 같은 장면이 이어지는 동안은 블록을 다시 넣지 않음 (가변 빠르기). 긴 쪽 1920 이하</summary>
+    public static void MakeWebm(List<string> keys, string path, double sec, double hold, double quality = 0.8)
+    {
+        var (w0, h0) = FirstSize(keys);
+        var (w, h) = WebmExport.FitSize(w0, h0, 1920);
+        var plan = Plan(keys.Count, sec, hold);
+        IEnumerable<(uint[], long)> Frames()
+        {
+            int shown = -1; uint[] px = null;
+            for (int f = 0; f < plan.Count; f++)
+            {
+                if (plan[f] != shown) { px = Load(keys[plan[f]], w, h); shown = plan[f]; }
+                yield return (px, (long)Math.Round(f * 1000.0 / Fps));
+            }
+        }
+        WebmExport.Write(path, w, h, Frames(), (long)Math.Round(plan.Count * 1000.0 / Fps), quality, null, Fps);
+    }
+
     /// <summary>GIF (긴 쪽 640px, 10fps — 움짤로 올리기 좋게)</summary>
     public static void MakeGif(List<string> keys, string path, double sec, double hold, int maxSide = 640, int fps = 10)
     {
@@ -81,10 +99,10 @@ public static class TimelapseMedia
         if (keys.Count < 2) { App.Toast("찍힌 장면이 아직 없습니다. 보기 > 타임랩스 기록을 켜고 그려 보세요"); return; }
         var v = Dlg.Form("타임랩스 동영상 만들기", new[]
         {
-            Field.Segment("fmt", "형식", App.Get("timelapseFmt", "mp4"), ("mp4", "MP4 (H.264)"), ("gif", "GIF (움짤)"), ("avi", "AVI (Motion-JPEG)")),
+            Field.Segment("fmt", "형식", App.Get("timelapseFmt", "mp4"), ("mp4", "MP4 (H.264)"), ("webm", "WebM (VP8)"), ("gif", "GIF (움짤)"), ("avi", "AVI (Motion-JPEG)")),
             Field.Num("sec", "동영상 길이 (초)", Math.Min(30, Math.Max(5, Math.Round(keys.Count / 10.0))), 1, 600),
             Field.Num("hold", "마지막 완성 그림 보여 주기 (초)", 2, 0, 30),
-            Field.Info($"찍힌 장면 {keys.Count}장. MP4 는 30fps, GIF 는 긴 쪽 640px·10fps 로 만듭니다."),
+            Field.Info($"찍힌 장면 {keys.Count}장. MP4·WebM 은 30fps (WebM 은 긴 쪽 1920px 이하), GIF 는 긴 쪽 640px·10fps 로 만듭니다."),
         }, "만들기");
         if (v == null) return;
         string fmt = (string)v["fmt"];
@@ -97,6 +115,7 @@ public static class TimelapseMedia
             try
             {
                 if (fmt == "mp4") MakeMp4(keys, path, sec, hold);
+                else if (fmt == "webm") MakeWebm(keys, path, sec, hold);
                 else if (fmt == "gif") MakeGif(keys, path, sec, hold);
                 else Extras.Timelapse.MakeVideo(keys, path, sec, hold);
                 ok = true;
