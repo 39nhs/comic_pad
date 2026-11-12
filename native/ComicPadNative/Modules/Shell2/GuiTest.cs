@@ -12,6 +12,7 @@ public static class GuiTest
 
     public static void Run()
     {
+        Directory.CreateDirectory(Dir);
         var log = new StringBuilder(); int fail = 0;
         void T(string name, Action a)
         {

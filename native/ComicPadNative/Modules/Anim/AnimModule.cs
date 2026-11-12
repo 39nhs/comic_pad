@@ -62,13 +62,23 @@ public sealed class AnimModule : IModule
 
         // 이벤트
         string lastActive = null;
+        // 아래 타임라인: 평소에는 숨기고, 애니메이션 트랙이 생기거나 그런 작품을 열면 보이게
+        bool hadTracks = false;
+        void ShowTimelineIfAnim()
+        {
+            bool has = AnimCore.Tracks(App.Doc).Count > 0;
+            if (has != hadTracks && App.Main is UI.MainForm f && !App.Get("bottomDock", false)) f.PeekBottomDock(has);   // 늘 보이기로 정했으면 그대로
+            hadTracks = has;
+        }
         App.DocChanged += () =>
         {
             if (AnimCore.Playing) Playback.Stop();
             AnimCore.Migrate(App.Doc);
             lastActive = App.Doc?.ActiveId;
             AnimCore.Emit();
+            hadTracks = false; ShowTimelineIfAnim();
         };
+        App.LayersChanged += ShowTimelineIfAnim;
         // 레이어 패널에서 셀을 고르면 그 셀이 보이는 프레임으로
         App.LayersChanged += () =>
         {

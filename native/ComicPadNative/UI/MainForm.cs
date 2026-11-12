@@ -46,7 +46,7 @@ public sealed class MainForm : Form
         {
             var btabs = new TabControl { Dock = DockStyle.Fill };
             foreach (var p in bottomDefs) { try { var c = p.Create(); c.Dock = DockStyle.Fill; btabs.TabPages.Add(Page(p.Title, c)); } catch (Exception ex) { App.Toast($"패널 {p.Title} 오류: {ex.Message}"); } }
-            bottomDock = new Panel { Dock = DockStyle.Bottom, Height = Math.Clamp(App.Get("bottomDockH", 220), 80, 800), BackColor = Opt.Bg, Visible = App.Get("bottomDock", true) };
+            bottomDock = new Panel { Dock = DockStyle.Bottom, Height = Math.Clamp(App.Get("bottomDockH", 220), 80, 800), BackColor = Opt.Bg, Visible = App.Get("bottomDock", false) };
             bottomDock.Controls.Add(btabs);
             bottomSplit = new Splitter { Dock = DockStyle.Bottom, Height = 5, BackColor = Opt.Bg, Visible = bottomDock.Visible };
             bottomSplit.SplitterMoved += (_, _) => App.Set("bottomDockH", bottomDock.Height);
@@ -80,6 +80,8 @@ public sealed class MainForm : Form
         get => bottomDock?.Visible == true;
         set { if (bottomDock == null) return; bottomDock.Visible = bottomSplit.Visible = value; App.Set("bottomDock", value); }
     }
+    /// <summary>이 작품 동안만 아래 패널 보이기/숨기기 (설정에 남기지 않음 — 애니 작품을 열 때 자동으로)</summary>
+    public void PeekBottomDock(bool v) { if (bottomDock != null) bottomDock.Visible = bottomSplit.Visible = v; }
 
     static TabPage Page(string title, Control c) { var p = new TabPage(title) { BackColor = Opt.Bg }; p.Controls.Add(c); return p; }
 
