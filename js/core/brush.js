@@ -242,6 +242,11 @@ export class Stroke {
       const mk = makeMaskTip(p.hardness, p.tip === 'grain' ? p.grain : 0, 0);
       this.maskTips.push(mk); this.tips.push(tintTip(mk, this.color));
     }
+    // 선뭉침 방지: 딱딱한 원 + 늘 불투명이면 찍은 원들을 하나의 모양으로 합쳐 칠한다 (가장자리 부드러움이 겹쳐 쌓이지 않게)
+    this.union = this.hardRound && !this.vector && !this.pixel && (p.flow ?? 1) >= 1 && !p.pressureOpacity && !p.speedOpacity
+      && !p.tiltOpacity && !(p.mix > 0) && !p.pressureColor && !p.hueJitter && !p.satJitter && !p.valJitter && !p.shading
+      && !(p.dualTip && p.dualTip !== 'none') && !p.ribbon && app.settings.penFeel?.unionDabs !== false;
+    this.ud = []; this.ug = new Map();
     // 겹침 보정: 압력 불투명도는 한 지점에 겹치는 dab 수를 고려
     this.overlap = Math.max(1, 1 / Math.max(0.02, p.spacing));
   }
@@ -350,6 +355,8 @@ export class Stroke {
         ctx.ellipse(x, y, Math.max(r, 0.5), Math.max(r * p.flatRatio, 0.5), ang, 0, Math.PI * 2);
         ctx.fill();
       }
+    } else if (this.hardRound && this.union) {
+      this._udab(x, y, Math.max(r, 0.5), size < 1 ? alpha * size : alpha);   // 그리는 것은 _flush 에서 한 번에
     } else if (this.hardRound) {
       ctx.setTransform(1, 0, 0, 1, 0, 0);
       ctx.globalAlpha = size < 1 ? alpha * size : alpha;
@@ -723,10 +730,74 @@ export class Stroke {
     if (pts.length > 4) pts.shift();
   }
 
+  /** 미뤄 둔 합쳐 칠하기를 지금 하기 (선택 영역 자르기도 그 다음에) */
+  _syncUnion() {
+    this.uq = false;
+    const b = this.udirty;
+    if (!b) return;
+    this.udirty = null;
+    const rb = this._unionRedraw(b);
+    this.ctx.setTransform(1, 0, 0, 1, 0, 0);
+    this.ctx.globalAlpha = 1;
+    if (!this.noClip) this.doc.selection.clipTo(this.ctx, rb);
+  }
+
+  /** 합쳐 칠할 원 하나 기억 (64px 칸으로 나눠 두어 근처 것만 빨리 찾음) */
+  _udab(x, y, r, a) {
+    const i = this.ud.length, C = 64;
+    this.ud.push({ x, y, r, a });
+    for (let cy = Math.floor((y - r - 1) / C); cy <= Math.floor((y + r + 1) / C); cy++) {
+      for (let cx = Math.floor((x - r - 1) / C); cx <= Math.floor((x + r + 1) / C); cx++) {
+        const k = cx * 100003 + cy;
+        let l = this.ug.get(k);
+        if (!l) this.ug.set(k, (l = []));
+        l.push(i);
+      }
+    }
+  }
+
+  /** 바뀐 영역을 지우고, 그 영역에 닿는 원들을 하나의 모양으로 한 번에 칠한다 → 겹친 가장자리가 진해지지 않음 */
+  _unionRedraw(b) {
+    const ctx = this.ctx, C = 64;
+    const x0 = Math.floor(b.x), y0 = Math.floor(b.y), x1 = Math.ceil(b.x + b.w), y1 = Math.ceil(b.y + b.h);
+    const full = new Path2D(), faint = [], seen = new Set();
+    for (let cy = Math.floor(y0 / C); cy <= Math.floor(y1 / C); cy++) {
+      for (let cx = Math.floor(x0 / C); cx <= Math.floor(x1 / C); cx++) {
+        for (const i of this.ug.get(cx * 100003 + cy) || []) {
+          if (seen.has(i)) continue;
+          seen.add(i);
+          const d = this.ud[i];
+          if (d.x + d.r + 1 < x0 || d.x - d.r - 1 > x1 || d.y + d.r + 1 < y0 || d.y - d.r - 1 > y1) continue;
+          if (d.a >= 0.999) { full.moveTo(d.x + d.r, d.y); full.arc(d.x, d.y, d.r, 0, Math.PI * 2); } else faint.push(d);
+        }
+      }
+    }
+    ctx.save();
+    ctx.setTransform(1, 0, 0, 1, 0, 0);
+    ctx.beginPath(); ctx.rect(x0, y0, x1 - x0, y1 - y0); ctx.clip();
+    ctx.clearRect(x0, y0, x1 - x0, y1 - y0);
+    ctx.globalCompositeOperation = 'source-over';
+    ctx.fillStyle = this.color;
+    ctx.globalAlpha = 1;
+    ctx.fill(full);
+    for (const d of faint) { ctx.globalAlpha = d.a; ctx.beginPath(); ctx.arc(d.x, d.y, d.r, 0, Math.PI * 2); ctx.fill(); }   // 아주 가는 끝부분
+    ctx.restore();
+    return { x: x0, y: y0, w: x1 - x0, h: y1 - y0 };
+  }
+
   _flush() {
     if (!this.batch) return null;
-    const b = this.batch;
+    let b = this.batch;
     this.batch = null;
+    if (this.union && this.ud.length) {
+      // 합쳐 칠하기는 이벤트 하나(펜 점 여러 개)가 끝난 뒤 한 번만 (점마다 하면 느림)
+      b = { x: Math.floor(b.x), y: Math.floor(b.y), w: Math.ceil(b.x + b.w) - Math.floor(b.x), h: Math.ceil(b.y + b.h) - Math.floor(b.y) };
+      this.udirty = rectUnion(this.udirty, b);
+      this.total = rectUnion(this.total, b);
+      if (!this.uq) { this.uq = true; queueMicrotask(() => this._syncUnion()); }
+      app.requestRender();
+      return b;
+    }
     this.ctx.setTransform(1, 0, 0, 1, 0, 0);
     this.ctx.globalAlpha = 1;
     if (!this.noClip) this.doc.selection.clipTo(this.ctx, b);
@@ -748,25 +819,28 @@ export class Stroke {
   }
 
   end(lastPt) {
-    // 보정 지연분을 마지막 지점까지 따라잡기
+    // 보정 지연분을 마지막 지점까지 따라잡기 (필압은 지금 값 → 펜을 뗄 때 잰 값으로 점점, 끝이 뭉툭하게 뭉치지 않게)
     if (lastPt && this.p.stabilizer > 0 && this.p.catchUp !== false) {
+      const p0 = this.ps ?? lastPt.p, p1 = Math.min(p0, lastPt.p ?? p0);
+      const pAt = (i, n) => p0 + (p1 - p0) * (i / n);
       if (this.sp) {
         // 무거운 펜: 펜 끝에 멈춰 설 때까지 조금 더 움직이기
         const t0 = this.sp.t;
-        for (let i = 1; i <= 12; i++) this._push(this._spring({ ...lastPt, p: this.ps ?? lastPt.p, t: t0 + i * 16 }));
-        this._push({ x: lastPt.x, y: lastPt.y, p: this.ps ?? lastPt.p, t: t0 + 220 });
+        for (let i = 1; i <= 12; i++) this._push(this._spring({ ...lastPt, p: pAt(i, 12), t: t0 + i * 16 }));
+        this._push({ x: lastPt.x, y: lastPt.y, p: p1, t: t0 + 220 });
       } else if (this.lz) {
-        this._push({ x: lastPt.x, y: lastPt.y, p: this.ps ?? lastPt.p, t: lastPt.t });
+        this._push({ x: lastPt.x, y: lastPt.y, p: p1, t: lastPt.t });
       } else if (this.eu) {
         const t0 = this.et ?? 0;
-        for (let i = 1; i <= 8; i++) this._push(this._euro({ ...lastPt, p: this.ps ?? lastPt.p, t: t0 + i * 12 }));
-        this._push({ x: lastPt.x, y: lastPt.y, p: this.ps ?? lastPt.p, t: t0 + 120 });
+        for (let i = 1; i <= 8; i++) this._push(this._euro({ ...lastPt, p: pAt(i, 8), t: t0 + i * 12 }));
+        this._push({ x: lastPt.x, y: lastPt.y, p: p1, t: t0 + 120 });
       } else for (let i = 0; i < this.p.stabilizer * 2 + 1; i++) this._push(this._smooth(lastPt));
     }
     const last = this.pts[this.pts.length - 1];
     if (last && this.lastMid && this.pts.length > 1) this._line(this.lastMid, last);
     if (this.queue.length) this._flushTaper();
     this._flush();
+    this._syncUnion();
     this.ctx.restore();
     return this.total;
   }
@@ -780,6 +854,7 @@ export class Stroke {
     if (last && this.lastMid && this.pts.length > 1) this._line(this.lastMid, last);
     if (this.queue.length) this._flushTaper();
     this._flush();
+    this._syncUnion();
     this.ctx.restore();
     return this.total;
   }
@@ -792,6 +867,7 @@ export class Stroke {
     }
     this.raw = []; this.pts = []; this.next = 0; this.batch = null; this.lastMid = null;
     this.travel = 0; this.queue = [];
+    this.ud = []; this.ug = new Map(); this.udirty = null;
     const keep = this.total;
     this.total = null;
     return keep;
@@ -809,6 +885,7 @@ export class Stroke {
     this.next = this._spacing(list[0].p);
     for (let i = 1; i < list.length; i++) this._line(list[i - 1], list[i]);
     this._flush();
+    this._syncUnion();                       // 도형·직선은 바로 이어서 확정하는 경우가 있어 지금 칠함
     this.ctx.restore();
     this.p = { ...this.p, stabilizer: saved };
     this.noTaper = false;
