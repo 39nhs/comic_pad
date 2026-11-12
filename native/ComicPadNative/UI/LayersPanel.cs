@@ -40,7 +40,7 @@ public sealed class LayersPanel : UserControl
         list.AllowDrop = true;
         list.DragOver += (_, e) => e.Effect = DragDropEffects.Move;
         list.DragDrop += OnDrop;
-        list.DoubleClick += (_, _) => Rename();
+        list.DoubleClick += (_, _) => { if (App.Active?.IsAdjust == true && Registry.Commands.TryGetValue("레이어/조정 레이어 값 수정", out var edit) && edit != null) MainForm.Run(edit, "조정 레이어 값 수정"); else Rename(); };
         blend.SelectedIndexChanged += (_, _) => { if (!syncing) Prop("합성 모드", l => l.Blend = Px.Modes[blend.SelectedIndex].id); };
         opacity.Scroll += (_, _) => { opLabel.Text = opacity.Value + "%"; if (!syncing) { var l = App.Active; if (l != null) { l.Opacity = opacity.Value / 100f; App.InvalidateAll(); } } };
         opacity.MouseUp += (_, _) => { var l = App.Active; if (l != null) { float v = l.Opacity; l.Opacity = opBefore; Prop("불투명도", x => x.Opacity = v); } };

@@ -40,6 +40,7 @@ public sealed class ColorPanel : UserControl
         bgc.Click += (_, _) => { (App.Fg, App.Bg) = (App.Bg, App.Fg); App.SetColor(App.Fg); };
         hex.KeyDown += (_, e) => { if (e.KeyCode == Keys.Enter) { App.SetColor(Px.FromHex(hex.Text, App.Fg)); AddRecent(); e.SuppressKeyPress = true; } };
         App.ColorChanged += Sync;
+        App.SettingsChanged += () => { if (!IsDisposed) { BuildSwatches(); BuildRecent(); } };   // 다른 곳에서 팔레트·최근 색을 바꾸면
         BuildSwatches(); BuildRecent(); Sync();
     }
 

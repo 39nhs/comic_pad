@@ -31,7 +31,7 @@ public static class FileCommands
     public static void Open()
     {
         if (!ConfirmDiscard()) return;
-        using var dlg = new OpenFileDialog { Filter = "ComicPad·이미지|*.cpad;*.png;*.jpg;*.jpeg;*.bmp;*.gif;*.webp;*.psd|ComicPad (*.cpad)|*.cpad|모든 파일|*.*", InitialDirectory = ProjectsDir };
+        using var dlg = new OpenFileDialog { Filter = "ComicPad·이미지|*.cpad;*.png;*.jpg;*.jpeg;*.bmp;*.gif;*.webp;*.psd;*.psb|ComicPad (*.cpad)|*.cpad|모든 파일|*.*", InitialDirectory = ProjectsDir };
         if (dlg.ShowDialog(App.Main) != DialogResult.OK) return;
         OpenPath(dlg.FileName);
     }
@@ -359,6 +359,7 @@ public sealed class CoreModule : IModule
         Registry.Menu("선택/선택 해제", SelectCommands.None, Keys.Control | Keys.D, HasDoc, order: 20);
         Registry.Menu("선택/선택 반전", SelectCommands.Invert, Keys.Control | Keys.Shift | Keys.I, HasDoc, order: 30);
 
+        Registry.Menu("보기/아래 패널 보이기 (타임라인)", () => { if (App.Main is MainForm f) f.BottomDockVisible = !f.BottomDockVisible; }, Keys.None, () => Registry.Panels.Any(p => p.Dock == "bottom"), () => (App.Main as MainForm)?.BottomDockVisible == true, order: 95);
         Registry.Menu("보기/화면에 맞추기", () => V()?.Fit(), Keys.Control | Keys.D0, order: 10);
         Registry.Menu("보기/100%", () => V()?.SetZoom(1), Keys.Control | Keys.D1, order: 20);
         Registry.Menu("보기/확대", () => V()?.SetZoom(V().V.Zoom * 1.25), Keys.Control | Keys.Oemplus, order: 30);

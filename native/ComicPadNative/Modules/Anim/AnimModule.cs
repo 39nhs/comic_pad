@@ -11,7 +11,7 @@ public sealed class AnimModule : IModule
         Hooks.AnimFolder = AnimRender.RenderFolder;
         Registry.Tool(new MotionTool());
         Registry.Tool(new PixelPencilTool());
-        Registry.Panel("애니", () => new AnimPanel(), "right", 300);
+        Registry.Panel("애니 타임라인", () => new AnimPanel(), "bottom", 300);
         FileCommands.Openers[".aseprite"] = Aseprite.Open;
         FileCommands.Openers[".ase"] = Aseprite.Open;
 
@@ -87,6 +87,7 @@ public sealed class AnimModule : IModule
         };
         App.ColorChanged += PixelTools.OnColorChanged;
         PixelEdit.Finishing += PixelTools.OnPixelsFinishing;
+        UI.CanvasView.CrispView = PixelArt.IsArt;
         Application.AddMessageFilter(new AnimKeys());
     }
 }

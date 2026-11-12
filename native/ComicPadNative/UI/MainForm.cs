@@ -15,7 +15,7 @@ public sealed class MainForm : Form
     readonly Panel optionsHost = new() { Dock = DockStyle.Fill, AutoScroll = true, BackColor = Opt.Bg };
     readonly System.Windows.Forms.Timer toastTimer = new() { Interval = 4000 };
 
-    static readonly string[] MenuOrder = { "파일", "편집", "레이어", "선택", "필터", "만화", "애니", "AI", "보기", "도움말" };
+    static readonly string[] MenuOrder = { "파일", "편집", "레이어", "선택", "필터", "보정", "만화", "애니", "AI", "보기", "도움말" };
 
     public MainForm()
     {
@@ -40,7 +40,21 @@ public sealed class MainForm : Form
         right.Panel2.Controls.Add(optTitle);
 
         status.Items.AddRange(new ToolStripItem[] { stInfo, stPen, stView });
-        Controls.Add(Canvas);
+        // 아래: Dock == "bottom" 패널 (타임라인 등). 보기 메뉴에서 숨기기
+        var bottomDefs = Registry.Panels.Where(p => p.Dock == "bottom").OrderBy(p => p.Order).ToList();
+        if (bottomDefs.Count > 0)
+        {
+            var btabs = new TabControl { Dock = DockStyle.Fill };
+            foreach (var p in bottomDefs) { try { var c = p.Create(); c.Dock = DockStyle.Fill; btabs.TabPages.Add(Page(p.Title, c)); } catch (Exception ex) { App.Toast($"패널 {p.Title} 오류: {ex.Message}"); } }
+            bottomDock = new Panel { Dock = DockStyle.Bottom, Height = Math.Clamp(App.Get("bottomDockH", 220), 80, 800), BackColor = Opt.Bg, Visible = App.Get("bottomDock", true) };
+            bottomDock.Controls.Add(btabs);
+            bottomSplit = new Splitter { Dock = DockStyle.Bottom, Height = 5, BackColor = Opt.Bg, Visible = bottomDock.Visible };
+            bottomSplit.SplitterMoved += (_, _) => App.Set("bottomDockH", bottomDock.Height);
+            Controls.Add(Canvas);
+            Controls.Add(bottomSplit);
+            Controls.Add(bottomDock);
+        }
+        else Controls.Add(Canvas);
         Controls.Add(right);
         Controls.Add(tools);
         Controls.Add(menu);
@@ -58,6 +72,13 @@ public sealed class MainForm : Form
         Canvas.ViewChanged += UpdateStatus;
         toastTimer.Tick += (_, _) => { toastTimer.Stop(); UpdateStatus(); };
         FormClosing += OnClosingForm;
+    }
+
+    Panel bottomDock; Splitter bottomSplit;
+    public bool BottomDockVisible
+    {
+        get => bottomDock?.Visible == true;
+        set { if (bottomDock == null) return; bottomDock.Visible = bottomSplit.Visible = value; App.Set("bottomDock", value); }
     }
 
     static TabPage Page(string title, Control c) { var p = new TabPage(title) { BackColor = Opt.Bg }; p.Controls.Add(c); return p; }
@@ -143,6 +164,16 @@ public sealed class MainForm : Form
             {
                 int i = list.FindIndex(t => t == App.Tool);
                 App.SetTool(list[(i + 1) % list.Count].Id);
+                return true;
+            }
+        }
+        // 메뉴 단축키 중 Windows 메뉴가 못 받는 키 (한 글자·Shift+글자·PageUp 등)
+        if (!IsValidShortcut(keyData))
+        {
+            var m = Registry.Menus.Find(x => x.Shortcut == keyData && x.Run != null);
+            if (m != null)
+            {
+                if (m.Enabled == null || m.Enabled()) Run(m.Run, m.Path);
                 return true;
             }
         }

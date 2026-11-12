@@ -32,7 +32,6 @@ public sealed class FiltersModule : IModule
         RegisterAdjust();
         RegisterFilters();
         RegisterFileAndEdit();
-        Application.Idle += MoveAdjustMenu;
 
         // 시험 (창 없이): COMICPAD_FILTERS_SELFTEST=결과폴더 로 --render 실행
         var st = Environment.GetEnvironmentVariable("COMICPAD_FILTERS_SELFTEST");

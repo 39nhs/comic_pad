@@ -36,6 +36,8 @@ public class PaintTool : ToolBase
     System.Windows.Forms.Timer holdTimer;
     (double sx, double sy, double x, double y)? holdAt;
     VErase vErase;
+    // 자 맞추기 (만화 모듈의 자): 화면에서 8px 움직일 때까지 점을 모았다가 방향이 정해지면 자 위로
+    Modules.Comic.RulerSnap rsnap; readonly List<BPt> rpend = new(); bool rDecided, rPass;
 
     sealed class VErase { public Layer Layer; public JsonArray Before; public double R; public bool Whole, Cross; public double LX, LY; }
 
@@ -108,6 +110,8 @@ public class PaintTool : ToolBase
         lineMode = e.Shift; lineEnd = start;
         if (lineMode) stroke.Polyline(new[] { start, start });
         else stroke.Begin(new BPt(e.X, e.Y, pr, e.Time));
+        rsnap = !lineMode && Modules.Comic.RulerSnap.Active(doc) ? new Modules.Comic.RulerSnap(e.X, e.Y) : null;
+        rpend.Clear(); rDecided = rPass = false;
         if (!EraseMode && p.Color == null && !p.RoughOnly) AddRecentColor(Px.ToHex(App.Fg));
         Flush();
     }
@@ -157,8 +161,20 @@ public class PaintTool : ToolBase
         }
         else
         {
-            stroke.Add(new BPt(e.X, e.Y, pr > 0 ? pr : lastP, e.Time));
-            HoldCheck(e);
+            var q = new BPt(e.X, e.Y, pr > 0 ? pr : lastP, e.Time);
+            if (rsnap == null || rPass) { stroke.Add(q); HoldCheck(e); }
+            else if (rDecided) stroke.Add(RulerProj(q));
+            else
+            {
+                rpend.Add(q);
+                if (Math.Sqrt((e.SX - startSX) * (e.SX - startSX) + (e.SY - startSY) * (e.SY - startSY)) >= 8)
+                {
+                    rDecided = true;
+                    if (!rsnap.Decide(e.X, e.Y)) rPass = true;
+                    foreach (var pq in rpend) stroke.Add(rPass ? pq : RulerProj(pq));
+                    rpend.Clear();
+                }
+            }
         }
         Flush();
     }
@@ -206,6 +222,11 @@ public class PaintTool : ToolBase
         }
         if (stroke == null) return;
         var last = new BPt(e.X, e.Y, lastP, e.Time);
+        if (rsnap != null && !rPass)
+        {
+            if (rDecided) last = RulerProj(last);
+            else { foreach (var pq in rpend) stroke.Add(pq); rpend.Clear(); }
+        }
         var rect = lineMode ? stroke.Total : stroke.End(last);
         Flush();
         if (!rect.IsEmpty)
@@ -248,8 +269,11 @@ public class PaintTool : ToolBase
         App.Invalidate(r);
     }
 
+    BPt RulerProj(BPt q) { var (x, y) = rsnap.Project(q.X, q.Y); return new BPt(x, y, q.P, q.T); }
+
     void ResetState()
     {
+        rsnap = null; rpend.Clear();
         holdTimer?.Stop(); holdAt = null;
         stroke = null; apply = null; edit = null; lineMode = false;
     }

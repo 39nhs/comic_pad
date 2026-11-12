@@ -25,6 +25,21 @@ static class Program
             bmp.Save(args[2], System.Drawing.Imaging.ImageFormat.Png);
             return;
         }
+        // 모듈 자체 시험 (창 없이): --selftest brushes|3d 결과폴더  → 끝 코드 = 실패 수
+        if (args.Length == 3 && args[0] == "--selftest")
+        {
+            foreach (var t in typeof(Program).Assembly.GetTypes().Where(t => typeof(IModule).IsAssignableFrom(t) && !t.IsAbstract && !t.IsInterface))
+                try { ((IModule)Activator.CreateInstance(t)).Init(); } catch { }
+            Directory.CreateDirectory(args[2]);
+            if (args[1] == "3d") { Environment.ExitCode = Modules.Scene3D.SelfTest3D.Run(args[2]); return; }
+            if (args[1] == "brushes")
+            {
+                var res = Modules.BrushEngine.SelfTest.Run(args[2]);
+                File.WriteAllLines(Path.Combine(args[2], "report.txt"), res.Select(r => (r.Ok ? "PASS " : "FAIL ") + r.Name + " " + r.Detail));
+                Environment.ExitCode = res.Count(r => !r.Ok); return;
+            }
+            Environment.ExitCode = 99; return;
+        }
         if (args.Length == 5 && args[0] == "--ai-test") { Environment.ExitCode = Modules.AI.AiTest.Run(args[1], args[2], double.Parse(args[3]), double.Parse(args[4])); return; }
         EnableMouseInPointer(true);            // 마우스도 펜·터치와 같은 포인터 메시지로
         ApplicationConfiguration.Initialize();

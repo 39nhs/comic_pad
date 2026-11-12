@@ -88,6 +88,9 @@ public sealed class CanvasView : Control
         e.Graphics.ReleaseHdc(hdc);
     }
 
+    /// <summary>true 면 축소해도 평균 내지 않고 가장 가까운 점 (픽셀 아트 보기)</summary>
+    public static Func<Document, bool> CrispView;
+
     /// <summary>화면 영역을 합성 캐시에서 그림 (축소면 여러 점 평균, 선택 영역 테두리 포함)</summary>
     unsafe void RenderScreen(Rectangle sr)
     {
@@ -101,7 +104,7 @@ public sealed class CanvasView : Control
             return;
         }
         double z = V.Zoom;
-        int k = z >= 1 ? 1 : Math.Min(4, (int)Math.Ceiling(1 / z));
+        int k = z >= 1 || CrispView?.Invoke(d) == true ? 1 : Math.Min(4, (int)Math.Ceiling(1 / z));
         // 화면 → 문서 아핀 변환 계수
         var (ox, oy) = V.ToDoc(0, 0); var (xx, xy) = V.ToDoc(1, 0); var (yx, yy) = V.ToDoc(0, 1);
         double ax = xx - ox, ay = xy - oy, bxv = yx - ox, byv = yy - oy;
