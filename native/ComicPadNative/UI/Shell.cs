@@ -153,6 +153,7 @@ public sealed class ShellModule : IModule
     static bool WantStartDialog()
     {
         if (!App.Get("startDialog", true)) return false;
+        if (Chrome.UiShot.Active) return false;
         if (Environment.GetCommandLineArgs().Skip(1).Any(File.Exists)) return false;
         foreach (System.Collections.DictionaryEntry e in Environment.GetEnvironmentVariables())
         {

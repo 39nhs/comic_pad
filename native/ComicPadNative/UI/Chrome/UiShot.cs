@@ -8,10 +8,14 @@ namespace ComicPadNative.UI.Chrome;
 
 public static class UiShot
 {
+    /// <summary>화면 찍기 중 (시작 창 등을 띄우지 않게)</summary>
+    public static bool Active;
+
     public static void Hook(MainForm f)
     {
         string shot = Environment.GetEnvironmentVariable("COMICPAD_UI_SHOT");
         if (string.IsNullOrEmpty(shot)) return;
+        Active = true;
         // Program.cs 의 예전 찍기(창 전체, 2초)는 쓰지 않게: 이 과정 안에서만 변수를 지움
         Environment.SetEnvironmentVariable("COMICPAD_UI_SHOT", null);
         f.Shown += (_, _) =>
