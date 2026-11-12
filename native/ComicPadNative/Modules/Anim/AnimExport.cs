@@ -1,6 +1,6 @@
 // 애니메이션 내보내기 — 웹 판 anim.js(exportPNGs·GIF) + animexport.js(APNG)
 // 프레임 순서는 태그·방향을 따름, 카메라 키가 있으면 그 영역만 확대·회전해서. 결과는 data/exports 에.
-// (WebP·MP4·WebM 은 네이티브에 인코더가 없어 아직 없음)
+// (WebP·MP4 는 Media 모듈 — AnimDialogs 의 ExportOverride 훅으로 그쪽 창이 열림)
 using ComicPadNative.Core;
 
 namespace ComicPadNative.Modules.Anim;

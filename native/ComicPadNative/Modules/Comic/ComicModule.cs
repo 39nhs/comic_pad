@@ -78,7 +78,7 @@ public sealed class ComicModule : IModule
         Registry.Menu("만화/웹툰 미리보기 (휴대폰 폭)", () => Run(Manuscript.WebtoonPreview), Keys.None, HasDoc, order: 35);
         Registry.Menu("만화/-3", null, order: 40);
         Registry.Menu("만화/유선 도구", () => App.SetTool("speedlines"), order: 41);
-        Registry.Menu("만화/플래시 효과 (우니/베타)…", () => Run(Flash.Dialog), Keys.None, HasDoc, order: 42);
+        Registry.Menu("만화/플래시 효과 (우니∕베타)…", () => Run(Flash.Dialog), Keys.None, HasDoc, order: 42);
         Registry.Menu("만화/방사선 자 (집중선용)", () => Run(() => Rulers.Add("radial")), Keys.None, HasDoc, order: 43);
         Registry.Menu("파일/인쇄·투고 전 점검…", () => Run(Preflight.Dialog), Keys.None, HasDoc, order: 60);
 

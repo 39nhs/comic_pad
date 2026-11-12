@@ -56,8 +56,8 @@ public sealed class AnimModule : IModule
         Registry.Menu("필터/색 수 줄이기 (팔레트·디더링)…", PixelTools.Quantize, Keys.None, HasDoc, order: 910);
         Registry.Menu("필터/팔레트 색 바꾸기 (같은 색 한꺼번에)…", PixelTools.ReplaceColor, Keys.None, HasDoc, order: 920);
         Registry.Menu("필터/팔레트 색으로만 칠하기 (이 작품)", PixelTools.ToggleLock, Keys.None, HasDoc, () => PixelArt.IsLocked(App.Doc), order: 930);
-        Registry.Menu("필터/팔레트 가져오기 (.gpl/.hex)…", PixelTools.ImportPalette, Keys.None, HasDoc, order: 940);
-        Registry.Menu("필터/팔레트 내보내기 (.gpl/.hex)…", PixelTools.ExportPalette, Keys.None, null, order: 950);
+        Registry.Menu("필터/팔레트 가져오기 (.gpl∕.hex)…", PixelTools.ImportPalette, Keys.None, HasDoc, order: 940);
+        Registry.Menu("필터/팔레트 내보내기 (.gpl∕.hex)…", PixelTools.ExportPalette, Keys.None, null, order: 950);
         Registry.Menu("필터/가져온 팔레트를 앱 팔레트로 쓰기 (Aseprite)", PixelTools.UseImportedPalette, Keys.None, () => Aseprite.PaletteOf(App.Doc)?.Count > 0, order: 960);
 
         // 이벤트

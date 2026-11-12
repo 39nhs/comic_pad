@@ -17,8 +17,7 @@ static class Program
         if (args.Length == 3 && args[0] == "--roundtrip") { var d = CpadIO.Load(args[1]); CpadIO.Save(d, args[2]); return; }
         if (args.Length == 3 && args[0] == "--render")
         {
-            foreach (var t in typeof(Program).Assembly.GetTypes().Where(t => typeof(IModule).IsAssignableFrom(t) && !t.IsAbstract && !t.IsInterface))
-                try { ((IModule)Activator.CreateInstance(t)).Init(); } catch { }
+            InitModules();
             var d = CpadIO.Load(args[1]);
             var flat = App.Comp.Flatten(d);
             using var bmp = CpadIO.ToBitmap(flat, flat.Full);
@@ -28,8 +27,7 @@ static class Program
         // 모듈 자체 시험 (창 없이): --selftest brushes|3d 결과폴더  → 끝 코드 = 실패 수
         if (args.Length == 3 && args[0] == "--selftest")
         {
-            foreach (var t in typeof(Program).Assembly.GetTypes().Where(t => typeof(IModule).IsAssignableFrom(t) && !t.IsAbstract && !t.IsInterface))
-                try { ((IModule)Activator.CreateInstance(t)).Init(); } catch { }
+            InitModules();
             Directory.CreateDirectory(args[2]);
             if (args[1] == "3d") { Environment.ExitCode = Modules.Scene3D.SelfTest3D.Run(args[2]); return; }
             if (args[1] == "brushes")
@@ -48,14 +46,7 @@ static class Program
         AppDomain.CurrentDomain.UnhandledException += (_, e) => Report(e.ExceptionObject as Exception);
 
         App.LoadSettings();
-        // 모듈 자동 등록 (Core 먼저, 나머지는 이름 순)
-        var mods = typeof(Program).Assembly.GetTypes().Where(t => typeof(IModule).IsAssignableFrom(t) && !t.IsAbstract && !t.IsInterface)
-            .OrderBy(t => t == typeof(CoreModule) ? 0 : t.Name == "BasicToolsModule" ? 1 : 2).ThenBy(t => t.FullName);
-        foreach (var t in mods)
-        {
-            try { ((IModule)Activator.CreateInstance(t)).Init(); }
-            catch (Exception ex) { File.AppendAllText(Path.Combine(Path.GetTempPath(), "comicpad-native-error.log"), $"{DateTime.Now} 모듈 {t.Name}: {ex}\r\n"); }
-        }
+        InitModules();
 
         var form = new MainForm();
         form.Shown += (_, _) =>
@@ -69,6 +60,18 @@ static class Program
         auto.Tick += (_, _) => FileCommands.Autosave();
         auto.Start();
         Application.Run(form);
+    }
+
+    /// <summary>모듈 자동 등록 (Core 먼저, 기본 도구, 나머지는 이름 순 — 창·시험 모드 모두 같은 순서)</summary>
+    static void InitModules()
+    {
+        var mods = typeof(Program).Assembly.GetTypes().Where(t => typeof(IModule).IsAssignableFrom(t) && !t.IsAbstract && !t.IsInterface)
+            .OrderBy(t => t == typeof(CoreModule) ? 0 : t.Name == "BasicToolsModule" ? 1 : 2).ThenBy(t => t.FullName);
+        foreach (var t in mods)
+        {
+            try { ((IModule)Activator.CreateInstance(t)).Init(); }
+            catch (Exception ex) { try { File.AppendAllText(Path.Combine(Path.GetTempPath(), "comicpad-native-error.log"), $"{DateTime.Now} 모듈 {t.Name}: {ex}\r\n"); } catch { } }
+        }
     }
 
     static void Report(Exception e)

@@ -119,7 +119,7 @@ public static class AnimDialogs
         var fields = new List<Ui.Field>
         {
             Ui.Field.Seg("fmt", "형식", AnimExport.Formats.Select(x => (x.id, x.label.Split(" (")[0])).ToArray(), o.Fmt),
-            Ui.Field.Info("GIF · 커뮤니티·메신저 어디나 / APNG · 색 손실 없음·투명 / PNG 연번 · 프레임마다 파일 (WebP·MP4·WebM 은 네이티브 판에 아직 없음)"),
+            Ui.Field.Info("GIF · 커뮤니티·메신저 어디나 / APNG · 색 손실 없음·투명 / PNG 연번 · 프레임마다 파일"),
             Ui.Field.Seg("scale", "크기", new[] { ("0.25", "25%"), ("0.5", "50%"), ("1", "100%"), ("2", "200%"), ("4", "400%") }, J.F(o.Scale)),
             tags.Count > 0 ? Ui.Field.Seg("tag", "구간", TagOptions(d), o.Tag?.ToString() ?? "") : null,
             Ui.Field.Seg("loop", "반복 (GIF·APNG)", new[] { ("0", "무한"), ("1", "한 번"), ("2", "2번"), ("3", "3번") }, o.Loop.ToString()),
