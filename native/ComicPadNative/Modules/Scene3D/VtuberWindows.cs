@@ -1,7 +1,7 @@
 // 버튜버 모드 (웹 판 ui/vtuber.js 이식): 그린 캐릭터의 부위(레이어)를 정하고, 마우스·슬라이더·마이크로 움직여 방송 창·사진으로 내보낸다.
 //  - 부위 정하기: doc.Extra["vtuber"].parts = { 레이어 id: { role, depth?, key } } (웹 판과 같은 형식, 실행취소 가능)
 //  - 스튜디오: 숨쉬기·자동 깜빡임·머리카락 흔들림, 고개 yaw/pitch/roll 시차, 입 모양, 표정 키(1~9)
-//  - 얼굴 추적(웹캠)은 MediaPipe 가 있어야 해서 네이티브 판에는 아직 없음 — 대신 마우스로 고개·눈동자, Space/오른쪽 버튼으로 말하기
+//  - 얼굴 추적(웹캠)은 Vtuber.FaceSourceFactory (Vision 모듈: Media Foundation 카메라 + ONNX 얼굴 그물) — 없으면 마우스로 고개·눈동자, Space/오른쪽 버튼으로 말하기
 using System.Diagnostics;
 using System.Drawing.Drawing2D;
 using System.Drawing.Imaging;
@@ -123,6 +123,9 @@ public static class Vtuber
         catch (Exception e) { App.Toast(e.Message); }
     }
 
+    /// <summary>웹캠 얼굴 추적기를 만드는 곳 (Vision 모듈이 채움). 없으면 카메라 단추는 안내만</summary>
+    public static Func<IVFaceSource> FaceSourceFactory;
+
     internal sealed class StudioForm : Form
     {
         readonly VRigData rig;
@@ -144,7 +147,8 @@ public static class Vtuber
         int expr;
         bool autoBlink = true, idle = true, follow, talkKey, talkMouse;
         VMic mic;
-        System.Windows.Forms.Button micBtn;
+        IVFaceSource face;
+        System.Windows.Forms.Button micBtn, camBtn;
         BroadcastForm popup;
         string Bg { get => rig.Bg; set => rig.Bg = value; }
 
@@ -167,7 +171,7 @@ public static class Vtuber
             Controls.Add(left); Controls.Add(host);
             meter.Controls.Add(meterBar);
 
-            var camBtn = Ui3.Button("카메라 얼굴 추적 켜기", () => SetStatus("카메라 얼굴 추적은 네이티브 판에서 아직 쓸 수 없습니다 (MediaPipe 얼굴 모델은 웹 판에서만 돌아갑니다). 마우스·슬라이더로 움직이세요."), true);
+            camBtn = Ui3.Button("카메라 얼굴 추적 켜기", ToggleCam, true);
             micBtn = Ui3.Button("마이크로 입 움직이기", ToggleMic);
             side.Controls.Add(ui.Section("따라 움직이기", Ui3.Row(camBtn, micBtn), meter,
                 ui.Toggle("거울처럼 (내가 오른쪽을 보면 캐릭터도 화면 오른쪽)", () => rig.Mirror, v => rig.Mirror = v)));
@@ -186,7 +190,7 @@ public static class Vtuber
                 ui.Slider("눈동자 위아래", -1, 1, 0.01, () => manual.LookY, v => manual.LookY = v, Pm),
                 ui.Slider("눈 감기", 0, 1, 0.01, () => manual.BlinkL, v => manual.BlinkL = manual.BlinkR = v, v => Math.Round(v * 100) + "%"),
                 Ui3.Row(ui.Toggle("자동 깜빡임", () => autoBlink, v => autoBlink = v), ui.Toggle("가만히 흔들림", () => idle, v => idle = v)),
-                Ui3.Row(Ui3.Button("가운데로", () => { var t = manual; t.Yaw = t.Pitch = t.Roll = t.Mouth = t.Smile = t.Funnel = t.Brow = t.LookX = t.LookY = t.BlinkL = t.BlinkR = 0; ui.SyncAll(); }))));
+                Ui3.Row(Ui3.Button("가운데로", () => { var t = manual; t.Yaw = t.Pitch = t.Roll = t.Mouth = t.Smile = t.Funnel = t.Brow = t.LookX = t.LookY = t.BlinkL = t.BlinkR = 0; ui.SyncAll(); face?.Recalibrate(); }))));
 
             side.Controls.Add(ui.Section("조절",
                 ui.Slider("움직임 크기", 0, 2, 0.05, () => rig.Motion, v => rig.Motion = v, v => Math.Round(v * 100) + "%"),
@@ -249,6 +253,20 @@ public static class Vtuber
         protected override void OnKeyDown(KeyEventArgs e) { if (e.KeyCode == Keys.Space && ActiveControl is not TextBoxBase) { talkKey = true; e.Handled = e.SuppressKeyPress = true; } base.OnKeyDown(e); }
         protected override void OnKeyUp(KeyEventArgs e) { if (e.KeyCode == Keys.Space) talkKey = false; base.OnKeyUp(e); }
 
+        void ToggleCam()
+        {
+            if (face != null) { face.Dispose(); face = null; camBtn.Text = "카메라 얼굴 추적 켜기"; SetStatus("카메라를 껐습니다"); return; }
+            if (FaceSourceFactory == null) { SetStatus("카메라 얼굴 추적을 쓸 수 없습니다. 마우스·슬라이더로 움직이세요."); return; }
+            try
+            {
+                face = FaceSourceFactory();
+                if (face == null) return;
+                camBtn.Text = "카메라 끄기";
+                SetStatus("카메라 추적 준비 중… (영상은 저장·전송하지 않습니다)");
+            }
+            catch (Exception e) { face = null; SetStatus("카메라를 켜지 못했습니다: " + e.Message); }
+        }
+
         void ToggleMic()
         {
             if (mic != null) { mic.Dispose(); mic = null; micBtn.Text = "마이크로 입 움직이기"; meterBar.Width = 0; return; }
@@ -263,6 +281,22 @@ public static class Vtuber
             double now = clock.Elapsed.TotalSeconds;
             double dt = now - last; last = now;
             var next = manual.Clone();
+            bool tracked = false;
+            if (face != null)
+            {
+                var fs = face.Poll(rig.Mirror);
+                if (face.Status != null && status.Text != face.Status) SetStatus(face.Status);
+                if (fs != null)
+                {
+                    // 추적 값 + 손으로 정한 값 (슬라이더는 가운데가 0 이라 더하면 됨)
+                    tracked = true;
+                    fs.Yaw = Math.Clamp(fs.Yaw + manual.Yaw, -1, 1); fs.Pitch = Math.Clamp(fs.Pitch + manual.Pitch, -1, 1); fs.Roll = Math.Clamp(fs.Roll + manual.Roll, -1, 1);
+                    fs.Mouth = Math.Max(fs.Mouth, manual.Mouth); fs.Smile = Math.Max(fs.Smile, manual.Smile); fs.Funnel = Math.Max(fs.Funnel, manual.Funnel);
+                    fs.Brow = Math.Clamp(fs.Brow + manual.Brow, -1, 1); fs.LookX = Math.Clamp(fs.LookX + manual.LookX, -1, 1); fs.LookY = Math.Clamp(fs.LookY + manual.LookY, -1, 1);
+                    fs.BlinkL = Math.Max(fs.BlinkL, manual.BlinkL); fs.BlinkR = Math.Max(fs.BlinkR, manual.BlinkR);
+                    next = fs;
+                }
+            }
             // 마우스: 그림을 끄는 동안 또는 "따라 보기" 일 때 고개·눈동자가 마우스 쪽으로
             var mp = view.PointToClient(Cursor.Position);
             bool over = view.ClientRectangle.Contains(mp);
@@ -274,8 +308,8 @@ public static class Vtuber
                 next.LookX = Math.Clamp(next.LookX + mx, -1, 1); next.LookY = Math.Clamp(next.LookY + my, -1, 1);
             }
             // 추적 없음: 자동 깜빡임 + 아주 작은 흔들림
-            if (autoBlink && manual.BlinkL < 0.01) { double b = VRig.AutoBlink(now, seed); next.BlinkL = next.BlinkR = b; }
-            if (idle) { next.Yaw += Math.Sin(now * 1000 / 2600) * 0.06; next.Roll += Math.Sin(now * 1000 / 3300) * 0.04; }
+            if (!tracked && autoBlink && manual.BlinkL < 0.01) { double b = VRig.AutoBlink(now, seed); next.BlinkL = next.BlinkR = b; }
+            if (idle && !tracked) { next.Yaw += Math.Sin(now * 1000 / 2600) * 0.06; next.Roll += Math.Sin(now * 1000 / 3300) * 0.04; }
             next.Mouth *= rig.MouthGain;
             bool talking = talkKey || talkMouse;
             if (talking) next.Mouth = Math.Max(next.Mouth, 0.3 + 0.55 * Math.Abs(Math.Sin(now * 13)));
@@ -327,6 +361,7 @@ public static class Vtuber
         {
             timer.Stop(); timer.Dispose();
             mic?.Dispose(); mic = null;
+            face?.Dispose(); face = null;
             if (popup != null && !popup.IsDisposed) popup.Close();
             if (doc != null)
             {
@@ -408,4 +443,15 @@ public static class Vtuber
             }
         }
     }
+}
+
+/// <summary>얼굴 추적 값 공급기 (웹캠 등). Poll 은 화면 타이머에서 부르므로 막히지 않아야 한다 (최근 값만 돌려줌)</summary>
+public interface IVFaceSource : IDisposable
+{
+    /// <summary>최근 추적 상태 (얼굴이 없거나 아직 준비 중이면 null). 돌려준 객체는 호출한 쪽이 고쳐도 된다</summary>
+    VState Poll(bool mirror);
+    /// <summary>상태 알림 문구 (바뀔 때만 다른 값)</summary>
+    string Status { get; }
+    /// <summary>지금 얼굴을 "가운데(평소 얼굴)" 로 다시 맞추기 ("가운데로" 단추)</summary>
+    void Recalibrate() { }
 }

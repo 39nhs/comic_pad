@@ -13,7 +13,7 @@ namespace ComicPadNative.Modules.AI;
 
 public sealed class AiModel
 {
-    public string Id, Task, Name, License, Commercial, Note, Slow, Ep;
+    public string Id, Task, Name, License, Commercial, Note, Slow, Ep, Source;
     public bool Manual, Convert;
     public List<(string name, long size, string url, string sha256)> Files = new();
     public string Dir => Path.Combine(App.DataDir, "models", Id);
@@ -47,12 +47,21 @@ public static class AiRuntime
             var m = new AiModel
             {
                 Id = (string)n["id"], Task = (string)n["task"], Name = (string)n["name"], License = (string)n["license"], Commercial = (string)n["commercial"] ?? "check",
-                Note = (string)n["note"], Slow = (string)n["slow"], Ep = (string)n["ep"], Manual = (bool?)n["manual"] ?? false, Convert = n["convert"] != null,
+                Note = (string)n["note"], Slow = (string)n["slow"], Ep = (string)n["ep"], Manual = (bool?)n["manual"] ?? false, Convert = n["convert"] != null, Source = (string)n["source"],
             };
             foreach (var f in n["files"]?.AsArray() ?? new JsonArray()) m.Files.Add(((string)f["name"], (long?)f["size"] ?? 0, (string)f["url"], (string)f["sha256"]));
             registry.Add(m);
         }
+        foreach (var m in extra) if (!registry.Any(x => x.Id == m.Id)) registry.Add(m);
         return registry;
+    }
+
+    /// <summary>네이티브 판에만 있는 모델 더하기 (웹 판 목록 app/ai-models.json 은 그대로). 주소·크기·SHA-256 은 같은 규칙으로 검사</summary>
+    static readonly List<AiModel> extra = new();
+    public static void Register(AiModel m)
+    {
+        extra.RemoveAll(x => x.Id == m.Id); extra.Add(m);
+        if (registry != null) { registry.RemoveAll(x => x.Id == m.Id); registry.Add(m); }
     }
 
     /// <summary>설치 파일에 들어 있는 모델(models_bundled)은 data/models 로 복사해 둠</summary>

@@ -280,7 +280,7 @@ public static class AiFeatures
     public static void ModelManager()
     {
         using var f = new Form { Text = "AI 모델 관리", Width = 760, Height = 560, StartPosition = FormStartPosition.CenterParent, BackColor = Opt.Bg, ForeColor = Opt.Fg, FormBorderStyle = FormBorderStyle.SizableToolWindow };
-        var list = new ListView { Dock = DockStyle.Fill, View = View.Details, FullRowSelect = true, BackColor = Opt.Bg, ForeColor = Opt.Fg };
+        var list = new ListView { Dock = DockStyle.Fill, View = View.Details, FullRowSelect = true, BackColor = Opt.Bg, ForeColor = Opt.Fg, ShowItemToolTips = true };
         list.Columns.Add("모델", 260); list.Columns.Add("기능", 70); list.Columns.Add("라이선스", 130); list.Columns.Add("크기", 80); list.Columns.Add("상태", 180);
         string TaskName(string t) => t switch { "lineart" => "선화", "cutout" => "따기", "depth" => "깊이", "upscale" => "키우기", "select" => "고르기", "pose" => "포즈", "hand" => "손", "face" => "얼굴", _ => t };
         void Fill()
@@ -290,7 +290,7 @@ public static class AiFeatures
             {
                 AiRuntime.CopyBundled(m);
                 string st = m.Installed ? "✔ 있음" : m.Manual ? "직접 받기 (약관)" : m.Convert ? "웹 판에서 받기 (변환 필요)" : m.Files.Any(x => x.name.EndsWith(".task")) ? "웹 판 전용 (MediaPipe)" : "받기 가능";
-                var it = new ListViewItem(new[] { m.Name, TaskName(m.Task), $"{m.Badge} ({m.License})", $"{m.Files.Sum(x => x.size) / 1e6:0}MB", st }) { Tag = m };
+                var it = new ListViewItem(new[] { m.Name, TaskName(m.Task), $"{m.Badge} ({m.License})", $"{m.Files.Sum(x => x.size) / 1e6:0}MB", st }) { Tag = m, ToolTipText = m.License + (m.Note != null ? " — " + m.Note : "") + (m.Source != null ? " · 출처: " + m.Source : "") };
                 list.Items.Add(it);
             }
         }
@@ -307,6 +307,13 @@ public static class AiFeatures
                 Fill();
             }, true),
             Opt.Button("모델 폴더 열기", () => Shell.OpenFolder(Path.Combine(App.DataDir, "models"))),
+            Opt.Button("출처·라이선스 보기", () =>
+            {
+                if (list.SelectedItems.Count == 0) return;
+                var m = (AiModel)list.SelectedItems[0].Tag;
+                if (m.Source?.StartsWith("https://") != true) { App.Toast(m.License); return; }
+                try { System.Diagnostics.Process.Start(new System.Diagnostics.ProcessStartInfo(m.Source) { UseShellExecute = true }); } catch { App.Toast(m.Source); }
+            }),
             Opt.Check("그래픽 가속 끄기 (CPU 만)", () => App.Get("aiCpuOnly", false), v => { App.Set("aiCpuOnly", v); AiRuntime.CloseAll(); }));
         row.Dock = DockStyle.Top;
         f.Controls.Add(list); f.Controls.Add(bar); f.Controls.Add(row);

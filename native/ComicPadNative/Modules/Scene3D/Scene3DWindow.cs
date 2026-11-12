@@ -597,8 +597,21 @@ public sealed class Scene3DWindow : Form
         catch (Exception e) { MessageBox.Show(this, "BVH 를 읽지 못했습니다: " + e.Message, "3D 소재"); }
     }
 
+    /// <summary>사진 → 포즈 추정기 (Vision 모듈이 채움). (kind "pose"|"hand", 창) → 포즈 또는 null(취소·실패, 알림은 추정기가)</summary>
+    public static Func<string, IWin32Window, Pose> PhotoPoseProvider;
+
     void PhotoPose(string kind)
     {
+        var n = SelNode;
+        if (PhotoPoseProvider != null && n != null)
+        {
+            var pose = PhotoPoseProvider(kind, this);
+            if (pose == null) return;
+            n.Pose = pose;
+            RenderSide(); Draw();
+            Status(kind == "pose" ? "사진의 자세를 인형에 입혔습니다 (관절 슬라이더로 다듬으세요)" : "사진의 손 모양을 입혔습니다");
+            return;
+        }
         // 웹 판은 MediaPipe(.task, TFLite) 로 추정한다. 네이티브 판에는 이 형식을 돌릴 실행기가 없어 아직 쓸 수 없다.
         MessageBox.Show(this, (kind == "pose" ? "사진에서 자세" : "사진에서 손 모양") + " (AI) 는 네이티브 판에서 아직 쓸 수 없습니다.\n\n이 기능의 모델(MediaPipe .task)은 웹 판에서만 돌아갑니다. 웹 판에서 자세를 입힌 뒤 3D 폴더를 저장하면 네이티브 판에서 이어서 고칠 수 있습니다.", "3D 소재");
     }
