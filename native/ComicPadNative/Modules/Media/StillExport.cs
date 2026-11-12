@@ -50,11 +50,12 @@ public static class StillExport
         return bmp;
     }
 
-    public static byte[] Encode(Argb im, string fmt, double quality = 0.92)
+    /// <summary>quality 를 안 주면 WebP 는 무손실, JPG 는 0.92</summary>
+    public static byte[] Encode(Argb im, string fmt, double quality = -1)
     {
-        if (fmt == "webp") return WebP.EncodeStill(im, quality);
+        if (fmt == "webp") return WebP.EncodeStill(im, quality < 0 ? 1 : quality);
         using var bmp = ToBitmap(im);
-        return fmt == "jpg" ? ImageIO.EncodeJpeg(bmp, quality) : ImageIO.EncodePng(bmp);
+        return fmt == "jpg" ? ImageIO.EncodeJpeg(bmp, quality < 0 ? 0.92 : quality) : ImageIO.EncodePng(bmp);
     }
 
     // ------------------------------------------------------------------ 이미지 내보내기 창
