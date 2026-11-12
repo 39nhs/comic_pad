@@ -69,6 +69,14 @@ public sealed class FilterChain
     {
         if (Ops.Count == 0) return;
         if (count < 0) count = buf.Length - start;
+        if (count > 262144)
+        {
+            // 큰 그림은 여러 코어로 나눠서
+            const int chunk = 65536;
+            int s0 = start, n0 = count;
+            Parallel.For(0, (n0 + chunk - 1) / chunk, k => Apply(buf, s0 + k * chunk, Math.Min(chunk, n0 - k * chunk)));
+            return;
+        }
         var ops = Ops.ToArray();
         int end = start + count;
         // 같은 색이 이어지는 경우가 많아서 직전 결과를 기억

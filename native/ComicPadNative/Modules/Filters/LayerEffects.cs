@@ -51,6 +51,8 @@ public static class LayerEffects
         if (!sh && !gl && !st) return;
         int pad = Padding(fx);
         var R = r.Inflate(pad);
+        // 그림 레이어인데 넓힌 영역에 그림 타일이 하나도 없으면 효과도 없음 (빠르게 건너뜀)
+        if (!l.IsFolder && l.Tone == null && l.Px != null && !l.Px.TilesIn(R).Any(ti => l.Px.TileAt(ti) != null) && Array.TrueForAll(buf, c => c == 0)) return;
         float[] A = AlphaOf(l, d, R, r, buf);
         int W = R.W, H = R.H;
         float[] shadow = null, glow = null, stroke = null;

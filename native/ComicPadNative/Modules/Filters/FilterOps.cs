@@ -245,12 +245,12 @@ public static class FilterOps
     static uint[] Accumulate(uint[] src, int w, int h, int n, Func<int, double, double, (double, double)> map, Rect area)
     {
         var acc = new float[src.Length * 4];
-        var tmp = new float[4];
-        // 그림이 있는 범위만 (빈 곳은 계산 안 함)
-        for (int i = 0; i < n; i++)
+        // 그림이 있는 범위만 (빈 곳은 계산 안 함). 줄마다 따로 → 여러 코어로 (한 픽셀 안에서는 i 순서 그대로)
+        Parallel.For(area.Y, area.B, () => new float[4], (y, _, tmp) =>
         {
-            float op = 1f / (i + 1);
-            for (int y = area.Y; y < area.B; y++)
+            for (int i = 0; i < n; i++)
+            {
+                float op = 1f / (i + 1);
                 for (int x = area.X; x < area.R; x++)
                 {
                     var (sx, sy) = map(i, x + 0.5, y + 0.5);
@@ -264,7 +264,9 @@ public static class FilterOps
                     acc[p + 2] = tmp[2] * op + acc[p + 2] * ia;
                     acc[p + 3] = tmp[3] * op + acc[p + 3] * ia;
                 }
-        }
+            }
+            return tmp;
+        }, _ => { });
         var o = new uint[src.Length];
         for (int i = 0; i < o.Length; i++)
         {
@@ -326,8 +328,9 @@ public static class FilterOps
         for (double rr = r / 2; rr > 0.5; rr /= 2) for (int i = 0; i < 12; i++) { double a = i / 12.0 * Math.PI * 2; offs.Add((Math.Cos(a) * rr, Math.Sin(a) * rr)); }
         offs.Add((0, 0));
         var ring = new float[w * h];
-        foreach (var (ox, oy) in offs)
-            for (int y = area.Y; y < area.B; y++)
+        Parallel.For(area.Y, area.B, y =>
+        {
+            foreach (var (ox, oy) in offs)
                 for (int x = area.X; x < area.R; x++)
                 {
                     float v = SampleA(A, w, h, x + 0.5 - ox, y + 0.5 - oy);
@@ -335,6 +338,7 @@ public static class FilterOps
                     int i = y * w + x;
                     ring[i] = v + ring[i] * (1 - v);
                 }
+        });
         uint col = Px.FromHex(color, 0xFFFFFFFF);
         var o = (uint[])src.Clone();
         for (int y = area.Y; y < area.B; y++)

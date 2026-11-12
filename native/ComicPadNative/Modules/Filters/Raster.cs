@@ -20,17 +20,23 @@ public static class Raster
     static void BlurAxis(float[] p, int w, int h, double s, bool horiz)
     {
         int len = horiz ? w : h, lines = horiz ? h : w;
-        var a = new float[len]; var b = new float[len];
+        float[] k = null; int rad = 0, d = 0;
         if (s < 2)
         {
             // 작은 반경: 진짜 가우스 커널
-            int rad = Math.Max(1, (int)Math.Ceiling(s * 3));
-            var k = new float[rad * 2 + 1]; double sum = 0;
+            rad = Math.Max(1, (int)Math.Ceiling(s * 3));
+            k = new float[rad * 2 + 1]; double sum = 0;
             for (int i = -rad; i <= rad; i++) { double v = Math.Exp(-i * i / (2 * s * s)); k[i + rad] = (float)v; sum += v; }
             for (int i = 0; i < k.Length; i++) k[i] = (float)(k[i] / sum);
-            for (int ln = 0; ln < lines; ln++)
+        }
+        else d = (int)Math.Floor(s * 3 * Math.Sqrt(2 * Math.PI) / 4 + 0.5);
+        // 줄마다 따로 → 여러 코어로 (줄마다 작업 버퍼)
+        Parallel.For(0, lines, new ParallelOptions { MaxDegreeOfParallelism = lines * len > 40000 ? -1 : 1 }, () => (new float[len], new float[len]), (ln, _, buf) =>
+        {
+            var (a, b) = buf;
+            Get(p, w, ln, horiz, a, len);
+            if (k != null)
             {
-                Get(p, w, ln, horiz, a, len);
                 for (int x = 0; x < len; x++)
                 {
                     float acc = 0;
@@ -38,15 +44,8 @@ public static class Raster
                     for (int j = lo; j <= hi; j++) acc += a[j] * k[j - x + rad];
                     b[x] = acc;
                 }
-                Put(p, w, ln, horiz, b, len);
             }
-            return;
-        }
-        int d = (int)Math.Floor(s * 3 * Math.Sqrt(2 * Math.PI) / 4 + 0.5);
-        for (int ln = 0; ln < lines; ln++)
-        {
-            Get(p, w, ln, horiz, a, len);
-            if (d % 2 == 1)
+            else if (d % 2 == 1)
             {
                 int r = (d - 1) / 2;
                 Box(a, b, len, r, r); Box(b, a, len, r, r); Box(a, b, len, r, r);
@@ -59,7 +58,8 @@ public static class Raster
                 Box(a, b, len, hf, hf);           // d+1 가운데
             }
             Put(p, w, ln, horiz, b, len);
-        }
+            return buf;
+        }, _ => { });
     }
 
     /// <summary>상자 흐림: dst[x] = 평균(src[x-lo .. x+hi]), 바깥은 0</summary>
@@ -93,22 +93,24 @@ public static class Raster
     public static void Dilate(float[] p, int w, int h, int r)
     {
         if (r <= 0) return;
-        int maxLen = Math.Max(w, h);
-        var line = new float[maxLen]; var outl = new float[maxLen];
-        for (int y = 0; y < h; y++) { Array.Copy(p, y * w, line, 0, w); MaxLine(line, outl, w, r); Array.Copy(outl, 0, p, y * w, w); }
-        for (int x = 0; x < w; x++)
+        foreach (bool horiz in new[] { true, false })
         {
-            for (int y = 0; y < h; y++) line[y] = p[y * w + x];
-            MaxLine(line, outl, h, r);
-            for (int y = 0; y < h; y++) p[y * w + x] = outl[y];
+            int len = horiz ? w : h, lines = horiz ? h : w, N = len + 2 * r;
+            Parallel.For(0, lines, new ParallelOptions { MaxDegreeOfParallelism = lines * len > 40000 ? -1 : 1 }, () => (new float[len], new float[len], new float[N], new float[N], new float[N]), (ln, _, buf) =>
+            {
+                var (line, outl, pad, g, hh) = buf;
+                Get(p, w, ln, horiz, line, len);
+                MaxLine(line, outl, len, r, pad, g, hh);
+                Put(p, w, ln, horiz, outl, len);
+                return buf;
+            }, _ => { });
         }
     }
 
-    static void MaxLine(float[] src, float[] dst, int n, int r)
+    static void MaxLine(float[] src, float[] dst, int n, int r, float[] pad, float[] g, float[] hh)
     {
         int k = 2 * r + 1, N = n + 2 * r;
-        var pad = new float[N]; Array.Copy(src, 0, pad, r, n);
-        var g = new float[N]; var hh = new float[N];
+        Array.Clear(pad, 0, N); Array.Copy(src, 0, pad, r, n);
         for (int i = 0; i < N; i++) g[i] = i % k == 0 ? pad[i] : Math.Max(g[i - 1], pad[i]);
         for (int i = N - 1; i >= 0; i--) hh[i] = (i % k == k - 1 || i == N - 1) ? pad[i] : Math.Max(hh[i + 1], pad[i]);
         for (int i = 0; i < n; i++) dst[i] = Math.Max(hh[i], g[Math.Min(N - 1, i + k - 1)]);

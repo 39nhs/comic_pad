@@ -367,7 +367,10 @@ public static class AdjustDialogs
         };
         foreach (var k in new[] { "stroke", "shadow", "glow" }) if (fx[k] is not JsonObject) fx[k] = new JsonObject();
         layer.Fx = fx;
-        void Upd() { layer.Touch(); App.InvalidateAll(); }
+        // 값을 바꿀 때마다 전체를 다시 합성하므로 잠깐 모아서 (끌기 중 버벅임 줄이기)
+        var timer = new System.Windows.Forms.Timer { Interval = 40 };
+        timer.Tick += (_, _) => { timer.Stop(); layer.Touch(); App.InvalidateAll(); };
+        void Upd() { timer.Stop(); timer.Start(); }
         JsonObject O(string k) => (JsonObject)fx[k];
         Control S(string k, string label, string key, double min, double max, double step = 1, Func<double, string> fmt = null)
             => Ui.Slider(label, min, max, step, () => Svg.Num(O(k), key), v => { O(k)[key] = v; Upd(); }, fmt: fmt);
@@ -390,8 +393,9 @@ public static class AdjustDialogs
         var scroll = new Panel { AutoScroll = true, Width = 400, Height = Math.Min(760, Ui.WorkArea().Height - 120), BackColor = Opt.Bg };
         scroll.Controls.Add(col);
         f.Controls.Add(scroll);
-        Upd();
+        layer.Touch(); App.InvalidateAll();
         f.ShowDialog(App.Main);
+        timer.Stop(); timer.Dispose();
         var after = (JsonObject)layer.Fx.DeepClone();
         layer.Fx = before;
         if (ok)
@@ -399,7 +403,7 @@ public static class AdjustDialogs
             bool any = new[] { "stroke", "shadow", "glow" }.Any(k => (bool?)(after[k] as JsonObject)?["on"] == true);
             App.History.Struct(d, "레이어 효과", () => layer.Fx = any ? after : null);
         }
-        Upd(); App.NotifyLayers();
+        layer.Touch(); App.InvalidateAll(); App.NotifyLayers();
     }
 
     // ---------------------------------------------------------------- 톤화

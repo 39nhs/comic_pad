@@ -38,6 +38,7 @@ public static class SelfTest
             Section("ICC · 인쇄"); Print(outDir);
             Section("대화상자 (자동으로 열고 닫음)"); Dialogs(outDir);
             Section("메뉴"); Menus();
+            if (Environment.GetEnvironmentVariable("COMICPAD_FILTERS_PERF") == "1") { Section("성능 (참고, B5 350dpi 크기)"); Perf(); }
         }
         catch (Exception ex) { fails++; log.AppendLine("예외: " + ex); }
         log.AppendLine($"\n통과 {passes} · 실패 {fails}");
@@ -418,6 +419,19 @@ public static class SelfTest
         var ebytes = PsdWriter.Write(empty, ef);
         var eback = PsdReader.Read(ebytes, "합성", out _);
         Check("레이어 없는 PSD → 배경 레이어", eback.Layers.Count == 1 && eback.Layers[0].Px.Read(eback.Layers[0].Px.Full).SequenceEqual(eb));
+        // 손으로 만든 PSD: 16비트 흑백 무압축, 8비트 CMYK 무압축 (레이어 없이 합성 이미지만)
+        byte[] Craft(int nch, int w2, int h2, int depth, int mode, byte[] body)
+        {
+            var be = new Be(); be.Ascii("8BPS"); be.U16(1); be.Bytes(new byte[6]); be.U16(nch); be.U32(h2); be.U32(w2); be.U16(depth); be.U16(mode);
+            be.U32(0); be.U32(0); be.U32(0); be.U16(0); be.Bytes(body); return be.ToArray();
+        }
+        var g16 = Craft(1, 3, 1, 16, 1, new byte[] { 0x00, 0x10, 0x80, 0xff, 0xff, 0x00 });
+        var gd = PsdReader.Read(g16, "g16", out _).Layers[0].Px;
+        Check("16비트 흑백 PSD", Get(gd.Get(0, 0)).r == 0 && Get(gd.Get(1, 0)).r == 0x80 && Get(gd.Get(2, 0)).r == 0xff);
+        var cmyk = Craft(4, 2, 1, 8, 4, new byte[] { 0, 255, /*C*/ 255, 255, /*M*/ 255, 255, /*Y*/ 255, 128 /*K*/ });
+        var cd = PsdReader.Read(cmyk, "cmyk", out _).Layers[0].Px;
+        var c0 = Get(cd.Get(0, 0)); var c1 = Get(cd.Get(1, 0));
+        Check("CMYK PSD (0 = 잉크 가득)", c0.r == 0 && c0.g == 255 && c0.b == 255 && c1.r == 128 && c1.g == 128, $"{c0} {c1}");
         // ZIP 압축 채널 (예측 포함)
         var raw = new byte[] { 1, 2, 3, 10, 10, 10, 5, 4, 3 };
         byte[] Z(byte[] x) { using var ms = new MemoryStream(); using (var z = new ZLibStream(ms, CompressionLevel.Optimal, true)) z.Write(x); return ms.ToArray(); }
@@ -472,6 +486,33 @@ public static class SelfTest
         Check("톤화 대화상자 취소 → 톤 없음", l.Tone == null);
         Auto("paper", AdjustDialogs.PaperTextureDialog);
         Check("용지 질감 취소 → 그대로", d.PaperExtra["texture"] == null);
+        App.History.Clear(); App.Doc = null;
+    }
+
+    static void Perf()
+    {
+        var d = Doc(2480, 3508);
+        Fill(d, "바탕", (x, y) => Px.Pack(255, (uint)(x & 255), (uint)(y & 255), 128));
+        var top = Fill(d, "그림", (x, y) => (x / 64 + y / 64) % 5 == 0 ? 0xFF202020 : 0);
+        double T(Action a) { var sw = System.Diagnostics.Stopwatch.StartNew(); a(); return sw.Elapsed.TotalMilliseconds; }
+        log.AppendLine($"참고  합성 (그대로): {T(() => App.Comp.Flatten(d)):0} ms");
+        d.PaperExtra["texture"] = new JsonObject { ["type"] = "rough", ["strength"] = 0.6, ["scale"] = 1 };
+        log.AppendLine($"참고  + 용지 질감: {T(() => App.Comp.Flatten(d)):0} ms");
+        d.PaperExtra.Remove("texture");
+        var adj = new Layer(d, "곡선", "adjust") { Meta = new JsonObject { ["type"] = "curves", ["params"] = AdjustTypes.Default("curves") } };
+        d.Layers.Add(adj);
+        log.AppendLine($"참고  + 조정 레이어: {T(() => App.Comp.Flatten(d)):0} ms");
+        d.Layers.Remove(adj);
+        top.Fx = new JsonObject { ["stroke"] = new JsonObject { ["on"] = true, ["size"] = 6, ["color"] = "#ffffff" }, ["glow"] = new JsonObject { ["on"] = true, ["size"] = 16, ["color"] = "#ffe680", ["opacity"] = 0.8 } };
+        log.AppendLine($"참고  + 레이어 효과 (테두리·광선): {T(() => App.Comp.Flatten(d)):0} ms");
+        top.Fx = null; top.Tone = new JsonObject { ["spacing"] = 8, ["angle"] = 45, ["shape"] = "dot", ["color"] = "#000000" };
+        log.AppendLine($"참고  + 톤화 (처음): {T(() => App.Comp.Flatten(d)):0} ms, (캐시): {T(() => App.Comp.Flatten(d)):0} ms");
+        top.Tone = null;
+        App.Doc = d; d.ActiveId = top.Id;
+        log.AppendLine($"참고  필터 흐리게 8px: {T(() => FilterOps.CanvasOp("흐리게", (s, w, h) => Raster.BlurRgba(s, w, h, 8))):0} ms");
+        log.AppendLine($"참고  필터 레벨 적용: {T(() => FilterOps.CanvasOp("레벨", (s, w, h) => { var o = (uint[])s.Clone(); Svg.Adjust("levels", new JsonObject { ["inB"] = 20 }).Apply(o); return o; })):0} ms");
+        var flat = App.Comp.Flatten(d);
+        log.AppendLine($"참고  PSD 쓰기: {T(() => PsdWriter.Write(d, flat)):0} ms");
         App.History.Clear(); App.Doc = null;
     }
 
