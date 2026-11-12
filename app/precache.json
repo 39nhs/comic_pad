@@ -1,5 +1,5 @@
 {
-"version": "7db98c9104d2fe03",
+"version": "59a881700c4c6fe3",
 "files": [
 "./",
 ".nojekyll",
@@ -92,6 +92,7 @@
 "js/ui/brushpreview.js",
 "js/ui/compare.js",
 "js/ui/controls.js",
+"js/ui/cursor.js",
 "js/ui/dialogs.js",
 "js/ui/ebook.js",
 "js/ui/extra.js",

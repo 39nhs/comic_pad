@@ -772,6 +772,27 @@ const TESTS = [
     const px = [...L('셰이프').ctx.getImageData(70, 150, 1, 1).data].join();
     assert(px === '51,102,204,255', `셰이프 칠 이상 (${px})`);
   }],
+  ['펜 커서·기본 필압 (클립스튜디오식)', async () => {
+    const { cursorFor } = await import('./cursor.js');
+    const { DEFAULT_SETTINGS } = await import('../app.js');
+    const { Stroke } = await import('../core/brush.js');
+    // 도구 커서가 실제 시스템 커서로: 브러시 = 펜촉(끝점 1,31), 지우개 = 십자, 채우기 = crosshair
+    const saved = app.settings.brushCursor;
+    app.settings.brushCursor = 'nib';
+    assert(/^url\("data:image\/svg\+xml/.test(cursorFor(app.tools.get('brush'))) && cursorFor(app.tools.get('brush')).includes(' 1 31'), '브러시 커서가 펜촉이 아님');
+    assert(!cursorFor(app.tools.get('eraser')).includes(' 1 31'), '지우개 커서가 펜촉');
+    assert(cursorFor(app.tools.get('fill')) === 'crosshair', '채우기 커서 이상');
+    app.settings.brushCursor = saved;
+    // 기본값: 필압 다듬기 없음, 시작 굵기 줄이기 없음 → 펜이 보낸 필압 그대로
+    assert(DEFAULT_SETTINGS.penFeel.pressureSmooth === 0 && DEFAULT_SETTINGS.penFeel.startRamp === false, '기본 필압 보정값 이상');
+    const keep = app.settings.penFeel;
+    app.settings.penFeel = { ...DEFAULT_SETTINGS.penFeel };
+    try {
+      const st = Object.create(Stroke.prototype);
+      const got = [0.9, 0.9, 0.3, 0.05].map(p => +st._pressure(p).toFixed(3));
+      assert(got.join() === '0.9,0.9,0.3,0.05', `필압이 그대로가 아님 (${got})`);
+    } finally { app.settings.penFeel = keep; }
+  }],
 ];
 
 /** only: 이름에 이 글자가 들어간 항목만 (정규식 가능) */

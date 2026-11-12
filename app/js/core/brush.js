@@ -38,7 +38,7 @@ export const BRUSH_DEFAULTS = {
 export const DEFAULT_PRESETS = {
   brush: [
     { id: 'notepen', name: '필기 펜 (노트 느낌)', size: 4, hardness: 1, minSize: 0.22, stabilizer: 3, speedThin: 0.35, spacing: 0.05 },
-    { id: 'gpen', name: 'G펜', size: 6, hardness: 1, minSize: 0.12, stabilizer: 4 },
+    { id: 'gpen', name: 'G펜', size: 6, hardness: 1, minSize: 0.04, stabilizer: 4 },
     { id: 'maru', name: '마루펜', size: 3, hardness: 1, minSize: 0.45, stabilizer: 3 },
     { id: 'pencil', name: '연필', size: 7, hardness: 0.55, tip: 'grain', grain: 0.65, pressureOpacity: true, minOpacity: 0.15, minSize: 0.55, stabilizer: 1, spacing: 0.1 },
     { id: 'rough', name: '러프 연필', size: 9, hardness: 0.5, tip: 'grain', grain: 0.55, pressureOpacity: true, minOpacity: 0.2, minSize: 0.6, stabilizer: 1, opacity: 0.85, roughOnly: true },

@@ -260,24 +260,17 @@ export class BrushTool {
     }
     const pt = app.pointer;
     if (!pt.inside || pt.type === 'touch') return;
-    const look = app.settings.brushCursor || 'circle';
+    const look = app.settings.brushCursor || 'nib';
     const r = (this.preset.size / 2) * view.zoom;
     ctx.lineWidth = 1;
+    // 가운데 표시(펜촉·십자·점)는 시스템 커서(ui/cursor.js)가 하고, 여기서는 크기 원만 그린다
     if (look === 'shape' && r > 2 && this._drawTipShape(ctx, pt, r, view)) { /* 브러시 모양으로 그렸음 */ }
-    else if (look === 'cross') {
-      ctx.strokeStyle = 'rgba(0,0,0,.7)';
-      ctx.beginPath(); ctx.moveTo(pt.sx - 8, pt.sy); ctx.lineTo(pt.sx + 8, pt.sy); ctx.moveTo(pt.sx, pt.sy - 8); ctx.lineTo(pt.sx, pt.sy + 8); ctx.stroke();
-      ctx.strokeStyle = 'rgba(255,255,255,.8)';
-      ctx.beginPath(); ctx.moveTo(pt.sx - 8, pt.sy + 1); ctx.lineTo(pt.sx + 8, pt.sy + 1); ctx.stroke();
-    } else if (look !== 'dot' && r > 3) {
+    else if ((look === 'nib' || look === 'circle' || look === 'shape') && r > 3) {
       ctx.strokeStyle = 'rgba(0,0,0,0.6)';
       ctx.beginPath(); ctx.arc(pt.sx, pt.sy, r, 0, Math.PI * 2); ctx.stroke();
       ctx.strokeStyle = 'rgba(255,255,255,0.8)';
       ctx.beginPath(); ctx.arc(pt.sx, pt.sy, r + 1, 0, Math.PI * 2); ctx.stroke();
     }
-    ctx.fillStyle = this.mode === 'erase' ? '#fff' : (this.preset.color || app.color.fg);
-    ctx.strokeStyle = 'rgba(128,128,128,0.9)';
-    ctx.beginPath(); ctx.arc(pt.sx, pt.sy, 1.6, 0, Math.PI * 2); ctx.fill(); ctx.stroke();
   }
 
   /** 커서를 브러시 끝 모양대로 (납작 펜 = 기운 타원, 이미지 = 그 모양, 연필결 = 거친 원) */
