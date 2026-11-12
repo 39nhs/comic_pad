@@ -5,7 +5,7 @@ using System.Globalization;
 using System.Reflection;
 using System.Text.Json.Nodes;
 
-namespace ComicPadNative.Modules.Brushes;
+namespace ComicPadNative.Modules.BrushEngine;
 
 public sealed class BrushPreset
 {

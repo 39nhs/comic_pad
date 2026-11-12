@@ -3,7 +3,7 @@ using System.Text.Json.Nodes;
 using ComicPadNative.Core;
 using ComicPadNative.UI;
 
-namespace ComicPadNative.Modules.Brushes;
+namespace ComicPadNative.Modules.BrushEngine;
 
 public sealed class BrushesModule : IModule
 {

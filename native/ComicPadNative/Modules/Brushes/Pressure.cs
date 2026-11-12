@@ -1,7 +1,7 @@
 // 필압 곡선 · 펜 필기감 설정 (웹 core/brush.js 의 curveLut · PRESSURE_PRESETS · pressureCurve, app.settings.penFeel)
 using System.Text.Json.Nodes;
 
-namespace ComicPadNative.Modules.Brushes;
+namespace ComicPadNative.Modules.BrushEngine;
 
 public static class Pressure
 {

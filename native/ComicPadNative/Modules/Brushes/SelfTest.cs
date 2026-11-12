@@ -4,7 +4,7 @@ using System.Diagnostics;
 using System.Text.Json.Nodes;
 using ComicPadNative.Core;
 
-namespace ComicPadNative.Modules.Brushes;
+namespace ComicPadNative.Modules.BrushEngine;
 
 public static class SelfTest
 {

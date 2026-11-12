@@ -7,7 +7,7 @@
 //  - 딱딱한 불투명 원은 찍은 원들을 하나의 모양으로 (덮인 정도 최댓값) → 겹친 가장자리가 진해지지 않음 (선뭉침 없음)
 using ComicPadNative.Core;
 
-namespace ComicPadNative.Modules.Brushes;
+namespace ComicPadNative.Modules.BrushEngine;
 
 public struct BPt
 {

@@ -1,7 +1,7 @@
 // 손끝(문지르기) — 웹 tools/paint2.js smudgeTool, 흐림/선명 브러시 — 웹 tools/retouch.js blurTool
 using ComicPadNative.Core;
 
-namespace ComicPadNative.Modules.Brushes;
+namespace ComicPadNative.Modules.BrushEngine;
 
 /// <summary>펜 경로를 따라 간격마다 찍는 보정 도구 공통 (레이어 픽셀을 직접 고침)</summary>
 public abstract class DabToolBase : ToolBase

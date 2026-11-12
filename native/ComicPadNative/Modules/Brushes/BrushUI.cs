@@ -5,7 +5,7 @@ using System.Runtime.InteropServices;
 using ComicPadNative.Core;
 using ComicPadNative.UI;
 
-namespace ComicPadNative.Modules.Brushes;
+namespace ComicPadNative.Modules.BrushEngine;
 
 public static class BUI
 {

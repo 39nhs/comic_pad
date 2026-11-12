@@ -5,7 +5,7 @@
 using System.Text.Json.Nodes;
 using ComicPadNative.Core;
 
-namespace ComicPadNative.Modules.Brushes;
+namespace ComicPadNative.Modules.BrushEngine;
 
 public class PaintTool : ToolBase
 {

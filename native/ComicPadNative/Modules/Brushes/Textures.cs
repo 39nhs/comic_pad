@@ -8,7 +8,7 @@ using System.Drawing.Imaging;
 using System.Text.Json.Nodes;
 using ComicPadNative.Core;
 
-namespace ComicPadNative.Modules.Brushes;
+namespace ComicPadNative.Modules.BrushEngine;
 
 /// <summary>팁 그림: 알파(0~1) 밉맵 + (색이 있는 이미지 팁이면) 미리 곱한 색 밉맵</summary>
 public sealed class TipImage

@@ -6,7 +6,7 @@ using System.Drawing.Imaging;
 using System.Text;
 using System.Text.Json.Nodes;
 
-namespace ComicPadNative.Modules.Brushes;
+namespace ComicPadNative.Modules.BrushEngine;
 
 public sealed class AbrSample
 {

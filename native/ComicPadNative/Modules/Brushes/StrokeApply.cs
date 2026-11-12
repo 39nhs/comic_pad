@@ -4,7 +4,7 @@
 // 그리는 동안에도 매번 "그리기 전" 에서 다시 계산하므로 미리보기와 확정 결과가 같다.
 using ComicPadNative.Core;
 
-namespace ComicPadNative.Modules.Brushes;
+namespace ComicPadNative.Modules.BrushEngine;
 
 public sealed class StrokeApply
 {
