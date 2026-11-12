@@ -237,7 +237,7 @@ public static class Modals
     /// (Program 의 찍기는 대화상자가 떠 있는 동안 기다리지 못하므로 여기서)</summary>
     internal static void ShotHook(Form f)
     {
-        string shot = Environment.GetEnvironmentVariable("COMICPAD_UI_SHOT");
+        string shot = Chrome.UiShot.ShotPath ?? Environment.GetEnvironmentVariable("COMICPAD_UI_SHOT");
         if (string.IsNullOrEmpty(shot) || App.Main == null || !f.Modal) return;
         var t = new System.Windows.Forms.Timer { Interval = 1200 };
         t.Tick += (_, _) =>
