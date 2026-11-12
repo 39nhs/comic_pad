@@ -6,7 +6,8 @@ namespace ComicPadNative.Modules.Vision;
 
 public static class VisionModels
 {
-    public const string Pose = "pose-blaze", Hand = "hand-blaze", Face = "face-blaze";
+    public const string Pose = "pose-blaze", Hand = "hand-blaze", Face = "face-blaze", Iris = "iris-mp";
+    const string KIris = "https://raw.githubusercontent.com/keijiro/IrisBarracuda/e1372d7285e060a10c233e0e88ca5a97ccaee99c/Packages/jp.keijiro.mediapipe.iris/ONNX/";
 
     const string UPose = "https://huggingface.co/unity/inference-engine-blaze-pose/resolve/d96e13766db93eaaac6ad398d7b01f1c94c7ff6e/";
     const string UHand = "https://huggingface.co/unity/inference-engine-blaze-hand/resolve/1e4394f13926e0b61c4a2d8f24ce7a78319d4d21/";
@@ -50,6 +51,17 @@ public static class VisionModels
                 ("blaze_face_short_range.onnx", 418465, UFace + "models/blaze_face_short_range.onnx", "587fa34c93de9a523e691669d2405671d67faad86e595e9a63c6d3db401f18f4"),
                 ("anchors.csv", 32256, UFace + "data/anchors.csv", "f56366c69183510e6bcee214d26793d9148cb6a5ab6a4199c8c8c61690e19a86"),
                 ("face_mesh_Nx3x192x192_post.onnx", 2461455, PMesh + "face_mesh_Nx3x192x192_post.onnx", "ae6ada9004f22be3ab6bab8cbfbc8b795f8595f69e5eea77b95cb2fc344c04eb"),
+            },
+        },
+        new AiModel
+        {
+            Id = Iris, Task = "iris", Name = "MediaPipe Iris ONNX (버튜버 눈동자 추적, 네이티브)", License = "Apache-2.0", Commercial = "yes",
+            Ep = "wasm",      // 64×64 작은 모델 (CPU 로 한 눈 몇 ms)
+            Source = "https://github.com/keijiro/IrisBarracuda",
+            Note = "Google MediaPipe iris_landmark.tflite(Apache-2.0)를 keijiro 가 ONNX 로 옮긴 것 (저장소도 Apache-2.0, 릴리스 1.2.0 커밋 고정). 얼굴 추적 모델과 함께 씀",
+            Files =
+            {
+                ("iris_landmark.onnx", 2645189, KIris + "iris_landmark_barracuda.onnx", "3eb985960b80e6069812c2f20682b7a4194d80cf5a3a918ddb8d0b3ca72a6432"),
             },
         },
     };

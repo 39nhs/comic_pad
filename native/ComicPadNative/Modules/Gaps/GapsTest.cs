@@ -52,6 +52,7 @@ public static partial class GapsTest
         yield return ("버튜버 녹화", TestVtRecorder);
         yield return ("버튜버 VP8 속도", TestVp8Speed);
         yield return ("버튜버 스튜디오 녹화 단추", TestVtStudioRec);
+        yield return ("눈동자 추적", TestIris);
     }
 
     // ------------------------------------------------------------------ 시험 그림

@@ -59,7 +59,7 @@ public static class AiLicenseExtras
     {
         ("pose", "사진 → 인형 자세·손 모양", "3D 소재 창에서 사진 한 장으로 데생 인형 자세 잡기", new[] { VisionModels.Pose, VisionModels.Hand }, true),
         ("lineart", "선화 추출", "채색 그림·사진에서 선만 뽑기 (만화 전용 모델은 PyTorch 변환이 필요해 웹 판에서)", new[] { "line-informative" }, true),
-        ("face", "버튜버 얼굴 추적", "웹캠으로 내 표정·고개 움직임을 그린 캐릭터에 입히기 (버튜버 스튜디오)", new[] { VisionModels.Face }, false),
+        ("face", "버튜버 얼굴 추적", "웹캠으로 내 표정·고개·눈동자 움직임을 그린 캐릭터에 입히기 (버튜버 스튜디오)", new[] { VisionModels.Face, VisionModels.Iris }, false),
         ("upscale", "크기 키우기 (2·4배)", "작은 그림을 인쇄용으로 크게 (설치 파일에 들어 있어 바로 됨)", new[] { "up-animevideo" }, true),
         ("cutout", "캐릭터 따기", "애니·만화 캐릭터만 선택하거나 오려 내기", new[] { "seg-anime" }, false),
         ("depth", "깊이 추정", "명암·원근 참고용 깊이 그림", new[] { "depth-s" }, false),
