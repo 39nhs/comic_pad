@@ -54,6 +54,7 @@ public static partial class GapsTest
         yield return ("버튜버 스튜디오 녹화 단추", TestVtStudioRec);
         yield return ("눈동자 추적", TestIris);
         yield return ("펜 예측", TestPenPredict);
+        yield return ("퀵바·웹 id", TestQuickMods);
     }
 
     // ------------------------------------------------------------------ 시험 그림

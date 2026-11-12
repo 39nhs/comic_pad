@@ -333,7 +333,7 @@ public sealed class CanvasView : Control
         {
             X = dx, Y = dy, SX = sx, SY = sy, Pressure = pr, Time = info.dwTime, Type = type == PT_PEN ? "pen" : type == PT_TOUCH ? "touch" : "mouse",
             Buttons = buttons, TiltX = (pp.penMask & 4) != 0 ? pp.tiltX : 0, TiltY = (pp.penMask & 8) != 0 ? pp.tiltY : 0, Twist = (pp.penMask & 2) != 0 ? pp.rotation : 0,
-            Shift = (mods & Keys.Shift) != 0, Ctrl = (mods & Keys.Control) != 0, Alt = (mods & Keys.Alt) != 0,
+            Shift = (mods & Keys.Shift) != 0 || Modules.Gaps.VirtualMods.ShiftFor(App.Tool), Ctrl = (mods & Keys.Control) != 0, Alt = (mods & Keys.Alt) != 0,   // 퀵바 직선·스냅 버튼 = 가상 Shift
         };
     }
 

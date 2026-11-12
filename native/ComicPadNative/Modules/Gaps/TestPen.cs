@@ -40,4 +40,19 @@ public static partial class GapsTest
             "설정: 예측 끄기/기본 켬, 두 번째 측면 버튼 기본 화면 이동·바꾸기, 브러시만 (지우개는 아님)");
         App.Settings.Remove("penButton2"); App.Settings.Remove("penFeel");
     }
+
+    static void TestQuickMods()
+    {
+        var line = Shell2.QuickActions.Get("line"); var snap = Shell2.QuickActions.Get("snap");
+        var brush = Registry.Tools.Find(t => t.Id == "brush"); var sel = Registry.Tools.Find(t => t.Id == "select");
+        bool ok0 = !VirtualMods.ShiftFor(brush);
+        line?.Run(); bool l1 = VirtualMods.ShiftFor(brush) && !VirtualMods.ShiftFor(sel) && line.Active();
+        line?.Run(); snap?.Run(); bool s1 = VirtualMods.ShiftFor(sel) && VirtualMods.ShiftFor(brush);
+        snap?.Run();
+        Ok(line != null && snap != null && ok0 && l1 && s1 && !VirtualMods.ShiftFor(brush), "퀵바 직선 모드(브러시·지우개만 Shift)·각도 스냅(모든 도구 Shift) 버튼");
+        // 웹 id → 메뉴: 다른 모듈이 만든 메뉴도 웹 id 로
+        var ids = new[] { "edit.contentAwareFill", "edit.heal", "ai.pose", "ai.img2img", "ai.check", "ai.setup", "view.spread", "anim.export" };
+        var missing = ids.Where(id => !Shell2.WebIds.Map.TryGetValue(id, out var path) || !Registry.Commands.ContainsKey(path)).ToList();
+        Ok(missing.Count == 0, $"웹 id → 네이티브 메뉴 ({ids.Length}개{(missing.Count > 0 ? ", 없음: " + string.Join(",", missing) : "")})");
+    }
 }
