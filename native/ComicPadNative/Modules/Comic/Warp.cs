@@ -199,7 +199,12 @@ public sealed class MeshWarpTool : ToolBase
         return false;
     }
 
-    public override Rectangle OverlayBounds(ViewXf v) => CUI.ScreenAll();
+    public override Rectangle OverlayBounds(ViewXf v)
+    {
+        if (Pts != null) return CUI.Bounds(Pts.Select(p => Gfx.S(v, p)), 10);
+        var b = App.Active?.Target?.Bounds() ?? Rect.Empty;
+        return b.IsEmpty ? Rectangle.Empty : Rectangle.Inflate(Gfx.ToScreen(v, b.X, b.Y, b.W, b.H), 3, 3);
+    }
     public override void DrawOverlay(Graphics g, ViewXf v)
     {
         if (Pts == null)
@@ -308,7 +313,12 @@ public sealed class PuppetTool : ToolBase
         return false;
     }
 
-    public override Rectangle OverlayBounds(ViewXf v) => CUI.ScreenAll();
+    public override Rectangle OverlayBounds(ViewXf v)
+    {
+        if (S != null) return CUI.Bounds(Deformed().Concat(pins.Select(p => p.p)).Select(p => Gfx.S(v, p)), 12);
+        var b = App.Active?.Target?.Bounds() ?? Rect.Empty;
+        return b.IsEmpty ? Rectangle.Empty : Rectangle.Inflate(Gfx.ToScreen(v, b.X, b.Y, b.W, b.H), 3, 3);
+    }
     public override void DrawOverlay(Graphics g, ViewXf v)
     {
         if (S == null)

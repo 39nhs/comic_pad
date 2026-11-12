@@ -601,5 +601,15 @@ public static class CUI
         if (round) { g.FillEllipse(br, p.X - r - 1, p.Y - r - 1, (r + 1) * 2, (r + 1) * 2); g.DrawEllipse(pen, p.X - r - 1, p.Y - r - 1, (r + 1) * 2, (r + 1) * 2); }
         else { g.FillRectangle(br, p.X - r, p.Y - r, r * 2, r * 2); g.DrawRectangle(pen, p.X - r, p.Y - r, r * 2, r * 2); }
     }
+    /// <summary>화면 점들을 감싸는 사각형 (도구 겹침 그림 범위)</summary>
+    public static Rectangle Bounds(IEnumerable<PointF> pts, int pad = 12)
+    {
+        float x0 = float.MaxValue, y0 = float.MaxValue, x1 = float.MinValue, y1 = float.MinValue;
+        foreach (var p in pts) { x0 = Math.Min(x0, p.X); y0 = Math.Min(y0, p.Y); x1 = Math.Max(x1, p.X); y1 = Math.Max(y1, p.Y); }
+        if (x1 < x0) return Rectangle.Empty;
+        var all = ScreenAll();
+        var r = Rectangle.FromLTRB((int)Math.Floor(x0) - pad, (int)Math.Floor(y0) - pad, (int)Math.Ceiling(x1) + pad, (int)Math.Ceiling(y1) + pad);
+        return all.IsEmpty ? r : Rectangle.Intersect(r, Rectangle.Inflate(all, 4, 4));
+    }
     public static Rectangle ScreenAll() { var c = MetaLayers.Canvas; return c == null ? Rectangle.Empty : new Rectangle(0, 0, c.Width, c.Height); }
 }

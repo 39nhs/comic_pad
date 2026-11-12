@@ -534,20 +534,30 @@ public sealed class PanelTool : ToolBase
         return false;
     }
 
-    public override Rectangle OverlayBounds(ViewXf v) => CUI.ScreenAll();
+    /// <summary>컷 윤곽 (컷 도구일 때, 늘 그리는 겹침 그림)</summary>
+    public static void DrawOutlines(Graphics g, ViewXf v)
+    {
+        if (App.Tool?.Id != "panel") return;
+        var layer = Panels.PanelLayer(false);
+        if (layer == null || !layer.Visible) return;
+        using var pen = CUI.Dash(Color.FromArgb(140, 47, 124, 246), 1, 5, 4);
+        foreach (var q in Panels.List(layer.Meta)) if (q.Count >= 2) g.DrawPolygon(pen, q.Select(p => Gfx.S(v, p)).ToArray());
+    }
+
+    public override Rectangle OverlayBounds(ViewXf v)
+    {
+        var pts = new List<P2>();
+        if (poly != null) { pts.AddRange(poly); if (cursor is P2 c) pts.Add(c); }
+        if (drag is { Moved: true } d) { pts.Add(new P2(d.X0, d.Y0)); pts.Add(new P2(d.X1, d.Y1)); if (Mode == "split") { var (a, b) = SnapLine(d); pts.Add(a); pts.Add(b); } }
+        return CUI.Bounds(pts.Select(p => Gfx.S(v, p)), 14);
+    }
     public override void DrawOverlay(Graphics g, ViewXf v)
     {
-        var layer = Panels.PanelLayer(false);
         void Outline(Pen pen, IList<P2> q, bool close = true)
         {
             if (q.Count < 2) return;
             var pts = q.Select(p => Gfx.S(v, p)).ToArray();
             if (close) g.DrawPolygon(pen, pts); else g.DrawLines(pen, pts);
-        }
-        if (layer != null && layer.Visible)
-        {
-            using var pen = CUI.Dash(Color.FromArgb(140, 47, 124, 246), 1, 5, 4);
-            foreach (var q in Panels.List(layer.Meta)) Outline(pen, q);
         }
         using var red = new Pen(Color.FromArgb(232, 72, 74), 2);
         if (poly != null)

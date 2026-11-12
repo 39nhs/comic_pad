@@ -487,7 +487,7 @@ public sealed class TransformTool : ToolBase
     }
 
     // ---- 화면 ----
-    public override Rectangle OverlayBounds(ViewXf v) => st == null ? Rectangle.Empty : CUI.ScreenAll();
+    public override Rectangle OverlayBounds(ViewXf v) => st == null ? Rectangle.Empty : CUI.Bounds(HandlePos(v).Select(h => h.p).Concat(Corners().Select(p => Gfx.S(v, p))), 12);
     public override void DrawOverlay(Graphics g, ViewXf v)
     {
         if (st == null) return;

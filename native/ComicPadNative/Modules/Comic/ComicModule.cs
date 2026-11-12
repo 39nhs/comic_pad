@@ -24,6 +24,12 @@ public sealed class ComicModule : IModule
         Registry.Overlay(Manuscript.DrawGuides);
         Registry.Overlay(Rulers.Draw);
         Registry.Overlay(MemoTool.Draw);
+        Registry.Overlay(PanelTool.DrawOutlines);
+        Registry.Overlay(TextTool.DrawBoxes);
+        Registry.Overlay(SfxTool.DrawBoxes);
+        // 이 도구들은 고를 때·놓을 때 늘 그리는 겹침 그림(컷 윤곽·글자 상자·자 손잡이·메모 미리보기)이 바뀜 → 화면 전체 다시
+        var redrawOn = new HashSet<string> { "panel", "text", "sfx", "ruler", "memo" };
+        App.ToolChanged += () => { if (redrawOn.Contains(App.Tool?.Id ?? "") || redrawOn.Contains(App.PrevTool?.Id ?? "")) MetaLayers.Redraw(); };
 
         bool HasDoc() => App.Doc != null;
         bool HasSel() => App.Doc?.Sel.Active == true;

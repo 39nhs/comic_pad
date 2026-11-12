@@ -342,7 +342,7 @@ public sealed class SpeedLinesTool : ToolBase
         return l;
     }
 
-    public override Rectangle OverlayBounds(ViewXf v) => drag == null ? Rectangle.Empty : CUI.ScreenAll();
+    public override Rectangle OverlayBounds(ViewXf v) => drag is { } d ? CUI.Bounds(new[] { Gfx.S(v, d.x0, d.y0), Gfx.S(v, d.x1, d.y1) }, 6) : Rectangle.Empty;
     public override void DrawOverlay(Graphics g, ViewXf v)
     {
         if (drag is not { } d) return;

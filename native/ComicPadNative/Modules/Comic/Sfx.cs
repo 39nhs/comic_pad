@@ -346,9 +346,10 @@ public sealed class SfxTool : ToolBase
     }
     public override void Cancel() { if (drag?.Prev != null) { drag.Prev.Restore(); App.InvalidateAll(); } drag = null; }
 
-    public override Rectangle OverlayBounds(ViewXf v) => CUI.ScreenAll();
-    public override void DrawOverlay(Graphics g, ViewXf v)
+    /// <summary>효과음 상자 윤곽 (효과음 도구일 때, 늘 그리는 겹침 그림)</summary>
+    public static void DrawBoxes(Graphics g, ViewXf v)
     {
+        if (App.Tool?.Id != "sfx") return;
         foreach (var l in App.Doc?.Layers ?? new())
         {
             if (l.Kind != "text" || !J.Bool(l.Meta, "sfx") || !l.Visible || l.Meta["quad"] is not JsonArray q) continue;

@@ -507,7 +507,14 @@ public sealed class BubbleTool : ToolBase
         if (st?.Phase == "box") st = null;
     }
 
-    public override Rectangle OverlayBounds(ViewXf v) => CUI.ScreenAll();
+    public override Rectangle OverlayBounds(ViewXf v)
+    {
+        var pts = new List<PointF>();
+        var b = Selected();
+        if (b != null && st == null) foreach (var (_, p) in Handles(b)) pts.Add(Gfx.S(v, p));
+        if (st != null) { var r = Bubbles.BoundsOf(NewBubble()); var sr = Gfx.ToScreen(v, r.X, r.Y, r.W, r.H); pts.Add(new PointF(sr.Left, sr.Top)); pts.Add(new PointF(sr.Right, sr.Bottom)); }
+        return CUI.Bounds(pts, 12);
+    }
     public override void DrawOverlay(Graphics g, ViewXf v)
     {
         var b = Selected();

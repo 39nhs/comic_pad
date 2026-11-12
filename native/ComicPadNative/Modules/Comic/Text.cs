@@ -348,9 +348,10 @@ public sealed class TextTool : ToolBase
         Edit(l);
     }
 
-    public override Rectangle OverlayBounds(ViewXf v) => CUI.ScreenAll();
-    public override void DrawOverlay(Graphics g, ViewXf v)
+    /// <summary>글자 상자 윤곽 (텍스트 도구일 때, 늘 그리는 겹침 그림)</summary>
+    public static void DrawBoxes(Graphics g, ViewXf v)
     {
+        if (App.Tool?.Id != "text") return;
         foreach (var l in App.Doc?.Layers ?? new())
         {
             if (l.Kind != "text" || !l.Visible || l.Meta?["box"] is not JsonObject) continue;
