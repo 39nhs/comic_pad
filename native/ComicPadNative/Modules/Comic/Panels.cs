@@ -56,46 +56,54 @@ public static class Panels
     public static (Surface s, Rect r) Render(Document d, Layer l)
     {
         var m = l.Meta;
-        var panels = List(m);
+        var panels = List(m).Where(q => q.Count >= 3).ToList();
         double line = J.Num(m, "line", 6);
         bool mask = J.Bool(m, "maskOutside") && panels.Count > 0;
-        if (panels.Count == 0) return (new Surface(d.W, d.H), Rect.Empty);
-        var full = new Rect(0, 0, d.W, d.H);
-        var r = mask ? full : Geo.BoundsRect(panels.SelectMany(q => q), line * 2 + 4).Clip(d.W, d.H);
-        if (r.IsEmpty) return (new Surface(d.W, d.H), Rect.Empty);
-        var outb = new uint[r.W * r.H];
-        if (mask)
-        {
-            var cov = Gfx.Coverage(r, (g, br) => { foreach (var q in panels) { using var p = Geo.Poly(q); g.FillPath(br, p); } });
-            uint paper = Px.FromHex(d.PaperColor, 0xFFFFFFFF);
-            for (int i = 0; i < outb.Length; i++) { uint k = 255u - cov[i]; if (k > 0) outb[i] = Px.Scale(paper, k); }
-        }
-        // 테두리: 굵기 2배 선 ∩ 컷 안쪽
+        var surf = new Surface(d.W, d.H);
+        if (panels.Count == 0) return (surf, Rect.Empty);
+        var r = mask ? new Rect(0, 0, d.W, d.H) : Geo.BoundsRect(panels.SelectMany(q => q), line * 2 + 4).Clip(d.W, d.H);
+        if (r.IsEmpty) return (surf, Rect.Empty);
+        uint paper = Px.FromHex(d.PaperColor, 0xFFFFFFFF);
         uint col = Px.FromHex(J.Str(m, "color", "#000000"));
-        if (line > 0)
-            foreach (var q in panels)
+        var boxes = panels.Select(q => Geo.BoundsRect(q, line + 2)).ToList();
+        // 큰 원고도 메모리를 적게: 가로 띠(512줄)씩
+        const int BAND = 512;
+        for (int by = r.Y; by < r.B; by += BAND)
+        {
+            var band = Rect.FromLTRB(r.X, by, r.R, Math.Min(r.B, by + BAND));
+            var outb = new uint[band.W * band.H];
+            if (mask)
             {
-                if (q.Count < 3) continue;
-                var pr = Geo.BoundsRect(q, 2).Intersect(r);
-                if (pr.IsEmpty) continue;
-                using var path = Geo.Poly(q);
-                var inside = Gfx.Coverage(pr, (g, br) => g.FillPath(br, path));
-                var stroke = Gfx.Coverage(pr, (g, br) =>
-                {
-                    using var pen = new Pen(br, (float)(line * 2)) { LineJoin = LineJoin.Miter, MiterLimit = 20 };
-                    g.DrawPath(pen, path);
-                });
-                for (int y = 0; y < pr.H; y++)
-                    for (int x = 0; x < pr.W; x++)
-                    {
-                        int i = y * pr.W + x;
-                        uint c = (uint)(inside[i] * stroke[i] + 127) / 255;
-                        if (c == 0) continue;
-                        int oi = (pr.Y - r.Y + y) * r.W + (pr.X - r.X + x);
-                        outb[oi] = Px.Over(Px.Scale(col, c), outb[oi]);
-                    }
+                // 컷 바깥 = 용지색 (컷 안쪽 덮인 정도만큼 비움 → 가장자리도 매끈)
+                var cov = Gfx.Coverage(band, (g, br) => { foreach (var q in panels) { using var p = Geo.Poly(q); g.FillPath(br, p); } });
+                for (int i = 0; i < outb.Length; i++) { uint k = 255u - cov[i]; if (k > 0) outb[i] = Px.Scale(paper, k); }
             }
-        return (Gfx.NewSurface(d, r, outb), r);
+            // 테두리: 굵기 2배 선 ∩ 컷 안쪽
+            if (line > 0)
+                for (int k = 0; k < panels.Count; k++)
+                {
+                    var pr = boxes[k].Intersect(band);
+                    if (pr.IsEmpty) continue;
+                    using var path = Geo.Poly(panels[k]);
+                    var inside = Gfx.Coverage(pr, (g, br) => g.FillPath(br, path));
+                    var stroke = Gfx.Coverage(pr, (g, br) =>
+                    {
+                        using var pen = new Pen(br, (float)(line * 2)) { LineJoin = LineJoin.Miter, MiterLimit = 20 };
+                        g.DrawPath(pen, path);
+                    });
+                    for (int y = 0; y < pr.H; y++)
+                        for (int x = 0; x < pr.W; x++)
+                        {
+                            int i = y * pr.W + x;
+                            uint c = (uint)(inside[i] * stroke[i] + 127) / 255;
+                            if (c == 0) continue;
+                            int oi = (pr.Y - band.Y + y) * band.W + (pr.X - band.X + x);
+                            outb[oi] = Px.Over(Px.Scale(col, c), outb[oi]);
+                        }
+                }
+            surf.Write(band, outb);
+        }
+        return (surf, r);
     }
 
     // ---- 다각형 계산 ----
@@ -401,8 +409,16 @@ public sealed class PanelTool : ToolBase
         return (a, b);
     }
 
+    void EndLine()
+    {
+        if (linePrev == null) return;
+        var m = J.Clone(linePrev.L.Meta); var l = linePrev.L; linePrev.Restore(); linePrev = null;
+        MetaLayers.Commit(l, "컷 테두리", m, MetaLayers.Render);
+    }
+
     public override void Down(PointerArgs e)
     {
+        EndLine();   // 키보드로 바꾼 슬라이더 값도 기록
         if (Mode == "poly")
         {
             poly ??= new();
@@ -508,7 +524,7 @@ public sealed class PanelTool : ToolBase
         Panels.Set(m => { var ps = Panels.List(m); ps.Add(q); m["panels"] = Panels.PanelsJson(ps); return m; });
     }
 
-    public override void Deactivate() { poly = null; cursor = null; }
+    public override void Deactivate() { EndLine(); poly = null; cursor = null; }
     public override void Cancel() { drag?.Prev?.Restore(); if (drag?.Prev != null) App.InvalidateAll(); drag = null; }
     public override bool HandleKey(Keys k)
     {
@@ -580,12 +596,7 @@ public sealed class PanelTool : ToolBase
             var l = Panels.PanelLayer(false); if (l == null) return;
             linePrev ??= new MetaPreview(l);
             var m = linePrev.OrigMeta; m["line"] = Math.Round(v * 2) / 2; linePrev.Show(m, MetaLayers.Render);
-        }, step: 0.5, onEnd: () =>
-        {
-            if (linePrev == null) return;
-            var m = J.Clone(linePrev.L.Meta); var l = linePrev.L; linePrev.Restore(); linePrev = null;
-            MetaLayers.Commit(l, "컷 테두리", m, MetaLayers.Render);
-        });
+        }, step: 0.5, onEnd: EndLine);
         yield return Opt.Slider("좌우 간격", 0, 200, () => Gutters().gx, v => GutterX = Math.Max(0.01, v), step: 1);
         yield return Opt.Slider("상하 간격", 0, 300, () => Gutters().gy, v => GutterY = Math.Max(0.01, v), step: 1);
         yield return Opt.Check("컷 바깥을 용지색으로 가리기", () => J.Bool(Panels.PanelLayer(false)?.Meta, "maskOutside", true), v =>

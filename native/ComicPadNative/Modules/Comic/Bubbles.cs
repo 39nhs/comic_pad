@@ -291,6 +291,7 @@ public sealed class BubbleTool : ToolBase
 
     public override void Down(PointerArgs e)
     {
+        if (livePrev != null) EndLive("말풍선 수정");   // 키보드로 바꾼 슬라이더 값도 기록
         if (st?.Phase == "tail") { st.TailP = new P2(e.X, e.Y); return; }
         var cur = Selected();
         if (cur != null)
@@ -499,7 +500,7 @@ public sealed class BubbleTool : ToolBase
 
     public override void Activate() { App.DocChanged -= Reset; App.DocChanged += Reset; }
     void Reset() { st = null; sel = null; drag = null; }
-    public override void Deactivate() { if (st?.Phase == "tail") CommitNew(); st = null; sel = null; drag = null; }
+    public override void Deactivate() { if (livePrev != null) EndLive("말풍선 수정"); if (st?.Phase == "tail") CommitNew(); st = null; sel = null; drag = null; }
     public override void Cancel()
     {
         if (drag != null) { drag.Prev.Restore(); drag.TextPrev?.Restore(); App.InvalidateAll(); drag = null; }

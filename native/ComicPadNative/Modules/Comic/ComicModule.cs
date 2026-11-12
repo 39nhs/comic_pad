@@ -18,6 +18,8 @@ public sealed class ComicModule : IModule
         Registry.Tool(new SfxTool());
         Registry.Tool(new SpeedLinesTool());
         Registry.Tool(new MemoTool());
+        Registry.Tool(new MeshWarpTool());
+        Registry.Tool(new PuppetTool());
 
         Registry.Overlay(Manuscript.DrawGuides);
         Registry.Overlay(Rulers.Draw);
@@ -35,6 +37,8 @@ public sealed class ComicModule : IModule
         Registry.Menu("편집/레이어 회전/오른쪽으로 90°", () => Run(() => CanvasOps.RotateLayer(90)), Keys.None, HasDoc, order: 54);
         Registry.Menu("편집/레이어 회전/왼쪽으로 90°", () => Run(() => CanvasOps.RotateLayer(-90)), Keys.None, HasDoc, order: 55);
         Registry.Menu("편집/레이어 회전/180°", () => Run(() => CanvasOps.RotateLayer(180)), Keys.None, HasDoc, order: 56);
+        Registry.Menu("편집/원근·격자 왜곡 (여러 면)", () => App.SetTool("meshwarp"), Keys.None, HasDoc, order: 57);
+        Registry.Menu("편집/퍼펫 왜곡 (핀으로 휘기)", () => App.SetTool("puppet"), Keys.None, HasDoc, order: 58);
         Registry.Menu("편집/-캔버스", null, order: 60);
         Registry.Menu("편집/캔버스 크기…", () => Run(CanvasOps.CanvasSizeDialog), Keys.Control | Keys.Alt | Keys.C, HasDoc, order: 61);
         Registry.Menu("편집/이미지 크기…", () => Run(CanvasOps.ImageSize), Keys.Control | Keys.Alt | Keys.I, HasDoc, order: 62);
