@@ -49,6 +49,9 @@ public static partial class GapsTest
         yield return ("MF 소리 풀기", TestMfAudio);
         yield return ("애니 WebM", TestAnimWebm);
         yield return ("타임랩스 WebM", TestTimelapseWebm);
+        yield return ("버튜버 녹화", TestVtRecorder);
+        yield return ("버튜버 VP8 속도", TestVp8Speed);
+        yield return ("버튜버 스튜디오 녹화 단추", TestVtStudioRec);
     }
 
     // ------------------------------------------------------------------ 시험 그림
