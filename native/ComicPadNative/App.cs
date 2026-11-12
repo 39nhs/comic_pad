@@ -69,6 +69,10 @@ public static class Registry
         Commands[path] = run;
     }
     public static void Panel(string title, Func<Control> create, string dock = "right", int order = 500) { Panels.RemoveAll(p => p.Title == title); Panels.Add(new PanelDef(title, create, dock, order)); }
+
+    /// <summary>도구와 상관없이 늘 그리는 화면 겹침 그림 (자·원고 가이드 등, 화면 좌표). 모양이 바뀌면 그림판 RedrawAll</summary>
+    public static readonly List<Action<Graphics, ViewXf>> Overlays = new();
+    public static void Overlay(Action<Graphics, ViewXf> draw) => Overlays.Add(draw);
 }
 
 /// <summary>화면 ↔ 문서 변환 (확대·이동·회전·좌우 반전)</summary>
