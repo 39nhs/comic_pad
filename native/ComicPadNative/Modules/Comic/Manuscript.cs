@@ -120,6 +120,7 @@ public static class Manuscript
         var d = App.Doc; if (d == null) return;
         int width = App.Get("webtoonPreviewW", 390);
         using var f = new Form { Text = "웹툰 미리보기", StartPosition = FormStartPosition.CenterParent, BackColor = Opt.Bg, ForeColor = Opt.Fg, Width = 700, Height = 900, Font = new Font("Malgun Gothic", 9f) };
+        UI.Dialogs.Modals.Adopt(f);
         var flat = App.Comp.Flatten(d, new RenderOptions { ExcludeDraft = true });
         using var full = CpadIO.ToBitmap(flat, flat.Full, 0xFFFFFFFF);
         var pic = new PictureBox { SizeMode = PictureBoxSizeMode.StretchImage };
@@ -289,6 +290,7 @@ public static class Preflight
         var list = Check(d);
         Cursor.Current = Cursors.Default;
         using var f = new Form { Text = "인쇄·투고 전 점검", StartPosition = FormStartPosition.CenterParent, BackColor = Opt.Bg, ForeColor = Opt.Fg, Width = 760, Height = 520, Font = new Font("Malgun Gothic", 9f) };
+        UI.Dialogs.Modals.Adopt(f);
         var p = new FlowLayoutPanel { Dock = DockStyle.Fill, FlowDirection = FlowDirection.TopDown, WrapContents = false, AutoScroll = true, BackColor = Opt.Bg, Padding = new Padding(8) };
         int ce = list.Count(x => x.Sev == "error"), cw = list.Count(x => x.Sev == "warn"), ci = list.Count(x => x.Sev == "info");
         p.Controls.Add(Opt.Help(list.Count > 0 ? $"고쳐야 함 {ce} · 확인 {cw} · 참고 {ci}" : "문제를 찾지 못했습니다. 인쇄·투고해도 좋습니다."));

@@ -323,59 +323,90 @@ public static class Setup
         App.SetDoc(StartDocument(sd));
     }
 
-    // ---- 고르기 창 ---------------------------------------------------------------------
+    // ---- 고르기 창 (웹 setuppresets.js chooseSetupDialog: 넓은 .modal, .setup-cards 격자 + .setup-detail) -----------------
     public static void ChooseDialog(bool firstRun = false)
     {
         var s = App.Settings;
-        var root = new Panel { BackColor = Opt.Bg };
-        var cards = new FlowLayoutPanel { Dock = DockStyle.Left, Width = 300, FlowDirection = FlowDirection.TopDown, WrapContents = false, AutoScroll = true, BackColor = Opt.Bg, Padding = new Padding(6) };
-        var detail = new FlowLayoutPanel { Dock = DockStyle.Fill, FlowDirection = FlowDirection.TopDown, WrapContents = false, AutoScroll = true, BackColor = Opt.Bg, Padding = new Padding(10) };
         SetupPreset chosen = null;
-        var cardBtns = new List<Button>();
+        using var f = new UI.Dialogs.ModalForm(firstRun ? "처음 세팅 고르기" : "초기 세팅 프리셋", 820, 0);
+        var body = new UI.Controls.WebStack();
+        if (firstRun) body.Controls.Add(Opt.Help("ComicPad 에 오신 것을 환영합니다. 기본은 클립스튜디오식입니다. 다른 방식이 익숙하면 골라 주세요 (단축키·화면·새 작품 크기를 맞춰 드립니다)."));
+        var cards = new SetupCards(Presets, () => chosen?.Id) { Margin = new Padding(0, 8, 0, 8) };
+        var detail = new UI.Controls.WebBox { Padding = new Padding(10, 8, 10, 8) };
         void Show(SetupPreset p)
         {
             chosen = p;
-            foreach (var b in cardBtns) { bool on = (string)b.Tag == p.Id; b.BackColor = on ? Opt.Accent : Opt.Bg2; b.ForeColor = on ? Color.Black : Opt.Fg; }
+            cards.Invalidate();
             var (_, changed) = ApplyPresetTo(s, p.Id);
             detail.SuspendLayout();
             foreach (Control c in detail.Controls.Cast<Control>().ToList()) c.Dispose();
-            detail.Controls.Add(new Label { Text = p.Name, AutoSize = true, Font = new Font("Malgun Gothic", 11f, FontStyle.Bold) });
-            detail.Controls.Add(new Label { Text = p.Desc, AutoSize = true, MaximumSize = new Size(440, 0), ForeColor = Opt.Muted, Margin = new Padding(0, 4, 0, 8) });
-            foreach (var t in p.Changes) detail.Controls.Add(new Label { Text = "• " + t, AutoSize = true, MaximumSize = new Size(440, 0), Margin = new Padding(0, 2, 0, 2) });
-            detail.Controls.Add(new Label
-            {
-                AutoSize = true, MaximumSize = new Size(440, 0), ForeColor = Opt.Muted, Margin = new Padding(0, 10, 0, 0),
-                Text = firstRun ? "나중에 도움말 > 초기 세팅 프리셋 고르기 에서 언제든 바꿀 수 있습니다."
-                    : changed.Count > 0 ? $"바뀌는 설정: {string.Join(", ", changed.Select(k => KeyLabel.GetValueOrDefault(k, k)))}. 적용 전 상태는 백업되어 \"되돌리기\" 한 번으로 돌아갑니다. 내가 만든 브러시·작업 화면·팔레트는 지우지 않습니다."
-                    : "지금 설정과 같아서 바뀌는 것이 없습니다.",
-            });
-            var nh = Opt.Help("네이티브 판에서도 모두 쓰입니다: 도구 키·단축키, 화면 구성(간단히/모든 기능)·아래 막대·퀵바·원형 메뉴·큰 버튼, 펜 측면 버튼·손가락 제스처·브러시 커서, 오른쪽 패널, 새 작품 추천 크기.");
-            nh.MaximumSize = new Size(440, 0); nh.Margin = new Padding(0, 10, 0, 0);
-            detail.Controls.Add(nh);
+            detail.Controls.Add(new Label { Text = p.Name, AutoSize = true, Font = UI.Controls.Web.BodyBold, ForeColor = Opt.Fg, Margin = Padding.Empty });
+            detail.Controls.Add(Opt.Help(p.Desc));
+            foreach (var t in p.Changes) detail.Controls.Add(new Label { Text = "•  " + t, AutoSize = true, ForeColor = Opt.Fg, Font = UI.Controls.Web.Body, Margin = new Padding(8, 2, 0, 2) });
+            detail.Controls.Add(Opt.Help(firstRun ? "나중에 도움말 > 초기 세팅 프리셋 고르기 에서 언제든 바꿀 수 있습니다."
+                : changed.Count > 0 ? $"바뀌는 설정: {string.Join(", ", changed.Select(k => KeyLabel.GetValueOrDefault(k, k)))}. 적용 전 상태는 백업되어 \"되돌리기\" 한 번으로 돌아갑니다. 내가 만든 브러시·작업 화면·팔레트는 지우지 않습니다."
+                : "지금 설정과 같아서 바뀌는 것이 없습니다."));
+            detail.Controls.Add(Opt.Help("네이티브 판에서도 모두 쓰입니다: 도구 키·단축키, 화면 구성(간단히/모든 기능)·아래 막대·퀵바·원형 메뉴·큰 버튼, 펜 측면 버튼·손가락 제스처·브러시 커서, 오른쪽 패널, 새 작품 추천 크기."));
             detail.ResumeLayout();
+            body.PerformLayout();
+            if (f.Visible) f.Fit();
         }
-        if (firstRun) cards.Controls.Add(new Label { Text = "ComicPad 에 오신 것을 환영합니다. 기본은 클립스튜디오식입니다. 다른 방식이 익숙하면 골라 주세요 (단축키·화면·새 작품 크기를 맞춰 드립니다).", AutoSize = true, MaximumSize = new Size(280, 0), ForeColor = Opt.Muted, Margin = new Padding(0, 0, 0, 8) });
-        foreach (var p in Presets)
-        {
-            var b = new Button { Text = p.Name + "\n" + p.Desc, Tag = p.Id, Width = 280, Height = 78, TextAlign = ContentAlignment.TopLeft, FlatStyle = FlatStyle.Flat, BackColor = Opt.Bg2, ForeColor = Opt.Fg, Margin = new Padding(0, 0, 0, 6) };
-            var pp = p; b.Click += (_, _) => Show(pp);
-            cardBtns.Add(b); cards.Controls.Add(b);
-        }
+        cards.Picked += Show;
+        body.Controls.Add(cards); body.Controls.Add(detail);
+        f.SetContent(body);
         string result = null;
-        var bar = new FlowLayoutPanel { Dock = DockStyle.Bottom, Height = 40, FlowDirection = FlowDirection.RightToLeft, BackColor = Opt.Bg, Padding = new Padding(4) };
-        Form f = null;
-        bar.Controls.Add(Opt.Button("이 세팅으로 시작", () => { result = "apply"; f.Close(); }, true));
-        bar.Controls.Add(Opt.Button(firstRun ? "기본(클립스튜디오식)으로 시작" : "닫기", () => { result = "skip"; f.Close(); }));
-        if (!firstRun && s["setupBackup"] is JsonObject bk) bar.Controls.Add(Opt.Button($"되돌리기 (\"{(string)bk["label"]}\" 전으로)", () => { result = "undo"; f.Close(); }));
-        root.Controls.Add(detail); root.Controls.Add(cards); root.Controls.Add(bar);
-        f = new Form { Text = firstRun ? "처음 세팅 고르기" : "초기 세팅 프리셋", Width = 800, Height = 560, StartPosition = FormStartPosition.CenterParent, BackColor = Opt.Bg, ForeColor = Opt.Fg, FormBorderStyle = FormBorderStyle.FixedDialog, MinimizeBox = false, MaximizeBox = false, Font = new Font("Malgun Gothic", 9f) };
-        root.Dock = DockStyle.Fill; f.Controls.Add(root);
+        if (!firstRun && s["setupBackup"] is JsonObject bk) f.AddAction($"되돌리기 (\"{(string)bk["label"]}\" 전으로)", () => { result = "undo"; return true; });
+        f.AddAction(firstRun ? "기본(클립스튜디오식)으로 시작" : "닫기", () => { result = "skip"; return true; });
+        f.AddAction("이 세팅으로 시작", () => { if (chosen == null) { App.Toast("위에서 하나를 골라 주세요"); return false; } result = "apply"; return true; }, primary: true);
         Show(Presets.FirstOrDefault(p => p.Id == (string)s["setupDone"]) ?? Presets.First(p => p.Id == DefaultSetup));
-        using (f) f.ShowDialog(App.Main);
+        f.ShowDialog(App.Main);
         if (result == "apply" && chosen != null) ApplySetupPreset(chosen.Id);
         else if (result == "undo") UndoSetup(s);
         else if (firstRun) ApplySetupPreset(DefaultSetup, true);   // 창을 그냥 닫아도 기본은 클립스튜디오식
         App.SaveSettingsSoon();
+    }
+
+    /// <summary>세팅 카드 격자 (.setup-cards: 최소 190px, 간격 8 / .setup-card: 굵은 이름 + 흐린 11px 설명, 고른 것은 주황 테두리 2px)</summary>
+    sealed class SetupCards : Control, UI.Controls.IWebBlock
+    {
+        readonly List<SetupPreset> items; readonly Func<string> current;
+        public event Action<SetupPreset> Picked;
+        int hot = -1;
+        public SetupCards(IEnumerable<SetupPreset> items, Func<string> current)
+        {
+            this.items = items.ToList(); this.current = current;
+            SetStyle(ControlStyles.UserPaint | ControlStyles.AllPaintingInWmPaint | ControlStyles.OptimizedDoubleBuffer | ControlStyles.ResizeRedraw, true);
+            Cursor = Cursors.Hand;
+        }
+        int Cols(int w) => Math.Max(1, (w + 8) / (190 + 8));
+        List<Rectangle> Lay(int w)
+        {
+            int n = Cols(w), cw = (w - (n - 1) * 8) / n, y = 0; var res = new List<Rectangle>();
+            for (int i = 0; i < items.Count; i += n)
+            {
+                int rh = items.Skip(i).Take(n).Max(p => 20 + UI.Controls.Web.BodyBold.Height + 4 + UI.Controls.Web.MeasureWrap(p.Desc, UI.Controls.Web.Tiny, cw - 20).Height);
+                for (int k = 0; k < n && i + k < items.Count; k++) res.Add(new Rectangle(k * (cw + 8), y, cw, rh));
+                y += rh + 8;
+            }
+            return res;
+        }
+        public override Size GetPreferredSize(Size proposed) { int w = proposed.Width > 1 && proposed.Width < 100000 ? proposed.Width : 788; var r = Lay(w); return new Size(w, r.Count == 0 ? 0 : r.Max(x => x.Bottom)); }
+        protected override void OnPaint(PaintEventArgs e)
+        {
+            var g = e.Graphics; g.Clear(UI.Controls.Web.ParentBack(this));
+            var rs = Lay(Width); string cur = current();
+            for (int i = 0; i < items.Count; i++)
+            {
+                var r = rs[i]; bool on = items[i].Id == cur;
+                UI.Controls.Web.Box(g, r, 10, UI.Theme.Panel2, on || i == hot ? UI.Theme.Accent : UI.Theme.Line, on ? 3 : 1);
+                UI.Controls.Web.Text(g, items[i].Name, UI.Controls.Web.BodyBold, new Rectangle(r.X + 10, r.Y + 10, r.Width - 20, UI.Controls.Web.BodyBold.Height + 2), UI.Theme.Text, UI.Controls.Web.Left);
+                UI.Controls.Web.Text(g, items[i].Desc, UI.Controls.Web.Tiny, new Rectangle(r.X + 10, r.Y + 14 + UI.Controls.Web.BodyBold.Height, r.Width - 20, r.Height - 20 - UI.Controls.Web.BodyBold.Height), UI.Theme.Muted, UI.Controls.Web.Wrap);
+            }
+        }
+        int Hit(Point p) { var rs = Lay(Width); for (int i = 0; i < rs.Count; i++) if (rs[i].Contains(p)) return i; return -1; }
+        protected override void OnMouseMove(MouseEventArgs e) { base.OnMouseMove(e); int h = Hit(e.Location); if (h != hot) { hot = h; Invalidate(); } }
+        protected override void OnMouseLeave(EventArgs e) { base.OnMouseLeave(e); hot = -1; Invalidate(); }
+        protected override void OnMouseUp(MouseEventArgs e) { base.OnMouseUp(e); int h = Hit(e.Location); if (h >= 0 && e.Button == MouseButtons.Left) Picked?.Invoke(items[h]); }
     }
 
     /// <summary>처음 켰을 때: 이미 쓰던 설정이 있으면 조용히 "완료"로, 아니면 고르기 창</summary>

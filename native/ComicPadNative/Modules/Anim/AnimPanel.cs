@@ -15,7 +15,7 @@ public static class AnimBars
         var a = d.Anim; int n = AnimCore.FrameCount(d), f0 = AnimCore.Frame(d);
         var cur = AnimCore.AnimFolder(d);
         Button Tog(string text, string tip, Action run, bool on) { var b = Ui.Btn(text, run, on, tip); return b; }
-        var pos = new Label { Text = $"{f0 + 1} / {n}", AutoSize = true, ForeColor = Ui.Fg, Margin = new Padding(4, 6, 6, 0), Font = new Font("Malgun Gothic", 9.5f, FontStyle.Bold) };
+        var pos = new Label { Text = $"{f0 + 1} / {n}", AutoSize = true, ForeColor = Ui.Accent, Margin = new Padding(4, 0, 4, 0), Font = UI.Controls.Web.BodyBold, MinimumSize = new Size(56, 0), TextAlign = ContentAlignment.MiddleCenter };   // 웹 .anim-pos
         bool lit = cur != null && AnimCore.LightIds(d).Contains(AnimCore.CelAt(cur, f0, d)?.Id ?? "\0");
         var row = Ui.Row(
             Ui.Btn("◀", () => AnimCore.SetFrame(AnimCore.Frame(App.Doc) - 1), tip: "이전 (,)"),
@@ -28,14 +28,15 @@ public static class AnimBars
             Ui.Btn("삭제", AnimCore.DeleteFrame, tip: "프레임 삭제 (모든 트랙)"),
             Tog("어니언", "어니언 스킨", () => { a["onion"] = !J.T(a["onion"]); App.Doc.Modified = true; AnimCore.Refresh(); }, J.T(a["onion"])),
             Tog("라이트", "지금 칸을 라이트 테이블에 올리기/내리기", AnimCore.ToggleLight, lit));
-        row.MaximumSize = new Size(0, 0);
+        if (row is UI.Controls.WebRow wr) wr.Gap = 2;
         return row;
     }
 }
 
 public sealed class AnimPanel : UserControl
 {
-    readonly FlowLayoutPanel body = new() { FlowDirection = FlowDirection.TopDown, WrapContents = false, AutoSize = true, AutoSizeMode = AutoSizeMode.GrowAndShrink, Padding = new Padding(4), BackColor = Opt.Bg };
+    // 웹 .panel-scroll (여백 4·10·12, 부품은 폭을 꽉)
+    readonly UI.Controls.WebStack body = new() { Padding = new Padding(10, 4, 10, 12) };
     readonly System.Windows.Forms.Timer soon = new() { Interval = 60 };
     TimelineGrid grid;
     Control bar;
@@ -44,6 +45,7 @@ public sealed class AnimPanel : UserControl
     public AnimPanel()
     {
         BackColor = Opt.Bg; AutoScroll = true;
+        UI.Controls.Web.DarkScroll(this);
         Controls.Add(body);
         soon.Tick += (_, _) => { soon.Stop(); Render(); };
         Action changed = () =>
@@ -67,7 +69,6 @@ public sealed class AnimPanel : UserControl
         if (d == null || bar == null) return;
         int i = body.Controls.IndexOf(bar);
         var nb = AnimBars.Controls(d);
-        nb.MaximumSize = bar.MaximumSize;
         body.Controls.Add(nb); body.Controls.SetChildIndex(nb, i);
         body.Controls.Remove(bar); bar.Dispose(); bar = nb;
     }
@@ -100,10 +101,8 @@ public sealed class AnimPanel : UserControl
         }
         var a = d.Anim; int f0 = AnimCore.Frame(d);
         bar = AnimBars.Controls(d);
-        bar.MaximumSize = new Size(Math.Max(240, ClientSize.Width - 16), 0);
         body.Controls.Add(bar);
-        grid ??= new TimelineGrid { Width = 296, Margin = new Padding(0, 2, 0, 2) };
-        grid.Width = Math.Max(240, ClientSize.Width - 24);
+        grid ??= UI.Controls.Web.Stretch(new TimelineGrid { Width = 296, Margin = new Padding(0, 2, 0, 2) });
         body.Controls.Add(grid);
         grid.Sync();
         body.Controls.Add(Ui.Row(Ui.Btn("+ 트랙", () => AnimCore.AddTrack(), tip: "트랙 추가"), Ui.Btn("칸 비우기", AnimCore.ClearCell, tip: "지금 트랙의 지금 칸을 비우기"), Ui.Btn("연결 끊기", AnimCore.UnlinkCell, tip: "이 칸만 따로 고칠 수 있게 복제"),

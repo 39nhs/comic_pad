@@ -42,6 +42,7 @@ public static class AiFeatures
         var list = AiRuntime.Installed(task);
         if (list.Count == 0) { App.Toast("이 기능에 쓸 AI 모델이 아직 없습니다. AI > AI 모델 관리에서 받으세요"); ModelManager(); return null; }
         using var f = new Form { Text = title, StartPosition = FormStartPosition.CenterParent, FormBorderStyle = FormBorderStyle.FixedToolWindow, BackColor = Opt.Bg, ForeColor = Opt.Fg, AutoSize = true, AutoSizeMode = AutoSizeMode.GrowAndShrink };
+        UI.Dialogs.Modals.Adopt(f);
         var p = Opt.Panel();
         string last = (string)(App.Settings["aiPick"] as JsonObject)?[task];
         string model = list.Any(x => x.Id == last) ? last : list[0].Id;
@@ -103,6 +104,7 @@ public static class AiFeatures
     static T Busy<T>(string label, Func<IProgress<double>, CancellationToken, T> work)
     {
         using var f = new Form { Text = label, Width = 380, Height = 130, StartPosition = FormStartPosition.CenterParent, FormBorderStyle = FormBorderStyle.FixedToolWindow, ControlBox = false, BackColor = Opt.Bg, ForeColor = Opt.Fg };
+        UI.Dialogs.Modals.Adopt(f);
         var lab = new Label { Text = label + " 중… (이 PC 안에서)", Dock = DockStyle.Top, Height = 30, Padding = new Padding(8) };
         var bar = new ProgressBar { Dock = DockStyle.Top, Height = 18, Maximum = 1000 };
         var cts = new CancellationTokenSource();
@@ -280,6 +282,7 @@ public static class AiFeatures
     public static void ModelManager()
     {
         using var f = new Form { Text = "AI 모델 관리", Width = 760, Height = 560, StartPosition = FormStartPosition.CenterParent, BackColor = Opt.Bg, ForeColor = Opt.Fg, FormBorderStyle = FormBorderStyle.SizableToolWindow };
+        UI.Dialogs.Modals.Adopt(f);
         var list = new ListView { Dock = DockStyle.Fill, View = View.Details, FullRowSelect = true, BackColor = Opt.Bg, ForeColor = Opt.Fg, ShowItemToolTips = true };
         list.Columns.Add("모델", 260); list.Columns.Add("기능", 70); list.Columns.Add("라이선스", 130); list.Columns.Add("크기", 80); list.Columns.Add("상태", 180);
         string TaskName(string t) => t switch { "lineart" => "선화", "cutout" => "따기", "depth" => "깊이", "upscale" => "키우기", "select" => "고르기", "pose" => "포즈", "hand" => "손", "face" => "얼굴", _ => t };

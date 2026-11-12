@@ -53,6 +53,7 @@ public static class ImageAi
         double den = App.Get("aiDen", 0.45), steps = 25;
         using (var f = new Form { Text = "이미지 AI 로 그리기 (img2img)", StartPosition = FormStartPosition.CenterParent, FormBorderStyle = FormBorderStyle.FixedToolWindow, BackColor = Opt.Bg, ForeColor = Opt.Fg, AutoSize = true, AutoSizeMode = AutoSizeMode.GrowAndShrink })
         {
+            UI.Dialogs.Modals.Adopt(f);
             var p = Opt.Panel();
             TextBox Box(string label, string v, bool multi = false)
             {

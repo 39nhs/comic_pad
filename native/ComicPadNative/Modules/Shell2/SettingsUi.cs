@@ -9,12 +9,12 @@ namespace ComicPadNative.Modules.Shell2;
 
 public static class Shell2Settings
 {
-    static Control W(Label l) { l.MaximumSize = new Size(440, 0); return l; }
+    static Control W(Label l) => l;
 
     /// <summary>설정 화면 내용 (대화상자 또는 앱 밖 창에 넣음)</summary>
     public static Control Body()
     {
-        var p = new FlowLayoutPanel { FlowDirection = FlowDirection.TopDown, WrapContents = false, AutoScroll = true, BackColor = Opt.Bg, Padding = new Padding(10) };
+        var p = Opt.Panel();   // 웹 .settings: 구역 제목 + 부품 (세로 쌓기)
         void Add(params Control[] cs) { foreach (var c in cs) if (c != null) p.Controls.Add(c); }
         Add(Opt.Title("펜 (S펜·와콤·휴이온·XP-Pen·서피스 펜)"),
             Opt.Row(Opt.Button("필압 곡선·흔들림 보정…", PenSettings.Show), Opt.Button("펜 필기감 진단…", () => WebIds.Run("pen.diagnose"))),
@@ -51,11 +51,12 @@ public static class Shell2Settings
     public static void Dialog()
     {
         var body = Body();
-        using var f = Shell2Ui.Modal("환경 설정", body, 500, 760);
-        var pop = new Button { Text = "앱 밖 창으로", Dock = DockStyle.Bottom, Height = 28, FlatStyle = FlatStyle.Flat, BackColor = Opt.Bg2, ForeColor = Opt.Fg };
+        // 웹: 넓은 .modal, 아래 [닫기(주황)] [앱 밖 창으로]
+        using var f = new UI.Dialogs.ModalForm("환경 설정", 820, 0);
+        f.SetContent(body);
         bool popOut = false;
-        pop.Click += (_, _) => { popOut = true; f.Close(); };
-        f.Controls.Add(pop);
+        f.AddAction("닫기", () => true, primary: true);
+        f.AddAction("앱 밖 창으로", () => { popOut = true; return true; });
         f.ShowDialog(App.Main);
         App.NotifySettings();
         App.SaveSettings();
@@ -96,7 +97,7 @@ public static class BackupUi
 
     public static void Dialog()
     {
-        var body = new FlowLayoutPanel { FlowDirection = FlowDirection.TopDown, WrapContents = false, AutoScroll = true, BackColor = Opt.Bg, Padding = new Padding(10) };
+        var body = new UI.Controls.WebStack();
         using var f = Shell2Ui.Modal("작업물 백업", body, 640, 620);
         bool running = false;
         void Render()
@@ -105,7 +106,7 @@ public static class BackupUi
             body.SuspendLayout();
             foreach (Control c in body.Controls.Cast<Control>().ToList()) c.Dispose();
             var c0 = Conf();
-            body.Controls.Add(new Label { Text = $"작품·에셋·글꼴·설정을 zip 하나로 묶어 {Shell.BackupDir} 에 둡니다. AI 모델은 넣지 않습니다.", AutoSize = true, MaximumSize = new Size(580, 0), ForeColor = Opt.Muted });
+            body.Controls.Add(Opt.Help($"작품·에셋·글꼴·설정을 zip 하나로 묶어 {Shell.BackupDir} 에 둡니다. AI 모델은 넣지 않습니다."));
             body.Controls.Add(Opt.Title("자동 백업"));
             body.Controls.Add(Opt.Check("하루 한 번 자동으로 백업", () => c0["on"]?.GetValue<bool>() != false, v => { c0["on"] = v; App.SaveSettingsSoon(); }));
             body.Controls.Add(Opt.Slider("보관 개수", 1, 60, () => U.Num(c0["keep"], 14), v => { c0["keep"] = Math.Round(v); App.SaveSettingsSoon(); }, step: 1));
@@ -124,7 +125,7 @@ public static class BackupUi
             {
                 var fi = new FileInfo(zip);
                 var head = Opt.Button($"▸ {fi.Name} — {Mb(fi.Length)} · {fi.LastWriteTime:yyyy-MM-dd HH:mm}", () => { });
-                var inner = new FlowLayoutPanel { FlowDirection = FlowDirection.TopDown, AutoSize = true, WrapContents = false, Visible = false, Margin = new Padding(18, 0, 0, 6), BackColor = Opt.Bg };
+                var inner = new UI.Controls.WebStack { FillParent = false, Visible = false, Margin = new Padding(18, 0, 0, 6) };
                 bool loaded = false;
                 head.Click += (_, _) =>
                 {

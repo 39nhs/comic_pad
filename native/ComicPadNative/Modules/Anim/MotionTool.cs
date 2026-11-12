@@ -168,7 +168,7 @@ public sealed class MotionTool : ToolBase
     /// <summary>애니가 바뀔 때마다 다시 만드는 옵션 칸</summary>
     public static Control Live(Func<Control> build)
     {
-        var host = new FlowLayoutPanel { AutoSize = true, AutoSizeMode = AutoSizeMode.GrowAndShrink, FlowDirection = FlowDirection.TopDown, BackColor = Ui.Bg, Padding = new Padding(6) };
+        var host = (FlowLayoutPanel)UI.Opt.Panel();
         var timer = new System.Windows.Forms.Timer { Interval = 60 };
         void Rebuild() { timer.Stop(); if (host.IsDisposed) return; host.SuspendLayout(); foreach (Control c in host.Controls) c.Dispose(); host.Controls.Clear(); try { host.Controls.Add(build()); } catch (Exception ex) { host.Controls.Add(Ui.Help("오류: " + ex.Message)); } host.ResumeLayout(); }
         timer.Tick += (_, _) => Rebuild();

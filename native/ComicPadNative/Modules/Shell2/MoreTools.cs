@@ -295,7 +295,7 @@ public sealed class VectorSelectTool : ToolBase
 
     public override Control BuildOptions()
     {
-        var box = new FlowLayoutPanel { FlowDirection = FlowDirection.TopDown, WrapContents = false, AutoSize = true, BackColor = Opt.Bg, Padding = new Padding(6) };
+        var box = (FlowLayoutPanel)Opt.Panel();
         void Render()
         {
             if (box.IsDisposed) return;

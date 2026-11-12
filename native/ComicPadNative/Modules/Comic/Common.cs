@@ -461,40 +461,20 @@ public static class MetaLayers
 // =====================================================================
 public static class CUI
 {
-    /// <summary>나란히 고르는 단추들 (웹 segmented)</summary>
+    /// <summary>나란히 고르는 단추들 (웹 segmented). label 이 있으면 위에 흐린 이름</summary>
     public static Control Seg((string id, string text)[] items, Func<string> get, Action<string> set, string label = null)
     {
-        var box = new FlowLayoutPanel { FlowDirection = FlowDirection.LeftToRight, AutoSize = true, MaximumSize = new Size(270, 0), BackColor = Opt.Bg, Margin = new Padding(0, 2, 0, 2), WrapContents = true };
-        if (label != null) box.Controls.Add(new Label { Text = label, ForeColor = Opt.Fg, AutoSize = true, Margin = new Padding(0, 6, 4, 0) });
-        var btns = new List<Button>();
-        void Sync() { for (int i = 0; i < items.Length; i++) { bool on = items[i].id == get(); btns[i].BackColor = on ? Opt.Accent : Opt.Bg2; btns[i].ForeColor = on ? Color.Black : Opt.Fg; } }
-        foreach (var (id, text) in items)
-        {
-            var b = new Button { Text = text, AutoSize = true, FlatStyle = FlatStyle.Flat, Margin = new Padding(0, 1, 3, 1), Padding = new Padding(1, 0, 1, 0) };
-            b.FlatAppearance.BorderColor = Color.FromArgb(74, 74, 84);
-            var key = id;
-            b.Click += (_, _) => { set(key); Sync(); };
-            btns.Add(b); box.Controls.Add(b);
-        }
-        Sync();
+        var seg = UI.Controls.WebSeg.Of(items, get, set);
+        if (label == null) return seg;
+        var box = new UI.Controls.WebStack { FillParent = false, Margin = new Padding(0, 4, 0, 4) };
+        box.Controls.Add(new Label { Text = label, AutoSize = true, Font = UI.Controls.Web.Small, ForeColor = Theme.Muted, Margin = new Padding(0, 0, 0, 4) });
+        seg.Margin = Padding.Empty;
+        box.Controls.Add(seg);
         return box;
     }
 
-    /// <summary>색 단추 (누르면 색 고르기)</summary>
-    public static Control ColorBtn(string label, Func<string> get, Action<string> set)
-    {
-        var row = new FlowLayoutPanel { AutoSize = true, BackColor = Opt.Bg, Margin = new Padding(0, 2, 6, 2) };
-        var sw = new Button { Width = 34, Height = 22, FlatStyle = FlatStyle.Flat, BackColor = Gfx.Col(get()), Margin = new Padding(0, 0, 4, 0) };
-        sw.Click += (_, _) =>
-        {
-            using var dlg = new ColorDialog { Color = Gfx.Col(get()), FullOpen = true };
-            if (dlg.ShowDialog(App.Main) != DialogResult.OK) return;
-            set(Gfx.Hex(dlg.Color)); sw.BackColor = dlg.Color;
-        };
-        row.Controls.Add(sw);
-        row.Controls.Add(new Label { Text = label, ForeColor = Opt.Fg, AutoSize = true, Margin = new Padding(0, 4, 0, 0) });
-        return row;
-    }
+    /// <summary>색 단추 (색 칩 + 이름, 누르면 색 고르기)</summary>
+    public static Control ColorBtn(string label, Func<string> get, Action<string> set) => new UI.Controls.WebColorButton(label, get, set);
 
     /// <summary>다시 만들 수 있는 옵션 상자 (고른 대상이 바뀌면 Rebuild)</summary>
     public sealed class Host
@@ -528,69 +508,32 @@ public static class CUI
     public static Field Txt(string key, string label, string v, bool multi = false) => new() { Key = key, Label = label, Type = multi ? "textarea" : "text", Value = v };
     public static Field Info(string text) => new() { Type = "info", Label = text };
 
-    /// <summary>확인 → 값 사전, 취소 → null, 추가 단추 → extra 의 값(string)</summary>
+    /// <summary>확인 → 값 사전, 취소 → null, 추가 단추 → {"$extra": 값} (모양은 UI.Dialogs.WebForm)</summary>
     public static Dictionary<string, object> Form(string title, IEnumerable<Field> fields, string okLabel = "확인", (string label, string value)[] extra = null)
     {
-        using var f = new Form { Text = title, FormBorderStyle = FormBorderStyle.FixedDialog, StartPosition = FormStartPosition.CenterParent, MinimizeBox = false, MaximizeBox = false, BackColor = Opt.Bg, ForeColor = Opt.Fg, AutoSize = true, AutoSizeMode = AutoSizeMode.GrowAndShrink, Padding = new Padding(10), Font = new Font("Malgun Gothic", 9f) };
-        var p = new FlowLayoutPanel { FlowDirection = FlowDirection.TopDown, AutoSize = true, Dock = DockStyle.Fill, WrapContents = false };
-        var getters = new Dictionary<string, Func<object>>();
-        foreach (var fd in fields)
+        var list = fields.Where(f => f != null).ToList();
+        var spec = list.Select(fd =>
         {
-            switch (fd.Type)
+            double v = fd.Type == "number" ? Convert.ToDouble(fd.Value ?? 0, CultureInfo.InvariantCulture) : 0;
+            int dec = fd.Decimals >= 0 ? fd.Decimals : (v % 1 == 0 ? 0 : 2);
+            return new UI.Dialogs.FormField
             {
-                case "info": p.Controls.Add(new Label { Text = fd.Label, AutoSize = true, MaximumSize = new Size(380, 0), ForeColor = Opt.Muted, Margin = new Padding(0, 4, 0, 6) }); break;
-                case "check":
-                {
-                    var c = new CheckBox { Text = fd.Label, Checked = fd.Value is bool b && b, AutoSize = true, ForeColor = Opt.Fg };
-                    p.Controls.Add(c); getters[fd.Key] = () => c.Checked; break;
-                }
-                case "select":
-                {
-                    p.Controls.Add(new Label { Text = fd.Label, AutoSize = true });
-                    var cb = new ComboBox { DropDownStyle = ComboBoxStyle.DropDownList, Width = 300, BackColor = Opt.Bg2, ForeColor = Opt.Fg };
-                    foreach (var (_, t) in fd.Options) cb.Items.Add(t);
-                    cb.SelectedIndex = Math.Max(0, Array.FindIndex(fd.Options, o => o.id == (string)fd.Value));
-                    var opts = fd.Options;
-                    p.Controls.Add(cb); getters[fd.Key] = () => opts[Math.Max(0, cb.SelectedIndex)].id; break;
-                }
-                case "text": case "textarea":
-                {
-                    p.Controls.Add(new Label { Text = fd.Label, AutoSize = true });
-                    var t = new TextBox { Text = fd.Value as string ?? "", Width = 300, Multiline = fd.Type == "textarea", Height = fd.Type == "textarea" ? 80 : 24, BackColor = Opt.Bg2, ForeColor = Opt.Fg, ScrollBars = fd.Type == "textarea" ? ScrollBars.Vertical : ScrollBars.None };
-                    p.Controls.Add(t); getters[fd.Key] = () => t.Text; break;
-                }
-                default:
-                {
-                    p.Controls.Add(new Label { Text = fd.Label, AutoSize = true });
-                    double v = Convert.ToDouble(fd.Value ?? 0, CultureInfo.InvariantCulture);
-                    int dec = fd.Decimals >= 0 ? fd.Decimals : (v % 1 == 0 ? 0 : 2);
-                    var n = new NumericUpDown { Minimum = (decimal)fd.Min, Maximum = (decimal)fd.Max, DecimalPlaces = dec, Value = (decimal)Math.Clamp(v, fd.Min, fd.Max), Width = 200, BackColor = Opt.Bg2, ForeColor = Opt.Fg, Increment = dec > 0 ? 0.1m : 1 };
-                    p.Controls.Add(n); getters[fd.Key] = () => (double)n.Value; break;
-                }
-            }
-        }
-        var ok = new Button { Text = okLabel, DialogResult = DialogResult.OK, AutoSize = true, BackColor = Opt.Accent, ForeColor = Color.Black, FlatStyle = FlatStyle.Flat };
-        var cancel = new Button { Text = "취소", DialogResult = DialogResult.Cancel, AutoSize = true, FlatStyle = FlatStyle.Flat };
-        var row = Opt.Row(ok, cancel);
-        string extraHit = null;
-        foreach (var (label, value) in extra ?? Array.Empty<(string, string)>())
-        {
-            var b = new Button { Text = label, AutoSize = true, FlatStyle = FlatStyle.Flat };
-            var v = value;
-            b.Click += (_, _) => { extraHit = v; f.DialogResult = DialogResult.Abort; f.Close(); };
-            row.Controls.Add(b);
-        }
-        p.Controls.Add(row);
-        f.Controls.Add(p); f.AcceptButton = ok; f.CancelButton = cancel;
-        var r = f.ShowDialog(App.Main);
-        if (extraHit != null) return new Dictionary<string, object> { ["$extra"] = extraHit };
-        return r == DialogResult.OK ? getters.ToDictionary(k => k.Key, k => k.Value()) : null;
+                Key = fd.Key, Label = fd.Label, Options = fd.Options, Min = fd.Min, Max = fd.Max,
+                Type = fd.Type switch { "check" => "checkbox", _ => fd.Type },
+                Value = fd.Type == "number" ? v : fd.Value,
+                Decimals = fd.Type == "number" ? dec : -1, Step = fd.Type == "number" && dec > 0 ? 0.1 : 1,
+            };
+        }).ToList();
+        var r = UI.Dialogs.WebForm.Show(title, spec, okLabel, "취소", extra);
+        if (r == null) return null;
+        if (r.TryGetValue("__extra", out var ex)) return new Dictionary<string, object> { ["$extra"] = ex };
+        return list.Where(f => f.Key != null && f.Type != "info" && r.ContainsKey(f.Key)).ToDictionary(f => f.Key, f => r[f.Key]);
     }
     public static double D(Dictionary<string, object> v, string k) => v != null && v.TryGetValue(k, out var o) && o is double d ? d : 0;
     public static string S(Dictionary<string, object> v, string k) => v != null && v.TryGetValue(k, out var o) ? o as string : null;
     public static bool B(Dictionary<string, object> v, string k) => v != null && v.TryGetValue(k, out var o) && o is bool b && b;
 
-    public static bool Confirm(string msg, string title = "ComicPad") => MessageBox.Show(App.Main, msg, title, MessageBoxButtons.OKCancel, MessageBoxIcon.Question) == DialogResult.OK;
+    public static bool Confirm(string msg, string title = "ComicPad") => UI.Dialogs.Modals.Confirm(msg, "확인", false, title);
 
     /// <summary>화면 겹침 그림 공통: 점선 펜</summary>
     public static Pen Dash(Color c, float w = 1f, float a = 5, float b = 4) => new(c, w) { DashPattern = new[] { a / Math.Max(1, w), b / Math.Max(1, w) } };

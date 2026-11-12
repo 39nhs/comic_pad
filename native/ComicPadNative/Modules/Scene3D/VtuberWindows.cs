@@ -33,6 +33,7 @@ public static class Vtuber
         var roleOpts = VRig.Roles.Select(r => (r.id, r.r.Name)).ToArray();
 
         using var f = new Form { Text = "버튜버 아바타 만들기 (부위 정하기)", StartPosition = FormStartPosition.CenterParent, BackColor = Opt.Bg, ForeColor = Opt.Fg, Font = new Font("Malgun Gothic", 9f), Size = new Size(720, 640), MinimizeBox = false };
+        UI.Dialogs.Modals.Adopt(f);
         var help = new Label { Dock = DockStyle.Top, Height = 64, ForeColor = Opt.Muted, Padding = new Padding(10, 8, 10, 0), Text = "레이어마다 어떤 부위인지 고르세요 (이름으로 미리 짐작해 두었습니다). 눈(뜸·감음), 입(닫힘·벌림, 있으면 ㅏㅣㅜㅔㅗ), 앞머리·뒷머리를 따로 그려 두면 깜빡임·입 모양·머리카락 흔들림이 됩니다. PNG 버튜버는 \"PNG: 가만히 / 말할 때 / 눈 감음\" 그림 몇 장이면 됩니다." };
         var list = new FlowLayoutPanel { Dock = DockStyle.Fill, FlowDirection = FlowDirection.TopDown, WrapContents = false, AutoScroll = true, BackColor = Opt.Bg, Padding = new Padding(10, 4, 10, 4) };
         var thumbs = new List<Bitmap>();

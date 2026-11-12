@@ -96,6 +96,7 @@ public static class Refine
         void Show(byte[] shape) { sel.Restore(orig); SelUtil.ApplyShape(sel, R, shape, "replace"); SelUtil.RedrawSel(); }
 
         using var f = new Form { Text = "선택 다듬기", FormBorderStyle = FormBorderStyle.FixedToolWindow, StartPosition = FormStartPosition.CenterParent, ShowInTaskbar = false, BackColor = UI.Opt.Bg, ForeColor = UI.Opt.Fg, AutoSize = true, AutoSizeMode = AutoSizeMode.GrowAndShrink, Padding = new Padding(10), Font = new Font("Malgun Gothic", 9f) };
+        UI.Dialogs.Modals.Adopt(f);
         var timer = new System.Windows.Forms.Timer { Interval = 90 };
         timer.Tick += (_, _) => { timer.Stop(); Show(Compute()); };
         void Preview() { timer.Stop(); timer.Start(); }

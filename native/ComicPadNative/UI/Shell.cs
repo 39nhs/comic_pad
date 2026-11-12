@@ -10,7 +10,7 @@ public static class Shell
     // ---- 설정 창 ----------------------------------------------------------------------
     public static void SettingsDialog()
     {
-        using var f = new Form { Text = "설정", Width = 420, Height = 640, StartPosition = FormStartPosition.CenterParent, BackColor = Opt.Bg, ForeColor = Opt.Fg, FormBorderStyle = FormBorderStyle.SizableToolWindow };
+        using var f = new Dialogs.ModalForm("설정", 500, 0);
         var p = Opt.Panel(
             Opt.Title("펜·터치"),
             Opt.Choice("펜 측면 버튼 누르고 그리기", new[] { ("eyedropper", "스포이트"), ("eraser", "지우개"), ("pan", "화면 이동"), ("none", "아무것도 안 함") }, () => App.Get("penButton", "eyedropper"), v => App.Set("penButton", v)),
@@ -28,8 +28,8 @@ public static class Shell
             Opt.Row(Opt.Button("지금 백업", () => { var r = MakeBackup(); App.Toast(r != null ? "백업함: " + Path.GetFileName(r) : "백업하지 못했습니다"); }), Opt.Button("백업 폴더 열기", () => OpenFolder(BackupDir))),
             Opt.Title("실행취소"),
             Opt.Slider("기억할 메모리 (MB)", 200, 6000, () => App.History.MaxBytes / 1_000_000.0, v => { App.History.MaxBytes = (long)(v * 1_000_000); App.Set("undoMB", Math.Round(v)); }, step: 50));
-        p.Dock = DockStyle.Fill; p.AutoScroll = true; p.WrapContents = false;
-        f.Controls.Add(p);
+        f.SetContent(p);
+        f.AddAction("닫기", () => true, primary: true);
         f.ShowDialog(App.Main);
         App.NotifySettings();
     }
@@ -83,66 +83,28 @@ public static class Shell
         Task.Run(MakeBackup);
     }
 
-    // ---- 기능 검색 (Ctrl+K): 메뉴·도구 이름으로 찾아 실행 -----------------------------------------
-    public static void CommandPalette()
-    {
-        using var f = new Form { Text = "기능 검색", Width = 520, Height = 460, StartPosition = FormStartPosition.CenterParent, BackColor = Opt.Bg, ForeColor = Opt.Fg, FormBorderStyle = FormBorderStyle.SizableToolWindow, KeyPreview = true };
-        var q = new TextBox { Dock = DockStyle.Top, BackColor = Opt.Bg2, ForeColor = Opt.Fg, Font = new Font("Malgun Gothic", 12f) };
-        var list = new ListBox { Dock = DockStyle.Fill, BackColor = Opt.Bg, ForeColor = Opt.Fg, BorderStyle = BorderStyle.None, Font = new Font("Malgun Gothic", 10.5f) };
-        var all = Registry.Menus.Where(m => m.Run != null && !m.Path.EndsWith("-") && !m.Path.Split('/').Last().StartsWith("-"))
-            .Select(m => (label: m.Path.Replace("/", " › ").TrimEnd('…'), run: m.Run, key: m.Shortcut))
-            .Concat(Registry.Tools.Select(t => (label: "도구 › " + t.Name, run: (Action)(() => App.SetTool(t.Id)), key: t.Key))).ToList();
-        List<(string label, Action run, Keys key)> shown = all;
-        void Fill()
-        {
-            string s = q.Text.Trim();
-            shown = s.Length == 0 ? all : all.Where(x => Fuzzy(x.label, s)).ToList();
-            list.BeginUpdate(); list.Items.Clear();
-            foreach (var x in shown) list.Items.Add(x.label + (x.key != Keys.None ? "   (" + new KeysConverter().ConvertToString(x.key) + ")" : ""));
-            if (list.Items.Count > 0) list.SelectedIndex = 0;
-            list.EndUpdate();
-        }
-        Action chosen = null;
-        void Go() { if (list.SelectedIndex >= 0) { chosen = shown[list.SelectedIndex].run; f.Close(); } }
-        q.TextChanged += (_, _) => Fill();
-        f.KeyDown += (_, e) =>
-        {
-            if (e.KeyCode == Keys.Down) { list.SelectedIndex = Math.Min(list.Items.Count - 1, list.SelectedIndex + 1); e.Handled = true; }
-            else if (e.KeyCode == Keys.Up) { list.SelectedIndex = Math.Max(0, list.SelectedIndex - 1); e.Handled = true; }
-            else if (e.KeyCode == Keys.Enter) { Go(); e.Handled = true; }
-            else if (e.KeyCode == Keys.Escape) f.Close();
-        };
-        list.DoubleClick += (_, _) => Go();
-        f.Controls.Add(list); f.Controls.Add(q);
-        Fill();
-        f.Shown += (_, _) => q.Focus();
-        f.ShowDialog(App.Main);
-        if (chosen != null) MainForm.Run(chosen, "기능 검색");
-    }
+    // ---- 기능 검색 (Ctrl+K): 메뉴·도구 이름으로 찾아 실행 (웹 .palette-modal) -----------------------------------------
+    public static void CommandPalette() => Dialogs.CommandPalette.Show();
 
-    /// <summary>글자들이 순서대로 들어 있으면 (띄어쓰기 무시)</summary>
-    static bool Fuzzy(string text, string q)
-    {
-        text = text.Replace(" ", "").ToLowerInvariant(); q = q.Replace(" ", "").ToLowerInvariant();
-        if (text.Contains(q)) return true;
-        int i = 0; foreach (char c in text) if (i < q.Length && c == q[i]) i++;
-        return i == q.Length;
-    }
-
-    // ---- 최근 파일·자동 저장 ----------------------------------------------------------------
+    // ---- 최근 파일·자동 저장 (웹 자동 저장 복구 / 프로젝트 열기 카드) ----------------------------------------------
     public static void RecentDialog()
     {
         var files = (App.Settings["recentFiles"] as JsonArray)?.Select(x => (string)x).Where(File.Exists).ToList() ?? new();
         string auto = Path.Combine(App.DataDir, "autosave");
         if (Directory.Exists(auto)) files.AddRange(Directory.GetFiles(auto, "*.cpad").OrderByDescending(File.GetLastWriteTime).Take(8).Select(p => p));
         if (files.Count == 0) { App.Toast("최근 파일이 없습니다"); return; }
-        using var f = new Form { Text = "최근 작품 · 자동 저장", Width = 640, Height = 420, StartPosition = FormStartPosition.CenterParent, BackColor = Opt.Bg, ForeColor = Opt.Fg, FormBorderStyle = FormBorderStyle.SizableToolWindow };
-        var list = new ListBox { Dock = DockStyle.Fill, BackColor = Opt.Bg, ForeColor = Opt.Fg, Font = new Font("Malgun Gothic", 10f) };
-        foreach (var p in files) list.Items.Add((p.Contains(Path.DirectorySeparatorChar + "autosave" + Path.DirectorySeparatorChar) ? "[자동 저장] " : "") + $"{Path.GetFileName(p)}   —   {File.GetLastWriteTime(p):yyyy-MM-dd HH:mm}   {Path.GetDirectoryName(p)}");
+        using var f = new Dialogs.ModalForm("최근 작품 · 자동 저장", 640, 440) { Resizable = true };
+        var list = new Controls.WebList { Bg = Theme.Panel, RowH = 38, Dock = DockStyle.Fill };
+        list.Items = files.Select(p => (p.Contains(Path.DirectorySeparatorChar + "autosave" + Path.DirectorySeparatorChar) ? "[자동 저장] " : "") + Path.GetFileName(p)).ToList();
+        list.Sub = files.Select(p => $"{File.GetLastWriteTime(p):yyyy-MM-dd HH:mm}").ToList();
+        list.Selected = 0;
+        f.SetContent(list);
         string pick = null;
-        list.DoubleClick += (_, _) => { if (list.SelectedIndex >= 0) { pick = files[list.SelectedIndex]; f.Close(); } };
-        list.KeyDown += (_, e) => { if (e.KeyCode == Keys.Enter && list.SelectedIndex >= 0) { pick = files[list.SelectedIndex]; f.Close(); } };
-        f.Controls.Add(list);
+        list.Picked += i => { pick = files[i]; f.DialogResult = DialogResult.OK; f.Close(); };
+        f.AddAction("작업물 폴더 열기", () => { OpenFolder(App.DataDir); return false; });
+        f.AddAction("취소", () => true);
+        f.AddAction("열기", () => { if (list.Selected >= 0) pick = files[list.Selected]; return pick != null; }, primary: true);
+        f.Shown += (_, _) => list.Focus();
         f.ShowDialog(App.Main);
         if (pick != null && FileCommands.ConfirmDiscard()) FileCommands.OpenPath(pick);
     }
@@ -169,10 +131,49 @@ public sealed class ShellModule : IModule
         Registry.Menu("파일/작업물 백업 (지금)", () => { var r = Shell.MakeBackup(); App.Toast(r != null ? "백업함: " + Path.GetFileName(r) : "백업하지 못했습니다"); }, order: 85);
         Registry.Menu("도움말/기능 검색…", Shell.CommandPalette, Keys.Control | Keys.K, order: 10);
         Registry.Menu("도움말/ComicPad 설명서", Shell.OpenManual, Keys.F1, order: 20);
+        // 새 캔버스 (웹 newDocDialog: 크기 카드 격자)
+        Registry.Menu("파일/새로 만들기…", () => Dialogs.NewDocDialog.Show(), Keys.Control | Keys.N, order: 10);
         App.History.MaxBytes = (long)(App.Get("undoMB", 1500.0) * 1_000_000);
         Shell.BackupIfDue();
         var t = new System.Windows.Forms.Timer { Interval = 3600_000 };
         t.Tick += (_, _) => Shell.BackupIfDue();
+        t.Start();
+        // 메인 창이 뜬 뒤 한 번 (화면 비교 찍기)
+        void FirstIdle(object s, EventArgs e)
+        {
+            if (App.Main == null || !App.Main.Visible || App.Doc == null) return;
+            Application.Idle -= FirstIdle;
+            if (!string.IsNullOrEmpty(PanelShots.Dir)) { var pt = new System.Windows.Forms.Timer { Interval = 1500 }; pt.Tick += (_, _) => { pt.Stop(); pt.Dispose(); PanelShots.Run(); }; pt.Start(); return; }
+            if (WantStartDialog()) StartDialogWhenFree();
+        }
+        Application.Idle += FirstIdle;
+    }
+
+    /// <summary>웹처럼 켤 때 "ComicPad 시작" 창 (최근 프로젝트 + 크기 카드). 파일을 열며 켰거나 시험·화면 찍기 중이면 안 띄움</summary>
+    static bool WantStartDialog()
+    {
+        if (!App.Get("startDialog", true)) return false;
+        if (Environment.GetCommandLineArgs().Skip(1).Any(File.Exists)) return false;
+        foreach (System.Collections.DictionaryEntry e in Environment.GetEnvironmentVariables())
+        {
+            string k = e.Key.ToString().ToUpperInvariant();
+            if (k.StartsWith("COMICPAD_") && (k.Contains("TEST") || k.Contains("SHOT") || k.Contains("PANELS")) && !string.IsNullOrEmpty(e.Value?.ToString())) return false;
+        }
+        return App.Doc != null && App.Doc.FilePath == null && !App.Doc.Modified;
+    }
+
+    /// <summary>처음 세팅 창 같은 다른 창이 닫힌 뒤에 띄움</summary>
+    static void StartDialogWhenFree()
+    {
+        var t = new System.Windows.Forms.Timer { Interval = 300 };
+        int tries = 0;
+        t.Tick += (_, _) =>
+        {
+            if (Application.OpenForms.Cast<Form>().Any(f => f.Modal && f.Visible) && ++tries < 600) return;
+            t.Stop(); t.Dispose();
+            if (App.Doc == null || App.Doc.FilePath != null || App.Doc.Modified || App.History.CanUndo) return;
+            MainForm.Run(() => Dialogs.NewDocDialog.Show(startup: true), "ComicPad 시작");
+        };
         t.Start();
     }
 }

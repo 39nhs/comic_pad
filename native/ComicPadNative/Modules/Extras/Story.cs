@@ -5,6 +5,7 @@ using System.Text.Json.Nodes;
 using System.Text.RegularExpressions;
 using ComicPadNative.Core;
 using ComicPadNative.UI;
+using ComicPadNative.UI.Controls;
 
 namespace ComicPadNative.Modules.Extras;
 
@@ -245,12 +246,14 @@ public sealed class PagesPanel : Panel
         ["conti"] = ("콘티", ColorTranslator.FromHtml("#8e5bd6")), ["line"] = ("선화", ColorTranslator.FromHtml("#3d7be0")),
         ["color"] = ("채색", ColorTranslator.FromHtml("#f08c2e")), ["done"] = ("완료", ColorTranslator.FromHtml("#2fa35b")),
     };
-    readonly FlowLayoutPanel body = new() { Dock = DockStyle.Fill, AutoScroll = true, FlowDirection = FlowDirection.TopDown, WrapContents = false, BackColor = Opt.Bg };
+    // 웹 .panel-scroll
+    readonly UI.Controls.WebStack body = new() { Padding = new Padding(10, 4, 10, 12) };
     bool pending;
 
     public PagesPanel()
     {
-        BackColor = Opt.Bg;
+        BackColor = Opt.Bg; AutoScroll = true;
+        UI.Controls.Web.DarkScroll(this);
         Controls.Add(body);
         Story.Changed += Soon;
         App.DocChanged += Soon;
@@ -269,14 +272,13 @@ public sealed class PagesPanel : Panel
     void Render()
     {
         body.SuspendLayout();
-        foreach (var pb in U.All(body).OfType<PictureBox>()) pb.Image?.Dispose();
         foreach (Control c in body.Controls.Cast<Control>().ToList()) c.Dispose();
         body.Controls.Clear();
         string story = Story.StoryOf(App.Doc);
         if (story == null)
         {
             body.Controls.Add(Opt.Help("여러 페이지로 된 만화를 한 작품으로 관리합니다. 페이지를 넘기면 자동 저장됩니다."));
-            body.Controls.Add(Opt.Button("새 작품 만들기", Story.NewStoryDialog, true));
+            body.Controls.Add(Opt.Row(Opt.Button("새 작품 만들기", Story.NewStoryDialog, true)));
             body.ResumeLayout();
             return;
         }
@@ -284,36 +286,89 @@ public sealed class PagesPanel : Panel
         string cur = Story.CurrentRel;
         int ci = pages.IndexOf(cur);
         body.Controls.Add(Opt.Title($"{story} — {pages.Count}쪽"));
-        body.Controls.Add(Opt.Row(Opt.Button("◀ 이전", () => Story.StepPage(-1)), Opt.Button("다음 ▶", () => Story.StepPage(1)), Opt.Button("+ 빈 페이지", () => Story.AddPage(false))));
-        body.Controls.Add(Opt.Row(Opt.Button("+ 복제", () => Story.AddPage(true)), Opt.Button("전체 내보내기", Story.ExportStory), Opt.Button("폴더 열기", () => Shell.OpenFolder(Path.Combine(Story.ProjectsDir, story)))));
-        body.Controls.Add(Opt.Row(Opt.Button("◀ 이 쪽을 앞으로", () => Story.MovePage(story, ci, ci - 1)), Opt.Button("이 쪽을 뒤로 ▶", () => Story.MovePage(story, ci, ci + 1))));
-        body.Controls.Add(Opt.Row(Opt.Button("진행표…", Progress.Dialog)));
+        WebButton IB(string text, string icon, bool iconRight, Action a) { var b = new WebButton(text, BtnKind.Normal, icon) { IconSize = 16, Margin = Padding.Empty }; b.Click += (_, _) => a(); return b; }
+        body.Controls.Add(Opt.Row(IB("이전", "prev", false, () => Story.StepPage(-1)), IB("다음", "next", true, () => Story.StepPage(1)), Opt.Button("+ 빈 페이지", () => Story.AddPage(false)), Opt.Button("+ 복제", () => Story.AddPage(true))));
+        body.Controls.Add(Opt.Row(Opt.Button("전체 내보내기", Story.ExportStory), Opt.Button("폴더 열기", () => Shell.OpenFolder(Path.Combine(Story.ProjectsDir, story)))));
+        body.Controls.Add(Opt.Row(Opt.Button("◀ 이 쪽을 앞으로", () => Story.MovePage(story, ci, ci - 1)), Opt.Button("이 쪽을 뒤로 ▶", () => Story.MovePage(story, ci, ci + 1)), Opt.Button("진행표…", Progress.Dialog)));
         var info = Story.ReadInfo(story);
-        var grid = new FlowLayoutPanel { AutoSize = true, MaximumSize = new Size(290, 0), WrapContents = true, BackColor = Opt.Bg };
+        var grid = new PageGrid { Margin = new Padding(0, 8, 0, 0) };
         for (int i = 0; i < pages.Count; i++)
         {
-            string p = pages[i]; int idx = i;
+            string p = pages[i];
             string st = (string)info["status"]?[p];
-            var card = new Panel { Width = 86, Height = 122, Margin = new Padding(3), BackColor = p == cur ? Opt.Accent : Opt.Bg2, Cursor = Cursors.Hand, AllowDrop = true };
-            var pic = new PictureBox { Location = new Point(3, 3), Size = new Size(80, 96), SizeMode = PictureBoxSizeMode.Zoom, BackColor = Color.FromArgb(70, 70, 78), Image = Img.Load(Path.ChangeExtension(Story.Full(p), ".png")) };
-            var lab = new Label { Text = (i + 1).ToString(), Location = new Point(3, 101), AutoSize = true, ForeColor = p == cur ? Color.Black : Opt.Fg };
-            card.Controls.Add(pic); card.Controls.Add(lab);
-            if (st != null && ST.TryGetValue(st, out var s))
-                card.Controls.Add(new Label { Text = s.label, BackColor = s.color, ForeColor = Color.White, AutoSize = true, Location = new Point(40, 101) });
-            void Open(object _, EventArgs __) { if (p != Story.CurrentRel) Story.GotoPage(p); }
-            card.Click += Open; pic.Click += Open; lab.Click += Open;
-            // 끌어서 다른 카드 위에 놓으면 그 자리로
-            pic.MouseMove += (_, e) => { if (e.Button == MouseButtons.Left) card.DoDragDrop("page:" + idx, DragDropEffects.Move); };
-            card.DragEnter += (_, e) => e.Effect = e.Data.GetData(typeof(string)) is string s2 && s2.StartsWith("page:") ? DragDropEffects.Move : DragDropEffects.None;
-            card.DragDrop += (_, e) => { if (e.Data.GetData(typeof(string)) is string s2 && int.TryParse(s2[5..], out int from)) Story.MovePage(story, from, idx); };
-            pic.AllowDrop = true;
-            pic.DragEnter += (_, e) => e.Effect = DragDropEffects.Move;
-            pic.DragDrop += (_, e) => { if (e.Data.GetData(typeof(string)) is string s2 && s2.StartsWith("page:") && int.TryParse(s2[5..], out int from)) Story.MovePage(story, from, idx); };
-            grid.Controls.Add(card);
+            grid.Items.Add((p, (i + 1).ToString(), Img.Load(Path.ChangeExtension(Story.Full(p), ".png")), st != null && ST.TryGetValue(st, out var s) ? s : ((string, Color)?)null));
         }
+        grid.Current = cur;
+        grid.Open += p => { if (p != Story.CurrentRel) Story.GotoPage(p); };
+        grid.Move += (from, to) => Story.MovePage(story, from, to);
         body.Controls.Add(grid);
         body.Controls.Add(Opt.Help("페이지 카드를 끌어다 다른 카드 위에 놓으면 순서가 바뀝니다 (펜·터치는 위 버튼으로)."));
         body.ResumeLayout();
+    }
+
+    /// <summary>.page-grid (칸 최소 70, 간격 6) / .page-card (panel2, 둥근 8, 고른 쪽 주황 테두리 2, 흰 쪽 그림 비율 0.71, 번호 11px, 상태 띠)</summary>
+    sealed class PageGrid : Control, UI.Controls.IWebBlock
+    {
+        public readonly List<(string rel, string label, Bitmap img, (string label, Color color)? status)> Items = new();
+        public string Current;
+        public event Action<string> Open;
+        public new event Action<int, int> Move;
+        int hot = -1, down = -1, drop = -1; Point downAt; bool dragging;
+        public PageGrid() { SetStyle(ControlStyles.UserPaint | ControlStyles.AllPaintingInWmPaint | ControlStyles.OptimizedDoubleBuffer | ControlStyles.ResizeRedraw, true); Cursor = Cursors.Hand; }
+        int Cols(int w) => Math.Max(1, (w + 6) / (70 + 6));
+        int Cw(int w) => (w - (Cols(w) - 1) * 6) / Cols(w);
+        int Ch(int w) => 4 + (int)((Cw(w) - 8) / 0.71) + 2 + 15 + 4;
+        Rectangle R(int i) { int n = Cols(Width), cw = Cw(Width), ch = Ch(Width); return new Rectangle(i % n * (cw + 6), i / n * (ch + 6), cw, ch); }
+        public override Size GetPreferredSize(Size proposed)
+        {
+            int w = proposed.Width > 1 && proposed.Width < 100000 ? proposed.Width : 280;
+            int rows = (Items.Count + Cols(w) - 1) / Cols(w);
+            return new Size(w, rows == 0 ? 0 : rows * (Ch(w) + 6) - 6);
+        }
+        protected override void OnPaint(PaintEventArgs e)
+        {
+            var g = e.Graphics; g.Clear(UI.Controls.Web.ParentBack(this));
+            for (int i = 0; i < Items.Count; i++)
+            {
+                var r = R(i); var it = Items[i]; bool on = it.rel == Current;
+                UI.Controls.Web.Box(g, r, 8, i == hot ? UI.Theme.Panel3 : UI.Theme.Panel2, on ? UI.Theme.Accent : dragging && i == drop ? UI.Theme.Accent : null, 2);
+                var ir = new Rectangle(r.X + 4, r.Y + 4, r.Width - 8, (int)((r.Width - 8) / 0.71));
+                UI.Controls.Web.Box(g, ir, 3, Color.White);
+                if (it.img != null)
+                {
+                    double k = Math.Min((double)ir.Width / it.img.Width, (double)ir.Height / it.img.Height);
+                    int w = (int)(it.img.Width * k), h = (int)(it.img.Height * k);
+                    g.DrawImage(it.img, ir.X + (ir.Width - w) / 2, ir.Y + (ir.Height - h) / 2, w, h);
+                }
+                UI.Controls.Web.Text(g, it.label, UI.Controls.Web.Tiny, new Rectangle(r.X, ir.Bottom + 2, r.Width, 15), on ? UI.Theme.Accent : UI.Theme.Muted, UI.Controls.Web.Center);
+                if (it.status is { } s)
+                {
+                    var f = UI.Controls.Web.F(10);
+                    var sr = new Rectangle(r.X + 4, r.Y + 4, UI.Controls.Web.Measure(s.label, f).Width + 8, 14);
+                    UI.Controls.Web.Box(g, sr, 4, s.color);
+                    UI.Controls.Web.Text(g, s.label, f, sr, Color.White, UI.Controls.Web.Center);
+                }
+            }
+        }
+        int Hit(Point p) { for (int i = 0; i < Items.Count; i++) if (R(i).Contains(p)) return i; return -1; }
+        protected override void OnMouseDown(MouseEventArgs e) { base.OnMouseDown(e); if (e.Button == MouseButtons.Left) { down = Hit(e.Location); downAt = e.Location; dragging = false; } }
+        protected override void OnMouseMove(MouseEventArgs e)
+        {
+            base.OnMouseMove(e);
+            int h = Hit(e.Location);
+            if (down >= 0 && e.Button == MouseButtons.Left && (Math.Abs(e.X - downAt.X) > 6 || Math.Abs(e.Y - downAt.Y) > 6)) { dragging = true; drop = h; Invalidate(); return; }
+            if (h != hot) { hot = h; Invalidate(); }
+        }
+        protected override void OnMouseLeave(EventArgs e) { base.OnMouseLeave(e); hot = -1; Invalidate(); }
+        protected override void OnMouseUp(MouseEventArgs e)
+        {
+            base.OnMouseUp(e);
+            int h = Hit(e.Location);
+            if (dragging) { dragging = false; if (down >= 0 && h >= 0 && h != down) Move?.Invoke(down, h); }
+            else if (h >= 0 && h == down) Open?.Invoke(Items[h].rel);
+            down = -1; drop = -1; Invalidate();
+        }
+        protected override void Dispose(bool disposing) { if (disposing) foreach (var i in Items) i.img?.Dispose(); base.Dispose(disposing); }
     }
 
     protected override void Dispose(bool disposing)

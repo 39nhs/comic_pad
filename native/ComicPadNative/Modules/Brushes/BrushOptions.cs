@@ -4,6 +4,7 @@ using System.Text.Json;
 using System.Text.Json.Nodes;
 using ComicPadNative.Core;
 using ComicPadNative.UI;
+using ComicPadNative.UI.Controls;
 
 namespace ComicPadNative.Modules.BrushEngine;
 
@@ -21,7 +22,7 @@ public sealed class BrushOptions
     readonly PaintTool tool;
     readonly string cat;
     readonly bool erase;
-    readonly ListBox list;
+    readonly PresetGrid list;
     readonly FlowLayoutPanel body;
     BrushTestPad testPad;
     bool showScatter;
@@ -33,24 +34,24 @@ public sealed class BrushOptions
     {
         tool = t; cat = t.Category; erase = t.EraseMode;
         Root = Opt.Panel();
-        list = new ListBox { Width = BUI.Width, Height = 34 * 7 + 4, DrawMode = DrawMode.OwnerDrawFixed, ItemHeight = 34, BackColor = Opt.Bg2, ForeColor = Opt.Fg, BorderStyle = BorderStyle.None, IntegralHeight = false };
-        list.DrawItem += DrawItem;
-        list.SelectedIndexChanged += (_, _) =>
+        // 웹: section(프리셋 2열 목록, 복제·이름·기본값·삭제) — 네이티브는 새로·가져오기·내보내기·ABR 도 함께
+        list = new PresetGrid(() => PresetStore.List(cat), () => P?.Id, p => erase ? 0xFF888888 : p.Color != null ? Px.FromHex(p.Color) : App.Fg | 0xFF000000);
+        list.Picked += p => { if (p.Id == P?.Id) return; PresetStore.SetActive(cat, p.Id); tool.Activate(); RenderList(); Rebuild(); };
+        list.Menu += (p, at) =>
         {
-            if (list.SelectedIndex < 0 || listSync) return;
-            var l = PresetStore.List(cat);
-            if (list.SelectedIndex < l.Count && l[list.SelectedIndex].Id != P?.Id) { PresetStore.SetActive(cat, l[list.SelectedIndex].Id); tool.Activate(); Rebuild(); }
+            if (p.Id != P?.Id) { PresetStore.SetActive(cat, p.Id); tool.Activate(); RenderList(); Rebuild(); }
+            var m = new ContextMenuStrip();
+            m.Items.Add("복제", null, (_, _) => Duplicate()); m.Items.Add("이름 바꾸기", null, (_, _) => Rename());
+            m.Items.Add("기본값으로", null, (_, _) => ResetDefault()); m.Items.Add("삭제", null, (_, _) => Delete());
+            m.Show(list, at);
         };
-        Root.Controls.Add(list);
-        var btns = new FlowLayoutPanel { FlowDirection = FlowDirection.LeftToRight, WrapContents = true, MaximumSize = new Size(BUI.Width, 0), AutoSize = true, BackColor = Opt.Bg };
-        btns.Controls.AddRange(new Control[]
-        {
-            Opt.Button("새로", NewPreset), Opt.Button("복제", Duplicate), Opt.Button("이름", Rename), Opt.Button("기본값", ResetDefault), Opt.Button("삭제", Delete),
-            Opt.Button("가져오기", Import), Opt.Button("내보내기", Export),
-        });
-        if (!erase) btns.Controls.Add(Opt.Button("ABR 가져오기", () => BrushesModule.ImportAbr()));
-        Root.Controls.Add(btns);
-        body = new FlowLayoutPanel { FlowDirection = FlowDirection.TopDown, WrapContents = false, AutoSize = true, BackColor = Opt.Bg, Margin = new Padding(0) };
+        var btns = Opt.Row(Opt.Button("복제", Duplicate), Opt.Button("이름", Rename), Opt.Button("기본값", ResetDefault), new WebButton("삭제", BtnKind.Danger));
+        ((WebButton)btns.Controls[3]).Click += (_, _) => Delete();
+        foreach (Control c in btns.Controls) c.Margin = Padding.Empty;
+        var more = Opt.Row(Opt.Button("새로", NewPreset), Opt.Button("가져오기", Import), Opt.Button("내보내기", Export), erase ? null : Opt.Button("ABR 가져오기", () => BrushesModule.ImportAbr()));
+        foreach (Control c in more.Controls) c.Margin = Padding.Empty;
+        Root.Controls.Add(new WebSection(null, list, btns, more));
+        body = new WebStack { FillParent = false };
         Root.Controls.Add(body);
         refreshSoon.Tick += (_, _) => { refreshSoon.Stop(); if (Root.IsDisposed) return; testPad?.Refresh2(); RenderList(); };
         Action onChange = () => { if (!Root.IsDisposed) { refreshSoon.Stop(); refreshSoon.Start(); } };
@@ -62,37 +63,12 @@ public sealed class BrushOptions
         Rebuild();
     }
 
-    bool listSync;
     void RenderList()
     {
-        var l = PresetStore.List(cat);
-        listSync = true;
-        list.BeginUpdate();
-        list.Items.Clear();
-        foreach (var p in l) list.Items.Add(p.Name);
-        list.SelectedIndex = l.FindIndex(x => x.Id == P?.Id);
-        list.EndUpdate();
-        listSync = false;
+        if (list.IsDisposed) return;
+        var parent = list.Parent;
         list.Invalidate();
-    }
-
-    void DrawItem(object s, DrawItemEventArgs e)
-    {
-        if (e.Index < 0) return;
-        var l = PresetStore.List(cat);
-        if (e.Index >= l.Count) return;
-        var p = l[e.Index];
-        bool on = p.Id == P?.Id;
-        var g = e.Graphics;
-        using (var bg = new SolidBrush(on ? Color.FromArgb(78, 66, 48) : Opt.Bg2)) g.FillRectangle(bg, e.Bounds);
-        uint col = erase ? 0xFF888888 : p.Color != null ? Px.FromHex(p.Color) : App.Fg | 0xFF000000;
-        var th = BrushPreview.Thumb(p, col, 96, 26);
-        g.DrawImage(th, e.Bounds.Right - 100, e.Bounds.Y + 4);
-        using var fb = new SolidBrush(on ? Opt.Accent : Opt.Fg);
-        var tr = new RectangleF(e.Bounds.X + 6, e.Bounds.Y, e.Bounds.Width - 112, e.Bounds.Height);
-        using var sf = new StringFormat { LineAlignment = StringAlignment.Center, Trimming = StringTrimming.EllipsisCharacter, FormatFlags = StringFormatFlags.NoWrap };
-        g.DrawString(p.Name, list.Font, fb, tr, sf);
-        if (on) using (var pen = new Pen(Opt.Accent)) g.DrawRectangle(pen, e.Bounds.X, e.Bounds.Y, e.Bounds.Width - 1, e.Bounds.Height - 1);
+        if (list.Height != list.GetPreferredSize(new Size(list.Width, 0)).Height) parent?.PerformLayout();
     }
 
     // ---- 프리셋 단추 -----------------------------------------------------------------
@@ -138,7 +114,7 @@ public sealed class BrushOptions
     {
         var l = PresetStore.List(cat);
         if (l.Count <= 1) return;
-        if (MessageBox.Show(App.Main, $"'{P.Name}' 프리셋을 삭제할까요?", "ComicPad", MessageBoxButtons.OKCancel, MessageBoxIcon.Question) != DialogResult.OK) return;
+        if (!UI.Dialogs.Modals.Confirm($"'{P.Name}' 프리셋을 삭제할까요?", "삭제", danger: true)) return;
         l.Remove(P);
         PresetStore.SetActive(cat, l[0].Id); PresetStore.Save(cat);
         RenderList(); Rebuild();
@@ -147,7 +123,7 @@ public sealed class BrushOptions
     /// <summary>내보내기: 웹 "내 세팅 내보내기"와 같은 .cpset (브러시 부분만) — 웹 판 "세팅 가져오기"로도 읽힘</summary>
     void Export()
     {
-        var r = MessageBox.Show(App.Main, "지금 프리셋만 내보낼까요?\n(아니요 = 이 목록의 프리셋 전부)", "브러시 내보내기", MessageBoxButtons.YesNoCancel, MessageBoxIcon.Question);
+        var r = UI.Dialogs.Modals.Ask3("지금 프리셋만 내보낼까요, 이 목록의 프리셋 전부를 내보낼까요?", "지금 프리셋만", "목록 전부", "브러시 내보내기");
         if (r == DialogResult.Cancel) return;
         var items = r == DialogResult.Yes ? new List<BrushPreset> { P } : PresetStore.List(cat);
         using var dlg = new SaveFileDialog { Filter = "ComicPad 세팅 (*.cpset)|*.cpset|JSON (*.json)|*.json", FileName = (r == DialogResult.Yes ? P.Name : (erase ? "지우개" : "브러시")) + ".cpset" };
@@ -300,32 +276,15 @@ public sealed class BrushOptions
         RenderList();
     }
 
-    Control ColorButton()
-    {
-        var b = new Button { Width = 40, Height = 22, FlatStyle = FlatStyle.Flat, BackColor = ColorTranslator.FromHtml(P.Color ?? "#3d7be0"), Margin = new Padding(6, 2, 0, 2) };
-        b.Click += (_, _) =>
-        {
-            using var dlg = new ColorDialog { Color = b.BackColor, FullOpen = true };
-            if (dlg.ShowDialog(App.Main) != DialogResult.OK) return;
-            P.Color = $"#{dlg.Color.R:x2}{dlg.Color.G:x2}{dlg.Color.B:x2}"; b.BackColor = dlg.Color; Changed();
-        };
-        return b;
-    }
+    Control ColorButton() => new WebSwatch(() => P.Color ?? "#3d7be0", v => { P.Color = v; Changed(); });
 
     /// <summary>러프 색 (의견 색) 14가지</summary>
     Control RoughSection()
     {
         var act = App.Doc?.Active;
         string cur = act?.Rough == true ? act.Tint : PaintTool.DefaultRoughColor();
-        var grid = new FlowLayoutPanel { FlowDirection = FlowDirection.LeftToRight, WrapContents = true, MaximumSize = new Size(BUI.Width, 0), AutoSize = true, BackColor = Opt.Bg };
-        foreach (var (hex, name) in RoughColors)
-        {
-            var b = new Button { Text = name, Width = 62, Height = 24, FlatStyle = FlatStyle.Flat, BackColor = ColorTranslator.FromHtml(hex), ForeColor = Color.White, Margin = new Padding(0, 0, 3, 3), Font = new Font(SystemFonts.MessageBoxFont.FontFamily, 8f, hex == cur ? FontStyle.Bold : FontStyle.Regular) };
-            b.FlatAppearance.BorderColor = hex == cur ? Color.White : Color.FromArgb(74, 74, 84);
-            b.FlatAppearance.BorderSize = hex == cur ? 2 : 1;
-            b.Click += (_, _) => { SetRoughColor(App.Doc?.Active, hex); Rebuild(); };
-            grid.Controls.Add(b);
-        }
+        var grid = new RoughColorGrid(RoughColors, () => cur);
+        grid.Picked += hex => { SetRoughColor(App.Doc?.Active, hex); Rebuild(); };
         return BUI.Section("러프 색 (의견 색)", grid,
             BUI.Help(act?.Rough == true ? "지금 러프 레이어의 색을 바꿉니다. 협업할 때 사람·의견마다 색을 나눠 쓰세요." : "러프 레이어를 고르면 그 레이어 색이 바뀝니다. 지금 고른 색은 새 러프 레이어에 쓰입니다."));
     }
@@ -379,7 +338,7 @@ public sealed class BrushOptions
             }
             catch (Exception ex) { App.Toast("이미지를 불러오지 못했습니다: " + ex.Message); }
         });
-        var box = new FlowLayoutPanel { FlowDirection = FlowDirection.TopDown, AutoSize = true, WrapContents = false, BackColor = Opt.Bg };
+        var box = new WebStack { FillParent = false };
         box.Controls.Add(sel); box.Controls.Add(pick);
         box.Controls.Add(BUI.Toggle("현재 색으로 칠하기", () => P.TintTip, SetB((p, v) => p.TintTip = v)));
         return box;

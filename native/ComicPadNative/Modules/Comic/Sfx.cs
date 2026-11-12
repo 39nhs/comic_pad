@@ -208,6 +208,7 @@ public static class SfxDialog
         int ci = 0;
         void Upd() { var mm = J.Clone(m); prev.Show(mm, MetaLayers.Render); foreach (var k in new[] { "lbox", "box", "quad" }) m[k] = mm[k]?.DeepClone(); }
         using var f = new Form { Text = isNew ? "효과음 넣기" : "효과음 고치기", StartPosition = FormStartPosition.CenterParent, BackColor = Opt.Bg, ForeColor = Opt.Fg, Width = 620, Height = 720, Font = new Font("Malgun Gothic", 9f), MinimizeBox = false, MaximizeBox = false, FormBorderStyle = FormBorderStyle.SizableToolWindow };
+        UI.Dialogs.Modals.Adopt(f);
         var ta = new TextBox { Dock = DockStyle.Top, Text = J.Str(m, "text", ""), BackColor = Opt.Bg2, ForeColor = Opt.Fg, Font = new Font("Malgun Gothic", 13f), PlaceholderText = "효과음 (예: 쾅!, 두근, 스윽)" };
         CUI.Host host = null;
         JsonObject Ch()
@@ -364,7 +365,7 @@ public sealed class SfxTool : ToolBase
         IEnumerable<Control> Items()
         {
             yield return Opt.Title("새 효과음");
-            var row = new FlowLayoutPanel { AutoSize = true, MaximumSize = new Size(270, 0), BackColor = Opt.Bg };
+            var row = new UI.Controls.WebRow();
             foreach (var (name, _) in Sfx.Presets) { var nm = name; row.Controls.Add(Opt.Button(nm, () => { PresetName = nm; host.Rebuild(); }, nm == PresetName)); }
             yield return row;
             yield return Opt.Choice("글꼴", Fonts.List(), () => Font, v => Font = v);

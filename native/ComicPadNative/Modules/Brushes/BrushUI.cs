@@ -4,113 +4,48 @@ using System.Globalization;
 using System.Runtime.InteropServices;
 using ComicPadNative.Core;
 using ComicPadNative.UI;
+using ComicPadNative.UI.Controls;
 
 namespace ComicPadNative.Modules.BrushEngine;
 
 public static class BUI
 {
-    public const int Width = 270;
+    public const int Width = 280;
     public static string Pct(double v) => $"{Math.Round(v * 100)}%";
     public static string OffOr(double v, Func<double, string> f) => v != 0 ? f(v) : "끔";
 
-    /// <summary>이름 + 끌어서 바꾸는 막대 + 값 (fmt 로 표시 형식)</summary>
+    /// <summary>이름 + 끌어서 바꾸는 막대 + 값 (웹 slider, fmt 로 표시 형식)</summary>
     public static Control Slider(string label, double min, double max, Func<double> get, Action<double> set, Func<double, string> fmt = null, bool log = false, double step = 0)
     {
-        var box = new Panel { Width = Width, Height = 44, BackColor = Opt.Bg, Margin = new Padding(0, 2, 0, 2) };
-        var name = new Label { Text = label, ForeColor = Opt.Fg, AutoSize = false, Width = Width - 72, Height = 16, Location = new Point(0, 2), AutoEllipsis = true };
-        var val = new Label { ForeColor = Opt.Muted, AutoSize = false, Width = 72, TextAlign = ContentAlignment.TopRight, Location = new Point(Width - 72, 2) };
-        var tb = new TrackBar { Minimum = 0, Maximum = 1000, TickStyle = TickStyle.None, Width = Width, Location = new Point(0, 18), AutoSize = false, Height = 24 };
-        new ToolTip().SetToolTip(name, label);
-        bool lg = log && min > 0;
-        double ToT(double v) => lg ? Math.Log(Math.Max(min, v) / min) / Math.Log(max / min) : (v - min) / (max - min);
-        double FromT(double t) { double v = lg ? min * Math.Pow(max / min, t) : min + (max - min) * t; if (step > 0) v = Math.Round(v / step) * step; return Math.Clamp(v, min, max); }
-        fmt ??= v => Math.Abs(v) >= 100 ? v.ToString("0", CultureInfo.InvariantCulture) : v.ToString("0.##", CultureInfo.InvariantCulture);
-        bool busy = false;
-        void Sync() { if (box.IsDisposed) return; busy = true; double v = get(); tb.Value = (int)Math.Clamp(ToT(v) * 1000, 0, 1000); val.Text = fmt(v); busy = false; }
-        tb.Scroll += (_, _) => { if (busy) return; double v = FromT(tb.Value / 1000.0); set(v); val.Text = fmt(v); };
-        tb.MouseWheel += (_, e) => { if (e is HandledMouseEventArgs h) h.Handled = true; };   // 패널 굴림에 값이 바뀌지 않게
-        box.Controls.AddRange(new Control[] { name, val, tb });
-        Sync();
-        Action onS = () => { if (!tb.Capture) Sync(); };
+        var s = new WebSlider(label, min, max, get, set, step, log, fmt);
+        Action onS = () => { if (!s.IsDisposed && !s.Capture) s.Sync(); };
         App.SettingsChanged += onS; PresetStore.Changed += onS;
-        box.Disposed += (_, _) => { App.SettingsChanged -= onS; PresetStore.Changed -= onS; };
-        return box;
+        s.Disposed += (_, _) => { App.SettingsChanged -= onS; PresetStore.Changed -= onS; };
+        return s;
     }
 
+    /// <summary>켜기/끄기 (웹 toggle)</summary>
     public static CheckBox Toggle(string label, Func<bool> get, Action<bool> set)
     {
-        var c = new CheckBox { Text = label, Checked = get(), ForeColor = Opt.Fg, AutoSize = true, Margin = new Padding(0, 2, 0, 2) };
-        // 긴 글은 줄을 바꿔 패널 너비 안에
-        var sz = TextRenderer.MeasureText(label, SystemFonts.MessageBoxFont);
-        if (sz.Width > Width - 24)
-        {
-            c.AutoSize = false; c.Width = Width;
-            c.Height = TextRenderer.MeasureText(label, SystemFonts.MessageBoxFont, new Size(Width - 24, 0), TextFormatFlags.WordBreak).Height + 6;
-            c.CheckAlign = ContentAlignment.TopLeft; c.TextAlign = ContentAlignment.TopLeft;
-        }
+        var c = new WebToggle(label) { Checked = get() };
         c.CheckedChanged += (_, _) => set(c.Checked);
         return c;
     }
 
     /// <summary>여러 칸 중 하나 고르기 (웹 segmented)</summary>
-    public static Control Seg<T>((T id, string text)[] items, Func<T> get, Action<T> set)
-    {
-        var p = new FlowLayoutPanel { FlowDirection = FlowDirection.LeftToRight, WrapContents = true, MaximumSize = new Size(Width, 0), AutoSize = true, BackColor = Opt.Bg, Margin = new Padding(0, 2, 0, 2) };
-        var btns = new List<RadioButton>();
-        foreach (var (id, text) in items)
-        {
-            var b = new RadioButton { Text = text, Appearance = Appearance.Button, AutoSize = true, FlatStyle = FlatStyle.Flat, ForeColor = Opt.Fg, BackColor = Opt.Bg2, Margin = new Padding(0, 0, 3, 3), Tag = id, TextAlign = ContentAlignment.MiddleCenter };
-            b.FlatAppearance.CheckedBackColor = Opt.Accent; b.FlatAppearance.BorderColor = Color.FromArgb(74, 74, 84);
-            b.Checked = Equals(get(), id);
-            b.ForeColor = b.Checked ? Color.Black : Opt.Fg;
-            b.CheckedChanged += (_, _) =>
-            {
-                b.ForeColor = b.Checked ? Color.Black : Opt.Fg;
-                if (b.Checked && !Equals(get(), (T)b.Tag)) set((T)b.Tag);
-            };
-            btns.Add(b); p.Controls.Add(b);
-        }
-        return p;
-    }
+    public static Control Seg<T>((T id, string text)[] items, Func<T> get, Action<T> set) => WebSeg.Of(items, get, set);
 
+    /// <summary>고르기 (웹 select: 흐린 이름 + 칸)</summary>
     public static Control Select(string label, (string id, string text)[] items, Func<string> get, Action<string> set)
-    {
-        var box = new FlowLayoutPanel { FlowDirection = FlowDirection.TopDown, AutoSize = true, BackColor = Opt.Bg, Margin = new Padding(0, 2, 0, 2), WrapContents = false };
-        if (label != null) box.Controls.Add(new Label { Text = label, ForeColor = Opt.Fg, AutoSize = true });
-        var cb = new ComboBox { DropDownStyle = ComboBoxStyle.DropDownList, Width = Width - 10, BackColor = Opt.Bg2, ForeColor = Opt.Fg, FlatStyle = FlatStyle.Flat };
-        foreach (var (_, t) in items) cb.Items.Add(t);
-        cb.SelectedIndex = Math.Max(0, Array.FindIndex(items, i => i.id == get()));
-        cb.SelectedIndexChanged += (_, _) => { if (cb.SelectedIndex >= 0) set(items[cb.SelectedIndex].id); };
-        cb.MouseWheel += (_, e) => { if (!cb.DroppedDown && e is HandledMouseEventArgs h) h.Handled = true; };
-        box.Controls.Add(cb);
-        return box;
-    }
+        => label == null ? new WebSelect(items, get, set) : new WebSelectRow(label, items, get, set);
 
-    public static Control Section(string title, params Control[] items)
-    {
-        var p = new FlowLayoutPanel { FlowDirection = FlowDirection.TopDown, WrapContents = false, AutoSize = true, BackColor = Opt.Bg, Margin = new Padding(0, 4, 0, 4) };
-        p.Controls.Add(Opt.Title(title));
-        foreach (var c in items) if (c != null) p.Controls.Add(c);
-        return p;
-    }
+    /// <summary>구역 (웹 section: 흐린 제목 + 내용 + 아래 줄)</summary>
+    public static Control Section(string title, params Control[] items) => new WebSection(title, items);
 
-    public static Label Help(string t) => new() { Text = t, AutoSize = true, MaximumSize = new Size(Width, 0), ForeColor = Opt.Muted, Margin = new Padding(0, 0, 0, 4) };
+    public static Label Help(string t) => new WebHelp(t);
 
     /// <summary>한 줄 글 입력 (웹 prompt)</summary>
-    public static string Prompt(string title, string value)
-    {
-        using var f = new Form { Text = title, FormBorderStyle = FormBorderStyle.FixedDialog, StartPosition = FormStartPosition.CenterParent, MinimizeBox = false, MaximizeBox = false, BackColor = Opt.Bg, ForeColor = Opt.Fg, AutoSize = true, AutoSizeMode = AutoSizeMode.GrowAndShrink, Padding = new Padding(10), ShowInTaskbar = false };
-        var p = new FlowLayoutPanel { FlowDirection = FlowDirection.TopDown, AutoSize = true, Dock = DockStyle.Fill };
-        p.Controls.Add(new Label { Text = title, AutoSize = true });
-        var tb = new TextBox { Text = value ?? "", Width = 280, BackColor = Opt.Bg2, ForeColor = Opt.Fg };
-        p.Controls.Add(tb);
-        var ok = new Button { Text = "확인", DialogResult = DialogResult.OK, AutoSize = true };
-        var cancel = new Button { Text = "취소", DialogResult = DialogResult.Cancel, AutoSize = true };
-        p.Controls.Add(Opt.Row(ok, cancel));
-        f.Controls.Add(p); f.AcceptButton = ok; f.CancelButton = cancel;
-        f.Shown += (_, _) => { tb.Focus(); tb.SelectAll(); };
-        return f.ShowDialog(App.Main) == DialogResult.OK ? tb.Text.Trim() : null;
-    }
+    public static string Prompt(string title, string value) => UI.Dialogs.Modals.Prompt(title, value);
 
     /// <summary>미리 곱한 면의 영역 → 흰 바탕 위 그림</summary>
     public static Bitmap ToBitmap(Surface s, Rect r, Color? bg = null)
@@ -338,20 +273,23 @@ public static class BrushPreview
 }
 
 /// <summary>시험 그리기 칸: 미리보기 한 획 + 마음대로 그려 보는 칸 (그림에는 안 들어감)</summary>
-public sealed class BrushTestPad : FlowLayoutPanel
+﻿﻿public sealed class BrushTestPad : WebStack
 {
-    const int W = BUI.Width - 6, PH = 64, H = 120;
+    const int W = BUI.Width, PH = 64, H = 120;
     readonly Func<BrushPreset> getPreset; readonly bool erase;
-    readonly PictureBox big = new() { Width = W, Height = PH, Margin = new Padding(0, 0, 0, 2), BackColor = Color.White };
-    readonly PenInputControl pad = new() { Width = W, Height = H, Margin = new Padding(0, 0, 0, 2), BackColor = Color.White, Cursor = Cursors.Cross };
+    readonly Control big = new WebCanvas { Width = W, Height = PH, Margin = new Padding(0, 0, 0, 4) };
+    readonly PenInputControl pad = new() { Width = W, Height = H, Margin = new Padding(0, 0, 0, 4), Cursor = Cursors.Cross };
     readonly Label info = BUI.Help("여기에 펜으로 그려 보세요 (그림에는 안 들어감)");
+    Bitmap bigImg;
     Surface done = new(W, H);
     BrushStroke st; BPt last; long t0;
 
     public BrushTestPad(Func<BrushPreset> getPreset, bool erase)
     {
         this.getPreset = getPreset; this.erase = erase;
-        FlowDirection = FlowDirection.TopDown; AutoSize = true; WrapContents = false; BackColor = Opt.Bg;
+        FillParent = false;
+        big.Inline(false).Stretch(); pad.Inline(false).Stretch();
+        big.Paint += (_, e) => { e.Graphics.Clear(Web.ParentBack(big)); Rounded(e.Graphics, bigImg, false); };
         pad.Paint += (_, e) => Show(e.Graphics);
         pad.PenDown += (x, y, pr, pen) =>
         {
@@ -378,9 +316,22 @@ public sealed class BrushTestPad : FlowLayoutPanel
             info.Text = "지우려면 \"칸 비우기\"";
         };
         Controls.Add(big); Controls.Add(pad);
-        Controls.Add(info);
-        Controls.Add(Opt.Button("칸 비우기", () => { done = new Surface(W, H); pad.Invalidate(); info.Text = "여기에 펜으로 그려 보세요 (그림에는 안 들어감)"; }));
+        info.Margin = new Padding(0, 0, 0, 0);
+        info.Flex();
+        Controls.Add(Opt.Row(Opt.Button("칸 비우기", () => { done = new Surface(W, H); pad.Invalidate(); info.Text = "여기에 펜으로 그려 보세요 (그림에는 안 들어감)"; }), info));
         Refresh2();
+    }
+
+    /// <summary>둥근 6px 흰 칸 (웹 .brush-test canvas)</summary>
+    void Rounded(Graphics g, Bitmap bmp, bool border)
+    {
+        var st2 = g.Save();
+        var r = new RectangleF(0, 0, W, bmp?.Height ?? PH);
+        using (var path = Theme.Round(r, 6)) { Web.Smooth(g); g.SetClip(path); }
+        g.Clear(Color.White);
+        if (bmp != null) g.DrawImageUnscaled(bmp, 0, 0);
+        g.Restore(st2);
+        if (border) Web.Box(g, new Rectangle(0, 0, W, (int)r.Height), 6, null, Theme.Line);
     }
 
     void Show(Graphics g)
@@ -391,14 +342,18 @@ public sealed class BrushTestPad : FlowLayoutPanel
             s = done.Clone();
             new StrokeApply { Buf = st.Buf, Target = s, Opacity = getPreset().Opacity }.Apply(new Rect(0, 0, W, H));
         }
+        g.Clear(Web.ParentBack(pad));
         using var bmp = BUI.ToBitmap(s, new Rect(0, 0, W, H));
-        g.DrawImageUnscaled(bmp, 0, 0);
+        Rounded(g, bmp, true);
     }
 
     public void Refresh2()
     {
-        var old = big.Image;
-        big.Image = BrushPreview.Bitmap(getPreset(), W, PH, null, erase);
+        var old = bigImg;
+        bigImg = BrushPreview.Bitmap(getPreset(), W, PH, null, erase);
         old?.Dispose();
+        big.Invalidate();
     }
+
+    protected override void Dispose(bool disposing) { if (disposing) bigImg?.Dispose(); base.Dispose(disposing); }
 }
