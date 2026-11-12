@@ -15,6 +15,7 @@ public sealed class CanvasView : Control
     Surface comp;                                   // 합성 캐시 (문서 크기)
     IntPtr memDC, dib, oldBmp; unsafe uint* bits; int bw, bh;
     Rectangle lastOverlay = Rectangle.Empty;
+    readonly Modules.Gaps.PenPredict predict = new();   // 펜 위치 예측 (penFeel.predict, 화면 표시만)
     double hoverSX = -1, hoverSY = -1;
     public bool SpaceDown, CtrlDown, ShiftDown;
     // 입력 상태
@@ -222,6 +223,8 @@ public sealed class CanvasView : Control
         }
         var tb = t.OverlayBounds(V);
         if (!tb.IsEmpty) r = r.IsEmpty ? tb : Rectangle.Union(r, tb);
+        var pb = drawing ? predict.Bounds(t.CircleSize * V.Zoom * 0.6) : Rectangle.Empty;
+        if (!pb.IsEmpty) r = r.IsEmpty ? pb : Rectangle.Union(r, pb);
         return r;
     }
 
@@ -239,6 +242,7 @@ public sealed class CanvasView : Control
             }
         }
         t.DrawOverlay(g, V);
+        if (drawing) predict.Draw(g, t.CircleSize * V.Zoom * 0.6, App.Fg);
     }
 
     // ---- 보기 ----------------------------------------------------------------------
@@ -321,7 +325,7 @@ public sealed class CanvasView : Control
         bool barrel = (pp.penFlags & PEN_FLAG_BARREL) != 0 || (info.pointerFlags & POINTER_FLAG_SECONDBUTTON) != 0;
         bool eraser = (pp.penFlags & (PEN_FLAG_ERASER | PEN_FLAG_INVERTED)) != 0;
         int buttons;
-        if (type == PT_PEN) buttons = (contact ? (eraser ? 32 : 1) : 0) | (barrel ? 2 : 0);
+        if (type == PT_PEN) buttons = (contact ? (eraser ? 32 : 1) : 0) | (barrel ? 2 : 0) | ((info.pointerFlags & POINTER_FLAG_THIRDBUTTON) != 0 ? 4 : 0);   // 4 = 두 번째 측면 버튼 (드라이버가 알려 줄 때)
         else buttons = ((info.pointerFlags & POINTER_FLAG_FIRSTBUTTON) != 0 ? 1 : 0) | ((info.pointerFlags & POINTER_FLAG_SECONDBUTTON) != 0 ? 2 : 0) | ((info.pointerFlags & POINTER_FLAG_THIRDBUTTON) != 0 ? 4 : 0);
         double pr = type == PT_PEN ? ((pp.penMask & 1) != 0 ? pp.pressure / 1024.0 : contact ? 0.5 : 0) : App.Get("mousePressure", 1.0);
         var mods = ModifierKeys;
@@ -369,7 +373,11 @@ public sealed class CanvasView : Control
                 if (!drawing && !panning) BeginInput(a);
                 else if (panning) PanMove(a);
                 else if (gesture != null) gesture.Move(a);
-                else App.Tool?.Move(a);
+                else
+                {
+                    App.Tool?.Move(a);
+                    if (type == PT_PEN && Modules.Gaps.PenPredict.ForTool(App.Tool) && Modules.Gaps.PenPredict.Enabled()) predict.Add(a.SX, a.SY, (long)hist[i].pointerInfo.PerformanceCount);
+                }
             }
             else
             {
@@ -389,8 +397,12 @@ public sealed class CanvasView : Control
 
     void BeginInput(PointerArgs a)
     {
+        predict.Reset();
+        // 펜 두 번째 측면 버튼 (설정 penButton2, 웹 판과 같음: 기본 화면 이동)
+        string b2 = a.Type == "pen" && (a.Buttons & 6) == 4 ? Modules.Gaps.PenPredict.Button2Action() : null;
+        if (b2 == "none") return;
         // 화면 조작: 스페이스(+Ctrl 확대 / +Shift 회전), 가운데 버튼, 화면 이동 도구
-        if (SpaceDown || (a.Buttons & 4) != 0 || App.Tool?.Id == "hand")
+        if (SpaceDown || ((a.Buttons & 4) != 0 && (b2 == null || b2 == "pan")) || App.Tool?.Id == "hand")
         {
             panning = true; panSX = a.SX; panSY = a.SY; panX0 = V.PanX; panY0 = V.PanY; rotA0 = V.Angle; zoomS0 = V.Zoom;
             panMode = SpaceDown && CtrlDown ? "zoom" : SpaceDown && ShiftDown ? "rotate" : "pan";
@@ -399,7 +411,8 @@ public sealed class CanvasView : Control
         }
         // 마우스 오른쪽 = 스포이트 / 펜 측면 버튼 = 설정(스포이트) / 지우개 끝 = 지우개 / Alt = 스포이트
         string temp = null;
-        if (a.EraserEnd) temp = "eraser";
+        if (b2 != null) temp = b2;
+        else if (a.EraserEnd) temp = "eraser";
         else if ((a.Buttons & 2) != 0 && a.Type == "mouse") temp = App.Get("mouseRadial", true) && TempAction != null ? "radial" : App.Get("penButton", "eyedropper");   // 마우스 오른쪽 = 원형 메뉴 (웹 판과 같음)
         else if ((a.Buttons & 2) != 0) temp = App.Get("penButton", "eyedropper");
         else if (a.Alt && App.Tool?.Id != "eyedropper" && App.Tool?.AllowAltPick != false) temp = "eyedropper";
@@ -414,6 +427,7 @@ public sealed class CanvasView : Control
     void EndDraw(PointerArgs a)
     {
         drawing = false;
+        predict.Reset();
         if (gesture != null) { var g = gesture; gesture = null; g.Up(a); return; }
         if (a != null) App.Tool?.Up(a); else App.Tool?.Cancel();
         if (tempTool != null) { App.SetTool(tempTool); tempTool = null; }
