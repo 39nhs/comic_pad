@@ -235,6 +235,7 @@ public static class HelpUi
                 Directory.CreateDirectory(outDir);
                 var psi = new ProcessStartInfo(exe) { UseShellExecute = false, CreateNoWindow = true };
                 psi.Environment["COMICPAD_DATA"] = Path.Combine(tmp, "data");
+                psi.Environment["COMICPAD_SETTINGS"] = Path.Combine(tmp, "settings.json");   // 사용자 설정 파일은 건드리지 않게
                 if (env != null) { psi.Environment[env] = outDir; psi.ArgumentList.Add("--render"); psi.ArgumentList.Add(Path.Combine(tmp, "없음.cpad")); psi.ArgumentList.Add(Path.Combine(tmp, "x.png")); }
                 else { foreach (var a in args) psi.ArgumentList.Add(a); psi.ArgumentList.Add(outDir); }
                 try

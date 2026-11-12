@@ -30,3 +30,13 @@ bin/Release/net8.0-windows/ComicPadNative.exe
 - 같은 S펜으로 클립스튜디오·웹 판 1.1.3 과 직접 비교 (느낌·지연·필압 곡선)
 - 큰 원고(B4 600dpi)에서 그리기·확대 속도
 - 계속하기로 하면 단계 1 (레이어·합성·브러시 엔진 전부·.cpad 읽기/쓰기)
+
+## 화면·명령 (Shell2 모듈) 시험
+웹 판과의 기능 대조는 `기능_대조표.md`. 시험은 늘 임시 폴더로 (사용자 작업물·설정을 건드리지 않음):
+```
+set COMICPAD_DATA=%TEMP%\cps & set COMICPAD_SHELL2_SELFTEST=%TEMP%\cps-out
+ComicPadNative.exe --render x y    → cps-out\result.txt (업데이트 서명·꾸러미, 웹 id, 자동 액션, 작업 화면, 레이어 명령, 패스 …)
+set COMICPAD_SETTINGS=%TEMP%\cps\settings.json & set COMICPAD_SHELL2_GUITEST=%TEMP%\cps-gui
+ComicPadNative.exe                  → 창을 띄워 퀵바·원형 메뉴·간단히 모드·패널 꺼내기 등을 해 보고 닫음 (gui-result.txt)
+```
+GUI 시험의 설정 파일에는 `{"setupDone":"csp"}` 를 미리 넣어 둔다 (처음 세팅 창이 뜨지 않게).

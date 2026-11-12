@@ -27,6 +27,8 @@ public static class Shell2Test
         try
         {
             if (string.IsNullOrEmpty(Environment.GetEnvironmentVariable("COMICPAD_DATA"))) { File.WriteAllText(Path.Combine(outDir, "result.txt"), "COMICPAD_DATA 를 임시 폴더로 정해 주세요"); return 2; }
+            // 설정 파일 저장이 일어나도 (DoEvents 로 저장 타이머가 돌 수 있음) 사용자 설정 파일이 아니라 시험 폴더로
+            Environment.SetEnvironmentVariable("COMICPAD_SETTINGS", Path.Combine(outDir, "settings-test.json"));
             App.Settings = new JsonObject();
             // 다른 모듈 모두 등록 (이 모듈 빼고 — 시험으로 끝나는 모듈은 그 환경 변수가 없으니 그냥 등록만 됨)
             foreach (var t in typeof(App).Assembly.GetTypes().Where(t => typeof(IModule).IsAssignableFrom(t) && !t.IsAbstract && !t.IsInterface && t != typeof(Shell2Module)))
