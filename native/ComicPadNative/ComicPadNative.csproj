@@ -15,4 +15,8 @@
     <Optimize>true</Optimize>
     <InvariantGlobalization>true</InvariantGlobalization>
   </PropertyGroup>
+  <ItemGroup>
+    <!-- AI 기능 (선화·따기·깊이·키우기·AI 고르기): 마이크로소프트 ONNX Runtime, 그래픽 가속(DirectML) 포함 -->
+    <PackageReference Include="Microsoft.ML.OnnxRuntime.DirectML" Version="1.20.1" />
+  </ItemGroup>
 </Project>

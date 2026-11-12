@@ -171,6 +171,8 @@ public static class App
     {
         get
         {
+            string env = Environment.GetEnvironmentVariable("COMICPAD_DATA");     // 시험용으로 다른 폴더
+            if (!string.IsNullOrEmpty(env)) { Directory.CreateDirectory(env); return env; }
             var d = new DirectoryInfo(AppContext.BaseDirectory);
             for (int i = 0; i < 6 && d != null; i++, d = d.Parent)
                 if (File.Exists(Path.Combine(d.FullName, "server.py")) && Directory.Exists(Path.Combine(d.FullName, "data"))) return Path.Combine(d.FullName, "data");

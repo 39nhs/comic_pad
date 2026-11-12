@@ -25,6 +25,7 @@ static class Program
             bmp.Save(args[2], System.Drawing.Imaging.ImageFormat.Png);
             return;
         }
+        if (args.Length == 5 && args[0] == "--ai-test") { Environment.ExitCode = Modules.AI.AiTest.Run(args[1], args[2], double.Parse(args[3]), double.Parse(args[4])); return; }
         EnableMouseInPointer(true);            // 마우스도 펜·터치와 같은 포인터 메시지로
         ApplicationConfiguration.Initialize();
         Application.SetUnhandledExceptionMode(UnhandledExceptionMode.CatchException);
@@ -62,4 +63,5 @@ static class Program
     }
 
     [DllImport("user32.dll")] static extern bool EnableMouseInPointer(bool enable);
+    [DllImport("kernel32.dll")] static extern bool AllocConsole();
 }
