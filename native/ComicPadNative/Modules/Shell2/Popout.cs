@@ -1,5 +1,5 @@
 // 패널·설정 창을 앱 밖 별도 창으로 (웹 ui/popout.js): 두 번째 모니터, 또는 "항상 위" 작은 창.
-// 오른쪽 패널 탭의 내용을 그대로 옮기는 방식이라 꺼낸 창에서 바꾸면 바로 반영되고, 창을 닫으면 탭으로 돌아온다.
+// 오른쪽 패널 탭의 내용을 그대로 옮기는 방식이라 (탭 머리의 ⧉ 단추 또는 보기 메뉴) 꺼낸 창에서 바꾸면 바로 반영되고, 창을 닫으면 탭으로 돌아온다.
 // 꺼낸 창에 손이 가 있어도 단축키는 메인 창으로 넘김.
 using ComicPadNative.Modules.Extras;
 using ComicPadNative.UI;
@@ -30,31 +30,29 @@ public static class Popout
         return f;
     }
 
-    public static void Panel(string title, bool onTop)
+    /// <summary>오른쪽 패널 탭 하나를 앱 밖 창으로 (웹 id 또는 제목). 창을 닫으면 탭으로 돌아옴</summary>
+    public static void Panel(string idOrTitle, bool onTop)
     {
-        if (popped.TryGetValue(title, out var ex) && !ex.IsDisposed) { ex.Activate(); return; }
-        var tabs = Shell2Ui.SideTabs;
-        var page = tabs?.TabPages.Cast<TabPage>().FirstOrDefault(p => p.Text == title);
-        if (page == null || page.Controls.Count == 0) { App.Toast("패널을 찾지 못했습니다"); return; }
-        var content = page.Controls[0];
-        int index = tabs.TabPages.IndexOf(page);
-        var f = MakeWindow(title, 360, 600, onTop);
-        page.Controls.Remove(content);
-        tabs.TabPages.Remove(page);
+        var side = Shell2Ui.Side;
+        var def = side?.Find(idOrTitle);
+        if (def == null) { App.Toast("패널을 찾지 못했습니다"); return; }
+        if (popped.TryGetValue(def.Id, out var ex) && !ex.IsDisposed) { ex.Activate(); return; }
+        var content = side.Detach(def.Id);
+        if (content == null) { App.Toast("패널을 찾지 못했습니다"); return; }
+        var f = MakeWindow(def.Title, 360, 600, onTop);
         var back = new Button { Text = "앱으로 되돌리기", Dock = DockStyle.Top, Height = 28, FlatStyle = FlatStyle.Flat, BackColor = Opt.Bg2, ForeColor = Opt.Fg };
         back.Click += (_, _) => f.Close();
         content.Dock = DockStyle.Fill;
+        content.Visible = true;
         f.Controls.Add(content); f.Controls.Add(back);
         f.FormClosed += (_, _) =>
         {
-            popped.Remove(title);
-            if (content.IsDisposed || tabs.IsDisposed) return;
+            popped.Remove(def.Id);
+            if (content.IsDisposed || side.IsDisposed) return;
             f.Controls.Remove(content);
-            page.Controls.Add(content);
-            tabs.TabPages.Insert(Math.Min(index, tabs.TabPages.Count), page);
-            tabs.SelectedTab = page;
+            side.Attach(def.Id);
         };
-        popped[title] = f;
+        popped[def.Id] = f;
         f.Show(App.Main);
     }
 
@@ -73,12 +71,13 @@ public static class Popout
 
     public static void Chooser()
     {
-        var titles = Shell2Ui.SideTabs?.TabPages.Cast<TabPage>().Select(p => p.Text).ToList() ?? new();
+        var defs = Shell2Ui.Side?.Defs.Where(UI.Chrome.SidePanel.Shown).ToList() ?? new();
+        var titles = defs.Select(d => d.Id).ToList();
         var opts = new List<(string, string)> { ("__settings", "환경 설정") };
-        opts.AddRange(titles.Select(t => (t, t + " 패널")));
+        opts.AddRange(defs.Select(d => (d.Id, d.Title + " 패널")));
         var v = Dlg.Form("앱 밖 창으로 꺼내기", new[]
         {
-            Field.Select("what", "꺼낼 것", titles.Contains("색") ? "색" : opts[0].Item1, opts.ToArray()),
+            Field.Select("what", "꺼낼 것", titles.Contains("color") ? "color" : opts[0].Item1, opts.ToArray()),
             Field.Check("top", "항상 위에 작은 창으로 (꺼내면 화면 위에 떠 있음)", App.Get("popoutOnTop", false)),
             Field.Info("보통 창은 다른 모니터로 끌어다 놓기 좋고, 여러 개를 꺼낼 수 있습니다. 창을 닫으면 패널은 오른쪽으로 돌아옵니다."),
         }, "꺼내기");

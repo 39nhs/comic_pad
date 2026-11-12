@@ -29,8 +29,6 @@ public sealed class Shell2Module : IModule
         };
         CanvasView.GestureCommand = id => WebIds.Run(id);
         CursorLook.Install();
-        MainForm.MenusBuilt += UiMode.OnMenusBuilt;
-        MainForm.ToolsBuilt += UiMode.OnToolsBuilt;
 
         bool done = false;
         void FirstIdle(object s, EventArgs e)
@@ -41,7 +39,6 @@ public sealed class Shell2Module : IModule
             // 설정 창을 이 모듈 것으로 (기본 Shell 모듈이 나중에 등록하므로 여기서 바꿈)
             Registry.Menu("파일/설정…", Shell2Settings.Dialog, Keys.Control | Keys.Oemcomma, order: 80);
             Shell2Ui.Main?.BuildMenus();
-            UiMode.ApplyPanels();
             UiMode.ApplyLarge();
             Bars.Attach();
             CursorLook.Apply();

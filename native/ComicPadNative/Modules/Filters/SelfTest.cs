@@ -529,12 +529,11 @@ public static class SelfTest
         Check("메뉴 등록", missing.Count == 0, string.Join(", ", missing));
         Check("메뉴 경로에 '/' 이름 없음", Registry.Menus.Where(m => m.Path.StartsWith("보정/") || m.Path.StartsWith("필터/")).All(m => m.Path.Count(c => c == '/') == 1));
         Check("PSD 열기 등록", UI.FileCommands.Openers.ContainsKey(".psd") && UI.FileCommands.Openers.ContainsKey(".PSB"));
-        // 메인 창 메뉴 만들기 + "보정" 을 "필터" 다음으로
+        // 메인 창 메뉴 만들기: 웹 판과 같은 메뉴 순서 (보정은 웹 판처럼 맨 끝)
         using var mf = new UI.MainForm();
-        FiltersModule.MoveAdjustMenu(null, EventArgs.Empty);
         var items = mf.MainMenuStrip.Items.OfType<ToolStripMenuItem>().Select(i => i.Text).ToList();
-        int fi = items.IndexOf("필터"), ai = items.IndexOf("보정");
-        Check("메인 창 메뉴: 보정이 필터 다음", fi >= 0 && ai == fi + 1, string.Join(",", items));
+        var web = UI.Chrome.WebMenus.Tree().Select(t => t.Label).ToList();
+        Check("메인 창 메뉴: 웹 판 순서 (필터·보정 포함)", items.SequenceEqual(web) && items.Contains("필터") && items.Contains("보정"), string.Join(",", items));
         App.Main = null;
     }
 

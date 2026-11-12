@@ -1,4 +1,4 @@
-// Shell2 공통: 메인 창 부품 찾기(메인 창 파일을 고치지 않고), 작은 창·알림, 퀵 동작 목록(퀵바·아래 막대·원형 메뉴가 같이 씀).
+// Shell2 공통: 메인 창 부품(위 막대·도구 막대·오른쪽 패널), 작은 창·알림, 퀵 동작 목록(퀵바·아래 막대·원형 메뉴가 같이 씀).
 using System.Text.Json.Nodes;
 using ComicPadNative.Modules.BrushEngine;
 using ComicPadNative.Modules.Extras;
@@ -10,10 +10,9 @@ public static class Shell2Ui
 {
     public static MainForm Main => App.Main as MainForm;
     public static CanvasView Canvas => Main?.Canvas;
-    public static SplitContainer Side => App.Main == null ? null : U.All(App.Main).OfType<SplitContainer>().FirstOrDefault(s => s.Dock is DockStyle.Right or DockStyle.Left);
-    public static TabControl SideTabs => Side == null ? null : U.All(Side.Panel1).OfType<TabControl>().FirstOrDefault();
-    public static ToolStrip ToolBar => App.Main?.Controls.OfType<ToolStrip>().FirstOrDefault(t => t is not MenuStrip && t is not StatusStrip && t.Dock is DockStyle.Left or DockStyle.Right);
-    public static MenuStrip MenuBar => App.Main?.MainMenuStrip;
+    public static UI.Chrome.SidePanel Side => Main?.Side;
+    public static UI.Chrome.ToolBox ToolBar => Main?.Tools;
+    public static MenuStrip MenuBar => Main?.MenuBar;
 
     public static Form Modal(string title, Control body, int w = 640, int h = 520) => Dlg.Modal(title, body, w, h);
     public static bool Confirm(string msg, string ok = "확인") => Dlg.Confirm(msg, ok);
@@ -107,12 +106,12 @@ public static class QuickActions
         Q("radial", "원형 메뉴", "◎", () => { var c = Shell2Ui.Canvas; if (c != null) Radial.Open(c.PointToScreen(new Point(c.Width / 2, c.Height / 2))); });
     }
 
-    public static void ShowTab(string title)
+    /// <summary>오른쪽 패널 탭 보이기 (웹 id 또는 제목). 패널이 숨어 있으면 보이게</summary>
+    public static void ShowTab(string idOrTitle)
     {
-        var side = Shell2Ui.Side; if (side == null) return;
-        if (!side.Visible) { side.Visible = true; App.Set("sideVisible", true); }
-        var tabs = Shell2Ui.SideTabs;
-        if (tabs != null) foreach (TabPage p in tabs.TabPages) if (p.Text == title) { tabs.SelectedTab = p; break; }
+        var m = Shell2Ui.Main; if (m == null) return;
+        if (!m.Side.Visible) m.SetSideVisible(true);
+        m.Side.ShowTab(idOrTitle);
     }
 
     /// <summary>스포이트 한 번: 색을 고르면 전 도구로</summary>

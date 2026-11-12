@@ -14,18 +14,17 @@ public static class Workspaces
     static readonly string[] Keys_ = { "dock_top", "dock_bottom", "dockSplit", "sideVisible", "leftHanded", "quickbar", "bottombar" };
     static JsonArray List => U.Arr("workspaces");
 
-    // 메인 창 부품 찾기 (MainForm 을 고치지 않고)
-    static SplitContainer Side => U.All(App.Main).OfType<SplitContainer>().FirstOrDefault(s => s.Dock is DockStyle.Right or DockStyle.Left);
-    static TabControl Tabs => Side == null ? null : U.All(Side.Panel1).OfType<TabControl>().FirstOrDefault();
-    static ToolStrip ToolBar => App.Main?.Controls.OfType<ToolStrip>().FirstOrDefault(t => t is not MenuStrip && t is not StatusStrip && t.Dock is DockStyle.Left or DockStyle.Right);
+    static MainForm Main => App.Main as MainForm;
 
     /// <summary>지금 화면 상태를 설정에 반영 (저장하기 전에)</summary>
     static void CaptureLayout()
     {
-        var s = App.Settings; var side = Side; var tabs = Tabs;
-        if (tabs?.SelectedTab != null) s["dock_top"] = tabs.SelectedTab.Text;
-        if (side != null && side.Height > 0) s["dockSplit"] = Math.Round(side.SplitterDistance / (double)side.Height, 3);
-        if (side != null) s["sideVisible"] = side.Visible;
+        var s = App.Settings; var m = Main;
+        if (m == null) return;
+        if (m.Side.Selected("top") is string t) s["dock_top"] = t;          // 웹 패널 id
+        if (m.Side.Selected("bottom") is string b) s["dock_bottom"] = b;
+        s["dockSplit"] = Math.Round(m.Side.SplitRatio, 3);
+        s["sideVisible"] = App.Get("sideVisible", true);
     }
 
     public static JsonObject Snapshot(string name)
@@ -40,17 +39,9 @@ public static class Workspaces
 
     public static void ApplyLayout()
     {
-        var s = App.Settings; var side = Side; var bar = ToolBar;
-        if (side == null) return;
-        bool left = App.Get("leftHanded", false);
-        side.Dock = left ? DockStyle.Left : DockStyle.Right;
-        if (bar != null) bar.Dock = left ? DockStyle.Right : DockStyle.Left;
-        side.Visible = App.Get("sideVisible", true);
-        double split = App.Get("dockSplit", -1.0);
-        try { if (split > 0 && side.Height > 0) side.SplitterDistance = Math.Clamp((int)(side.Height * split), side.Panel1MinSize, Math.Max(side.Panel1MinSize, side.Height - side.Panel2MinSize - side.SplitterWidth)); } catch { }
-        string top = (string)s["dock_top"];
-        var tabs = Tabs;
-        if (top != null && tabs != null) foreach (TabPage p in tabs.TabPages) if (p.Text == top) { tabs.SelectedTab = p; break; }
+        var m = Main; if (m == null) return;
+        m.ApplyLayout();          // 왼손잡이·패널 보이기·위아래 비율
+        m.Side.SelectSaved();     // 설정의 dock_top / dock_bottom 탭
     }
 
     public static void Apply(JsonObject w)

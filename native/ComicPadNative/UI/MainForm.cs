@@ -1,131 +1,100 @@
-// 메인 창: 위 메뉴(Registry.Menus), 왼쪽 도구 막대(Registry.Tools), 가운데 그림판, 오른쪽 패널(레이어·색·도구 옵션·Registry.Panels), 아래 상태 줄.
+// 메인 창 (웹 판 index.html 과 같은 배치): 위 막대(이름·메뉴·단추) / 왼쪽 도구 막대 · 가운데 그림판 · 오른쪽 패널(위·아래 탭) / 아래 큰 버튼 막대 / 상태 줄.
+//  - 부품은 UI/Chrome 아래: TopBar · ToolBox · SidePanel · BottomBar · StatusBar · Toasts (웹 모양 그대로 직접 그림)
+//  - 왼손잡이(leftHanded) = 도구 막대와 패널 자리 바꿈, 패널 숨기기(Tab) = 위·도구·패널·아래 막대·상태 줄 모두 숨김
+//  - 메뉴 단축키는 메뉴 단추가 아니라 여기서 (같은 기능이 여러 메뉴에 있어도 한 번만)
 using ComicPadNative.Core;
+using ComicPadNative.UI.Chrome;
 
 namespace ComicPadNative.UI;
 
 public sealed class MainForm : Form
 {
     public readonly CanvasView Canvas = new() { Dock = DockStyle.Fill };
-    readonly MenuStrip menu = new() { BackColor = Opt.Bg2, ForeColor = Opt.Fg, RenderMode = ToolStripRenderMode.System };
-    readonly ToolStrip tools = new() { Dock = DockStyle.Left, LayoutStyle = ToolStripLayoutStyle.VerticalStackWithOverflow, BackColor = Opt.Bg, ForeColor = Opt.Fg, GripStyle = ToolStripGripStyle.Hidden, RenderMode = ToolStripRenderMode.System, AutoSize = false, Width = 52 };
-    readonly StatusStrip status = new() { BackColor = Opt.Bg2, ForeColor = Opt.Fg, SizingGrip = false };
-    readonly ToolStripStatusLabel stInfo = new() { Spring = true, TextAlign = ContentAlignment.MiddleLeft };
-    readonly ToolStripStatusLabel stView = new();
-    readonly ToolStripStatusLabel stPen = new();
-    readonly Panel optionsHost = new() { Dock = DockStyle.Fill, AutoScroll = true, BackColor = Opt.Bg };
-    readonly System.Windows.Forms.Timer toastTimer = new() { Interval = 4000 };
-
-    static readonly string[] MenuOrder = { "파일", "편집", "레이어", "선택", "필터", "보정", "만화", "애니", "AI", "보기", "도움말" };
+    public readonly TopBar TopBar = new();
+    public readonly ToolBox Tools = new();
+    public readonly SidePanel Side;
+    public readonly BottomBar BottomBar = new();
+    public readonly StatusBar Status = new();
+    readonly Panel middle = new() { Dock = DockStyle.Fill, BackColor = Theme.StageBg };
+    readonly Toasts toasts;
+    public MenuStrip MenuBar => TopBar.Menu;
+    public Toasts ToastList => toasts;
 
     public MainForm()
     {
         App.Main = this;
         Text = "ComicPad";
         try { Icon = new Icon(Path.Combine(AppContext.BaseDirectory, "ComicPad.ico")); } catch { }
-        BackColor = Opt.Bg; ForeColor = Opt.Fg;
+        BackColor = Theme.Bg; ForeColor = Theme.Text;
         WindowState = FormWindowState.Maximized;
         ClientSize = new Size(1500, 950);
+        MinimumSize = new Size(640, 420);
         KeyPreview = true;
-        Font = new Font("Malgun Gothic", 9f);
+        Font = new Font("Malgun Gothic", 9f);   // 패널 안 부품들의 기본 글꼴 (위·아래 막대는 웹 13px 를 따로 씀)
+        Theme.Large = App.Get("largeUI", false);
 
-        // 오른쪽: 위 = 레이어·색·추가 패널 탭, 아래 = 도구 옵션
-        var right = new SplitContainer { Dock = DockStyle.Right, Orientation = Orientation.Horizontal, Width = 320, BackColor = Opt.Bg, SplitterWidth = 6 };
-        var tabs = new TabControl { Dock = DockStyle.Fill };
-        tabs.TabPages.Add(Page("레이어", new LayersPanel { Dock = DockStyle.Fill }));
-        tabs.TabPages.Add(Page("색", new ColorPanel { Dock = DockStyle.Fill }));
-        foreach (var p in Registry.Panels.Where(p => p.Dock == "right").OrderBy(p => p.Order)) { try { var c = p.Create(); c.Dock = DockStyle.Fill; tabs.TabPages.Add(Page(p.Title, c)); } catch (Exception ex) { App.Toast($"패널 {p.Title} 오류: {ex.Message}"); } }
-        right.Panel1.Controls.Add(tabs);
-        var optTitle = new Label { Text = "도구 옵션", Dock = DockStyle.Top, ForeColor = Opt.Accent, Height = 22, Padding = new Padding(6, 4, 0, 0) };
-        right.Panel2.Controls.Add(optionsHost);
-        right.Panel2.Controls.Add(optTitle);
-
-        status.Items.AddRange(new ToolStripItem[] { stInfo, stPen, stView });
-        // 아래: Dock == "bottom" 패널 (타임라인 등). 보기 메뉴에서 숨기기
-        var bottomDefs = Registry.Panels.Where(p => p.Dock == "bottom").OrderBy(p => p.Order).ToList();
-        if (bottomDefs.Count > 0)
-        {
-            var btabs = new TabControl { Dock = DockStyle.Fill };
-            foreach (var p in bottomDefs) { try { var c = p.Create(); c.Dock = DockStyle.Fill; btabs.TabPages.Add(Page(p.Title, c)); } catch (Exception ex) { App.Toast($"패널 {p.Title} 오류: {ex.Message}"); } }
-            bottomDock = new Panel { Dock = DockStyle.Bottom, Height = Math.Clamp(App.Get("bottomDockH", 220), 80, 800), BackColor = Opt.Bg, Visible = App.Get("bottomDock", false) };
-            bottomDock.Controls.Add(btabs);
-            bottomSplit = new Splitter { Dock = DockStyle.Bottom, Height = 5, BackColor = Opt.Bg, Visible = bottomDock.Visible };
-            bottomSplit.SplitterMoved += (_, _) => App.Set("bottomDockH", bottomDock.Height);
-            Controls.Add(Canvas);
-            Controls.Add(bottomSplit);
-            Controls.Add(bottomDock);
-        }
-        else Controls.Add(Canvas);
-        Controls.Add(right);
-        Controls.Add(tools);
-        Controls.Add(menu);
-        Controls.Add(status);
-        MainMenuStrip = menu;
-        Load += (_, _) => { right.SplitterDistance = (int)(right.Height * 0.55); };
+        Side = new SidePanel();
+        middle.Controls.Add(Canvas);
+        middle.Controls.Add(Tools);
+        middle.Controls.Add(Side);
+        Controls.Add(middle);
+        Controls.Add(BottomBar);
+        Controls.Add(Status);
+        Controls.Add(TopBar);
+        MainMenuStrip = TopBar.Menu;
+        toasts = new Toasts(this);
 
         BuildMenus();
-        BuildTools();
-        App.ToolChanged += () => { SyncTools(); BuildOptions(); };
+        Tools.Rebuild();
+        Load += (_, _) => { ApplyLayout(); Side.Rerender(); };
         App.LayersChanged += UpdateTitle;
         App.DocChanged += UpdateTitle;
         App.Toasted += Toast;
-        App.History.Changed += () => { UpdateTitle(); };
-        Canvas.ViewChanged += UpdateStatus;
-        toastTimer.Tick += (_, _) => { toastTimer.Stop(); UpdateStatus(); };
+        App.History.Changed += UpdateTitle;
+        Canvas.ViewChanged += () => Status.SyncView(Canvas.V);
         FormClosing += OnClosingForm;
+        Resize += (_, _) => { int t = ToolBox.T; if (t != lastTool) { lastTool = t; Tools.Rebuild(); } };
+        UiShot.Hook(this);
+    }
+    int lastTool = ToolBox.T;
+
+    // ---- 화면 배치 ---------------------------------------------------------------------
+    bool zen;
+    /// <summary>패널 모두 숨기기 (웹 body.zen): 위 막대·도구 막대·패널·아래 막대·상태 줄</summary>
+    public bool Zen { get => zen; set { zen = value; ApplyLayout(); } }
+
+    public bool SideVisible => Side.Visible;
+    public void SetSideVisible(bool v) { App.Set("sideVisible", v); Side.Visible = v && !zen; }
+
+    /// <summary>설정대로 다시 배치 (왼손잡이·패널 보이기·큰 버튼·위아래 비율·탭)</summary>
+    public void ApplyLayout()
+    {
+        SuspendLayout();
+        Theme.Large = App.Get("largeUI", false);
+        bool left = App.Get("leftHanded", false);
+        Tools.Dock = left ? DockStyle.Right : DockStyle.Left;
+        Side.LeftSide = left;
+        TopBar.Visible = Tools.Visible = Status.Visible = !zen;
+        Side.Visible = !zen && App.Get("sideVisible", true);
+        BottomBar.Rebuild();
+        Tools.Rebuild();
+        Side.Rerender();
+        Side.PerformLayout();
+        TopBar.Relayout();
+        ResumeLayout(true);
     }
 
-    Panel bottomDock; Splitter bottomSplit;
+    /// <summary>예전 "아래 패널(타임라인)" = 이제 오른쪽 아래 칸의 "애니" 탭 (웹 판과 같은 자리)</summary>
     public bool BottomDockVisible
     {
-        get => bottomDock?.Visible == true;
-        set { if (bottomDock == null) return; bottomDock.Visible = bottomSplit.Visible = value; App.Set("bottomDock", value); }
+        get => Side.IsSelected("anim");
+        set { App.Set("bottomDock", value); if (value) { SetSideVisible(true); Side.ShowTab("anim"); } else if (Side.IsSelected("anim")) Side.ShowTab("layers"); }
     }
-    /// <summary>이 작품 동안만 아래 패널 보이기/숨기기 (설정에 남기지 않음 — 애니 작품을 열 때 자동으로)</summary>
-    public void PeekBottomDock(bool v) { if (bottomDock != null) bottomDock.Visible = bottomSplit.Visible = v; }
-
-    static TabPage Page(string title, Control c) { var p = new TabPage(title) { BackColor = Opt.Bg }; p.Controls.Add(c); return p; }
+    /// <summary>이 작품 동안만 애니 탭 보이기 (애니 작품을 열 때 자동으로)</summary>
+    public void PeekBottomDock(bool v) { if (v) Side.ShowTab("anim"); }
 
     // ---- 메뉴 ----------------------------------------------------------------------
-    public void BuildMenus()
-    {
-        menu.Items.Clear();
-        var tops = new Dictionary<string, ToolStripMenuItem>();
-        ToolStripMenuItem Top(string name)
-        {
-            if (!tops.TryGetValue(name, out var t)) { t = new ToolStripMenuItem(name) { ForeColor = Opt.Fg }; tops[name] = t; }
-            return t;
-        }
-        foreach (var m in Registry.Menus.OrderBy(m => m.Order))
-        {
-            var parts = m.Path.Split('/');
-            var parent = Top(parts[0]);
-            for (int i = 1; i < parts.Length - 1; i++)
-            {
-                var sub = parent.DropDownItems.OfType<ToolStripMenuItem>().FirstOrDefault(x => x.Text == parts[i]);
-                if (sub == null) { sub = new ToolStripMenuItem(parts[i]); parent.DropDownItems.Add(sub); }
-                parent = sub;
-            }
-            string leaf = parts[^1];
-            if (leaf.StartsWith("-")) { parent.DropDownItems.Add(new ToolStripSeparator()); continue; }
-            var item = new ToolStripMenuItem(leaf) { ShortcutKeys = IsValidShortcut(m.Shortcut) ? m.Shortcut : Keys.None };
-            if (m.Shortcut != Keys.None && !IsValidShortcut(m.Shortcut)) item.ShortcutKeyDisplayString = new KeysConverter().ConvertToString(m.Shortcut);
-            var def = m;
-            item.Click += (_, _) => Run(def.Run, def.Path);
-            parent.DropDownItems.Add(item);
-            parent.DropDownOpening += (_, _) =>
-            {
-                item.Enabled = def.Enabled?.Invoke() ?? true;
-                if (def.Checked != null) item.Checked = def.Checked();
-            };
-        }
-        foreach (var name in MenuOrder.Concat(tops.Keys.Except(MenuOrder))) if (tops.TryGetValue(name, out var t)) menu.Items.Add(t);
-        MenusBuilt?.Invoke(menu);
-    }
-    /// <summary>메뉴를 (다시) 만든 뒤 (간단히 모드 등 메뉴를 거르는 모듈용)</summary>
-    public static event Action<MenuStrip> MenusBuilt;
-    /// <summary>도구 막대를 (다시) 만든 뒤</summary>
-    public static event Action<ToolStrip> ToolsBuilt;
-    static bool IsValidShortcut(Keys k) => k != Keys.None && (k & (Keys.Control | Keys.Alt)) != 0 || (k >= Keys.F1 && k <= Keys.F24) || k == Keys.Delete;
+    public void BuildMenus() => TopBar.BuildMenus();
 
     public static void Run(Action a, string name)
     {
@@ -133,38 +102,35 @@ public sealed class MainForm : Form
         catch (Exception ex) { App.Toast($"{name}: {ex.Message}"); File.AppendAllText(Path.Combine(Path.GetTempPath(), "comicpad-native-error.log"), DateTime.Now + " " + name + "\r\n" + ex + "\r\n\r\n"); }
     }
 
-    // ---- 도구 막대 -------------------------------------------------------------------
-    void BuildTools()
-    {
-        tools.Items.Clear();
-        foreach (var t in Registry.Tools)
-        {
-            var b = new ToolStripButton(t.Icon) { ToolTipText = t.Name + (t.Key != Keys.None ? $" ({t.Key})" : ""), Tag = t.Id, AutoSize = false, Width = 48, Height = 40, Font = new Font("Segoe UI Emoji", 14f), ForeColor = Opt.Fg };
-            var id = t.Id;
-            b.Click += (_, _) => App.SetTool(id);
-            tools.Items.Add(b);
-        }
-        SyncTools();
-        ToolsBuilt?.Invoke(tools);
-    }
-    void SyncTools() { foreach (ToolStripItem i in tools.Items) if (i is ToolStripButton b) b.Checked = (string)b.Tag == App.Tool?.Id; }
-
-    void BuildOptions()
-    {
-        optionsHost.SuspendLayout();
-        foreach (Control c in optionsHost.Controls) c.Dispose();
-        optionsHost.Controls.Clear();
-        try { var c = App.Tool?.BuildOptions(); if (c != null) optionsHost.Controls.Add(c); } catch (Exception ex) { App.Toast("도구 옵션 오류: " + ex.Message); }
-        optionsHost.ResumeLayout();
-    }
-
     // ---- 키보드 ----------------------------------------------------------------------
+    static bool IsTextInput(Control c)
+    {
+        while (c is ContainerControl cc && cc.ActiveControl != null && cc.ActiveControl != c) c = cc.ActiveControl;
+        return c is TextBoxBase || c is NumericUpDown || c is ComboBox || c is UpDownBase;
+    }
+
+    /// <summary>메뉴 단축키 실행 (있으면 true)</summary>
+    static bool RunShortcut(Keys keyData)
+    {
+        var m = Registry.Menus.Find(x => x.Shortcut == keyData && x.Run != null);
+        if (m == null) return false;
+        if (m.Enabled == null || m.Enabled()) Run(m.Run, m.Path);
+        return true;
+    }
+
     protected override bool ProcessCmdKey(ref Message msg, Keys keyData)
     {
-        if (ActiveControl is TextBoxBase || ActiveControl is NumericUpDown || ActiveControl is ComboBox) return base.ProcessCmdKey(ref msg, keyData);
-        Keys k = keyData & Keys.KeyCode, mods = keyData & Keys.Modifiers;
+        if (IsTextInput(ActiveControl))
+        {
+            // 글 입력 중: Ctrl·Alt 조합(복사·붙여넣기 등 글자 편집 키 빼고)과 F 키만 메뉴로
+            Keys code = keyData & Keys.KeyCode, mods = keyData & Keys.Modifiers;
+            bool edit = mods == Keys.Control && code is Keys.A or Keys.C or Keys.V or Keys.X or Keys.Z or Keys.Y or Keys.Left or Keys.Right or Keys.Back or Keys.Delete;
+            if (!edit && ((mods & (Keys.Control | Keys.Alt)) != 0 || code is >= Keys.F1 and <= Keys.F24) && RunShortcut(keyData)) return true;
+            return base.ProcessCmdKey(ref msg, keyData);
+        }
+        Keys k = keyData & Keys.KeyCode, mod = keyData & Keys.Modifiers;
         if (App.Tool?.HandleKey(keyData) == true) return true;
-        if (mods == Keys.None)
+        if (mod == Keys.None)
         {
             // 도구 키: 같은 키가 여러 도구면 누를 때마다 차례로
             var list = Registry.Tools.Where(t => t.Key == k).ToList();
@@ -175,23 +141,14 @@ public sealed class MainForm : Form
                 return true;
             }
         }
-        // 메뉴 단축키 중 Windows 메뉴가 못 받는 키 (한 글자·Shift+글자·PageUp 등)
-        if (!IsValidShortcut(keyData))
-        {
-            var m = Registry.Menus.Find(x => x.Shortcut == keyData && x.Run != null);
-            if (m != null)
-            {
-                if (m.Enabled == null || m.Enabled()) Run(m.Run, m.Path);
-                return true;
-            }
-        }
+        if (RunShortcut(keyData)) return true;
         return base.ProcessCmdKey(ref msg, keyData);
     }
 
     protected override void OnKeyDown(KeyEventArgs e)
     {
         base.OnKeyDown(e);
-        if (e.KeyCode == Keys.Space && !(ActiveControl is TextBoxBase)) { Canvas.SpaceDown = true; Canvas.Cursor = Cursors.Hand; e.Handled = true; e.SuppressKeyPress = true; }
+        if (e.KeyCode == Keys.Space && !IsTextInput(ActiveControl)) { Canvas.SpaceDown = true; Canvas.Cursor = Cursors.Hand; e.Handled = true; e.SuppressKeyPress = true; }
         Canvas.CtrlDown = e.Control; Canvas.ShiftDown = e.Shift;
     }
     protected override void OnKeyUp(KeyEventArgs e)
@@ -206,17 +163,10 @@ public sealed class MainForm : Form
     {
         var d = App.Doc;
         Text = d == null ? "ComicPad" : $"{(d.Modified ? "● " : "")}{d.Name} — ComicPad ({d.W}×{d.H}, {d.Dpi}dpi)";
-        UpdateStatus();
+        Status.SyncDoc();
+        TopBar.Invalidate();
     }
-    void UpdateStatus()
-    {
-        if (toastTimer.Enabled) return;
-        var d = App.Doc;
-        stInfo.Text = d == null ? "" : $"{App.Tool?.Name} · {d.Active?.Name}";
-        stView.Text = $"{Canvas.V.Zoom * 100:0}%" + (Canvas.V.Angle != 0 ? $" · {Canvas.V.Angle:0}°" : "") + (Canvas.V.Flip ? " · 반전" : "");
-        stPen.Text = Canvas.PenRate > 0 ? $"펜 {Canvas.PenRate}점/초 · 입력→화면 {Canvas.LatencyMs:0.0}ms" : "";
-    }
-    void Toast(string msg) { stInfo.Text = "ⓘ " + msg; toastTimer.Stop(); toastTimer.Start(); }
+    void Toast(string msg) { if (InvokeRequired) { BeginInvoke((Action)(() => Toast(msg))); return; } toasts.Show(msg); }
 
     void OnClosingForm(object s, FormClosingEventArgs e)
     {

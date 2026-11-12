@@ -308,7 +308,12 @@ public static class Shell2Test
         App.Settings.Remove("ui");
         Ok(UiMode.IsSimple && UiMode.MenuShown("파일") && !UiMode.MenuShown("애니") && UiMode.MenuShown("AI"), "간단히: 애니 메뉴 숨김, 파일·AI 보임");
         var pick = UiMode.Pick("파일");
-        Ok(UiMode.KeyMatches(pick, "파일/저장") && UiMode.KeyMatches(pick, "파일/설정…") && !UiMode.KeyMatches(pick, "파일/PNG 빠른 내보내기"), "간단히: 파일 메뉴 항목 고르기 (웹 id 로)");
+        Ok(UiMode.KeyMatches(pick, "파일/저장") && !UiMode.KeyMatches(pick, "파일/PNG 빠른 내보내기"), "간단히: 파일 메뉴 항목 고르기 (웹 id 로)");
+        Ok(UiMode.KeyMatches(UiMode.Pick("help"), "파일/설정…"), "간단히: 환경 설정은 웹 판처럼 도움말 메뉴에");
+        var tree = UI.Chrome.WebMenus.Tree();
+        var (fileItems, hidden) = UiMode.FilterMenu("file", tree.First(t => t.Id == "file").Items, false);
+        Ok(fileItems.First().Label == "새 캔버스…" && fileItems.Any(n => n.Label == "저장") && hidden > 0 && fileItems.Any(n => n.Key == "파일/끝내기"), "간단히: 웹 메뉴 거르기 (구분선 정리·숨긴 개수·끝내기는 늘)");
+        Ok(string.Join(",", tree.Select(t => t.Id).Take(13)) == "file,edit,layer,select,comic,asset,filter,view,ai,help,ruler,anim,adjust", "위 메뉴 순서 = 웹 판 (app.menuOrder)");
         Ok(UiMode.KeyMatches(UiMode.Pick("만화"), "만화/말풍선 도구"), "간단히: 이름(@말풍선 도구) 항목");
         UiMode.Ui()["mode"] = "full";
         Ok(!UiMode.IsSimple && UiMode.MenuShown("애니") && UiMode.Pick("파일") != null, "모든 기능 보기");
