@@ -19,7 +19,9 @@ class Bus {
 export const DEFAULT_SETTINGS = {
   pressureGamma: 1.0,          // 필압 곡선 (1 = 선형, <1 = 부드럽게, >1 = 딱딱하게)
   // 필기감: filter 'euro' = 1€ 필터 (느리면 많이, 빠르면 적게 보정), 'avg' = 예전 평균 방식
-  penFeel: { filter: 'euro', pressureSmooth: 0.35, startRamp: true, predict: true },
+  // pressureSmooth 0·startRamp false = 펜이 보내는 필압 그대로 (클립스튜디오 기본과 같은 느낌)
+  penFeel: { filter: 'euro', pressureSmooth: 0, startRamp: false, predict: true },
+  brushCursor: 'nib',          // nib 펜촉+크기 원 | circle 크기 원 | shape 브러시 끝 모양 | cross 십자 | dot 점
   mousePressure: 1.0,
   fingerDraw: false,           // 손가락으로 그리기 (끄면 손가락은 화면 조작 전용)
   palmGuardMs: 350,            // 펜을 띄우고 이 시간 동안 터치 무시 (손바닥 오입력 방지)

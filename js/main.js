@@ -40,6 +40,7 @@ import { initAI } from './ui/aimodels.js';
 import { initBackup } from './ui/backup.js';
 import { initUpdate } from './ui/update.js';
 import { initReport } from './ui/report.js';
+import { initCursor } from './ui/cursor.js';
 import { initVtuber } from './ui/vtuber.js';
 import { initPSTools } from './ui/pstools.js';
 import { initSfx } from './tools/sfx.js';
@@ -81,6 +82,15 @@ function mergeSettings(saved) {
     if (v && typeof v === 'object' && !Array.isArray(v) && app.settings[k] && typeof app.settings[k] === 'object' && !Array.isArray(app.settings[k])) {
       app.settings[k] = { ...app.settings[k], ...v };
     } else app.settings[k] = v;
+  }
+  // 1.1.3: 예전 기본 필압 보정(필압 다듬기 35%·시작 굵기 줄이기)을 그대로 쓰던 경우만 새 기본으로 (직접 바꾼 값은 그대로)
+  if ((app.settings.feelV || 0) < 2) {
+    const f = app.settings.penFeel || {};
+    if (f.pressureSmooth === 0.35) f.pressureSmooth = 0;
+    if (f.startRamp === true) f.startRamp = false;
+    app.settings.penFeel = f;
+    if (!saved.brushCursor || saved.brushCursor === 'circle') app.settings.brushCursor = 'nib';
+    app.settings.feelV = 2;
   }
 }
 
@@ -244,6 +254,7 @@ async function boot() {
   const stage = document.getElementById('stage');
   initRenderer(document.getElementById('view'), stage);
   initInput(stage);
+  initCursor(stage);
   initShortcuts();
 
   // 첫 문서

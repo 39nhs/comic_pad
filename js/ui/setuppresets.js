@@ -49,6 +49,7 @@ export const SETUP_PRESETS = [
       '도구 키: P·B 펜/브러시, E 지우개, G 채우기→그라데이션→올가미 채우기(누를 때마다), I 스포이트, M 선택→선택 펜, J 손끝→흐림, U 도형→컷 나누기→자, T 텍스트→말풍선, H 화면 이동, O 벡터 선 고르기',
       '도구 막대: 펜·컷·말풍선·자 중심 (그라데이션·올가미 채우기·벡터 선 고르기·유선 추가)',
       '브러시: G펜으로 시작',
+      '펜: 필압 그대로(필압 다듬기·시작 굵기 줄이기 끔), 필압 곡선 직선, 커서는 펜촉 + 크기 원',
       '새 작품 추천: 흑백 만화 원고 B5 600dpi (재단선·도련 가이드)',
       'Ctrl+Shift+N 새 레이어, Ctrl+E 아래로 병합, Ctrl+Alt+G 클리핑, Ctrl+T 변형 등은 그대로 (이미 같음)',
     ],
@@ -66,6 +67,10 @@ export const SETUP_PRESETS = [
       s.ui = { ...(s.ui || {}), mode: 'simple', tools: [...new Set([...SIMPLE_TOOLS, 'gradient', 'lassofill', 'vselect', 'speedlines', 'selpen'])] };
       (s.activePreset ||= {}).brush = 'gpen';
       s.startDoc = B5_600;
+      // 펜: 클립스튜디오 기본처럼 필압 그대로(다듬기·시작 줄이기 없음), 선형 필압 곡선, 펜촉 커서
+      s.penFeel = { ...(s.penFeel || {}), pressureSmooth: 0, startRamp: false };   // 펜 진단으로 잰 필압 범위(pmin·pmax)는 그대로
+      s.pressurePts = null; s.pressureGamma = 1;
+      s.brushCursor = 'nib';
     },
   },
   {
