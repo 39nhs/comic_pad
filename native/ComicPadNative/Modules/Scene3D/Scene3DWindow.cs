@@ -530,6 +530,7 @@ public sealed class Scene3DWindow : Form
     string Prompt(string title, string value)
     {
         using var f = new Form { Text = title, FormBorderStyle = FormBorderStyle.FixedDialog, StartPosition = FormStartPosition.CenterParent, MinimizeBox = false, MaximizeBox = false, BackColor = Opt.Bg, ForeColor = Opt.Fg, AutoSize = true, AutoSizeMode = AutoSizeMode.GrowAndShrink, Padding = new Padding(10) };
+        UI.Dialogs.Modals.Adopt(f);
         var tb = new TextBox { Text = value, Width = 280, BackColor = Opt.Bg2, ForeColor = Opt.Fg };
         var ok = new System.Windows.Forms.Button { Text = "확인", DialogResult = DialogResult.OK, AutoSize = true };
         var cancel = new System.Windows.Forms.Button { Text = "취소", DialogResult = DialogResult.Cancel, AutoSize = true };

@@ -174,5 +174,13 @@ public sealed class ShellModule : IModule
         var t = new System.Windows.Forms.Timer { Interval = 3600_000 };
         t.Tick += (_, _) => Shell.BackupIfDue();
         t.Start();
+        // 메인 창이 뜬 뒤 한 번 (화면 비교 찍기)
+        void FirstIdle(object s, EventArgs e)
+        {
+            if (App.Main == null || !App.Main.Visible || App.Doc == null) return;
+            Application.Idle -= FirstIdle;
+            if (!string.IsNullOrEmpty(PanelShots.Dir)) { var pt = new System.Windows.Forms.Timer { Interval = 1500 }; pt.Tick += (_, _) => { pt.Stop(); pt.Dispose(); PanelShots.Run(); }; pt.Start(); }
+        }
+        Application.Idle += FirstIdle;
     }
 }

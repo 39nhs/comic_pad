@@ -386,6 +386,7 @@ public static class TextDialog
             foreach (var k in new[] { "lbox", "box", "quad" }) m[k] = mm[k]?.DeepClone();
         }
         using var f = new Form { Text = isNew ? "텍스트 입력" : "텍스트 편집", StartPosition = FormStartPosition.CenterParent, BackColor = Opt.Bg, ForeColor = Opt.Fg, Width = 640, Height = 560, Font = new Font("Malgun Gothic", 9f), MinimizeBox = false, MaximizeBox = false, FormBorderStyle = FormBorderStyle.SizableToolWindow };
+        UI.Dialogs.Modals.Adopt(f);
         var ta = new TextBox { Multiline = true, Dock = DockStyle.Top, Height = 110, Text = (J.Str(m, "text", "") ?? "").Replace("\n", "\r\n"), BackColor = Opt.Bg2, ForeColor = Opt.Fg, Font = new Font("Malgun Gothic", 12f), ScrollBars = ScrollBars.Vertical, AcceptsReturn = true, PlaceholderText = "대사를 입력하세요" };
         ta.TextChanged += (_, _) => { m["text"] = ta.Text.Replace("\r\n", "\n"); Upd(); };
         var ctl = new FlowLayoutPanel { Dock = DockStyle.Fill, FlowDirection = FlowDirection.TopDown, WrapContents = true, AutoScroll = true, BackColor = Opt.Bg, Padding = new Padding(6) };

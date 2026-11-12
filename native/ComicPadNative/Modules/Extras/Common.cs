@@ -31,7 +31,7 @@ public static class Dlg
     /// <summary>확인한 창의 값 (자동 액션 기록용)</summary>
     public static event Action<string, JsonObject> FormSubmitted;
 
-    /// <summary>값 입력 창. 확인하면 {키: 값}, 취소면 null, 추가 버튼이면 {"__action": 값}</summary>
+    /// <summary>값 입력 창 (웹 form(), 모양은 UI.Dialogs.WebForm 하나로). 확인하면 {키: 값}, 취소면 null, 추가 버튼이면 {"__action": 값}</summary>
     public static JsonObject Form(string title, IEnumerable<Field> fieldList, string okLabel = "확인", (string label, string value)[] extra = null, int width = 460)
     {
         var fields = fieldList.Where(f => f != null).ToList();
@@ -42,91 +42,28 @@ public static class Dlg
             foreach (var (k, v) in auto) r[k] = v?.DeepClone();
             return r;
         }
-        using var f = new Form
+        var spec = fields.Select(fd => new UI.Dialogs.FormField
         {
-            Text = title, FormBorderStyle = FormBorderStyle.FixedDialog, StartPosition = FormStartPosition.CenterParent, MinimizeBox = false, MaximizeBox = false,
-            BackColor = Opt.Bg, ForeColor = Opt.Fg, AutoSize = true, AutoSizeMode = AutoSizeMode.GrowAndShrink, Padding = new Padding(10), Tag = "cp-dlg", Font = new Font("Malgun Gothic", 9f),
-        };
-        var p = new FlowLayoutPanel { FlowDirection = FlowDirection.TopDown, AutoSize = true, WrapContents = false, Dock = DockStyle.Fill, MaximumSize = new Size(width + 20, 900), AutoScroll = false };
-        var getters = new List<(string key, Func<JsonNode> get)>();
+            Key = fd.Key, Label = fd.Label, Options = fd.Options, Min = fd.Min, Max = fd.Max, Step = fd.Step,
+            Type = fd.Type,
+            Value = fd.Type switch
+            {
+                "checkbox" => fd.Value is JsonValue b && b.TryGetValue(out bool bb) && bb,
+                "number" => fd.Value is JsonValue n && n.TryGetValue(out double dv) ? dv : 0.0,
+                _ => fd.Value is JsonValue sv && sv.TryGetValue(out string ss) ? ss : fd.Value?.ToString(),
+            },
+        }).ToList();
+        var res = UI.Dialogs.WebForm.Show(title, spec, okLabel, "취소", extra, Math.Max(440, width));
+        if (res == null) return null;
+        if (res.TryGetValue("__extra", out var ex)) return new JsonObject { ["__action"] = ex as string };
+        var outp = new JsonObject();
         foreach (var fd in fields)
         {
-            switch (fd.Type)
-            {
-                case "info":
-                    p.Controls.Add(new Label { Text = fd.Label, AutoSize = true, MaximumSize = new Size(width, 0), ForeColor = Opt.Muted, Margin = new Padding(0, 4, 0, 6) });
-                    break;
-                case "checkbox":
-                {
-                    var c = new CheckBox { Text = fd.Label, Checked = (bool?)fd.Value ?? false, AutoSize = true, MaximumSize = new Size(width, 0), ForeColor = Opt.Fg, Tag = fd.Key, Margin = new Padding(0, 3, 0, 3) };
-                    p.Controls.Add(c); getters.Add((fd.Key, () => c.Checked));
-                    break;
-                }
-                case "number":
-                {
-                    p.Controls.Add(new Label { Text = fd.Label, AutoSize = true, MaximumSize = new Size(width, 0) });
-                    double v = fd.Value is JsonValue jv && jv.TryGetValue(out double dv) ? dv : 0;
-                    int dec = fd.Step % 1 != 0 || v % 1 != 0 ? 2 : 0;
-                    var n = new NumericUpDown { Minimum = (decimal)Math.Max(-1e9, fd.Min), Maximum = (decimal)Math.Min(1e9, fd.Max), DecimalPlaces = dec, Increment = (decimal)fd.Step, Width = 200, BackColor = Opt.Bg2, ForeColor = Opt.Fg, Tag = fd.Key };
-                    n.Value = (decimal)Math.Clamp(v, (double)n.Minimum, (double)n.Maximum);
-                    p.Controls.Add(n); getters.Add((fd.Key, () => (double)n.Value));
-                    break;
-                }
-                case "select":
-                case "segment":
-                {
-                    if (fd.Label != null) p.Controls.Add(new Label { Text = fd.Label, AutoSize = true, MaximumSize = new Size(width, 0) });
-                    var cb = new ComboBox { DropDownStyle = ComboBoxStyle.DropDownList, Width = Math.Min(width, 420), BackColor = Opt.Bg2, ForeColor = Opt.Fg, FlatStyle = FlatStyle.Flat, Tag = fd.Key };
-                    foreach (var (_, t) in fd.Options) cb.Items.Add(t);
-                    string cur = (string)fd.Value;
-                    cb.SelectedIndex = Math.Max(0, Array.FindIndex(fd.Options, o => o.id == cur));
-                    var opts = fd.Options;
-                    p.Controls.Add(cb); getters.Add((fd.Key, () => cb.SelectedIndex >= 0 && opts.Length > 0 ? opts[cb.SelectedIndex].id : null));
-                    break;
-                }
-                case "textarea":
-                {
-                    p.Controls.Add(new Label { Text = fd.Label, AutoSize = true });
-                    var t = new TextBox { Text = (string)fd.Value ?? "", Multiline = true, Width = width, Height = 110, ScrollBars = ScrollBars.Vertical, BackColor = Opt.Bg2, ForeColor = Opt.Fg, Tag = fd.Key, AcceptsReturn = true };
-                    p.Controls.Add(t); getters.Add((fd.Key, () => t.Text));
-                    break;
-                }
-                case "date":
-                {
-                    p.Controls.Add(new Label { Text = fd.Label, AutoSize = true });
-                    var dt = new DateTimePicker { Format = DateTimePickerFormat.Custom, CustomFormat = "yyyy-MM-dd", ShowCheckBox = true, Width = 200, Tag = fd.Key };
-                    if ((string)fd.Value is string ds && DateTime.TryParse(ds, out var dd)) { dt.Value = dd; dt.Checked = true; } else dt.Checked = false;
-                    p.Controls.Add(dt); getters.Add((fd.Key, () => dt.Checked ? dt.Value.ToString("yyyy-MM-dd") : null));
-                    break;
-                }
-                default:
-                {
-                    p.Controls.Add(new Label { Text = fd.Label, AutoSize = true, MaximumSize = new Size(width, 0) });
-                    var t = new TextBox { Text = (string)fd.Value ?? "", Width = Math.Min(width, 420), BackColor = Opt.Bg2, ForeColor = Opt.Fg, Tag = fd.Key };
-                    p.Controls.Add(t); getters.Add((fd.Key, () => t.Text));
-                    break;
-                }
-            }
+            if (fd.Key == null || fd.Type == "info" || !res.TryGetValue(fd.Key, out var v)) continue;
+            outp[fd.Key] = v switch { bool b => JsonValue.Create(b), double d => JsonValue.Create(d), string s => JsonValue.Create(s), null => null, _ => JsonValue.Create(v.ToString()) };
         }
-        string action = null;
-        var ok = new Button { Text = okLabel, DialogResult = DialogResult.OK, AutoSize = true, BackColor = Opt.Accent, ForeColor = Color.Black, FlatStyle = FlatStyle.Flat };
-        var cancel = new Button { Text = "취소", DialogResult = DialogResult.Cancel, AutoSize = true, FlatStyle = FlatStyle.Flat };
-        var row = Opt.Row(ok, cancel);
-        foreach (var (label, value) in extra ?? Array.Empty<(string, string)>())
-        {
-            var b = new Button { Text = label, AutoSize = true, FlatStyle = FlatStyle.Flat };
-            string v = value;
-            b.Click += (_, _) => { action = v; f.DialogResult = DialogResult.OK; };
-            row.Controls.Add(b);
-        }
-        p.Controls.Add(row);
-        f.Controls.Add(p); f.AcceptButton = fields.Any(x => x.Type == "textarea") ? null : ok; f.CancelButton = cancel;
-        if (f.ShowDialog(App.Main) != DialogResult.OK) return null;
-        if (action != null) return new JsonObject { ["__action"] = action };
-        var res = new JsonObject();
-        foreach (var (k, g) in getters) res[k] = g();
-        FormSubmitted?.Invoke(title, (JsonObject)res.DeepClone());
-        return res;
+        FormSubmitted?.Invoke(title, (JsonObject)outp.DeepClone());
+        return outp;
     }
 
     static JsonObject Defaults(List<Field> fields)
@@ -136,24 +73,20 @@ public static class Dlg
         return r;
     }
 
-    public static bool Confirm(string msg, string okLabel = "확인") =>
-        MessageBox.Show(App.Main, msg, okLabel, MessageBoxButtons.OKCancel, MessageBoxIcon.Question) == DialogResult.OK;
+    /// <summary>확인 창 (웹 confirmDialog)</summary>
+    public static bool Confirm(string msg, string okLabel = "확인") => UI.Dialogs.Modals.Confirm(msg, okLabel);
 
-    /// <summary>모달 창 하나 (닫기 버튼만): 내용 컨트롤을 넣어 보여 줌</summary>
+    /// <summary>모달 창 하나 (닫기 버튼만): 내용 컨트롤을 넣어 보여 줌 (웹 .modal, 크기 고정·가장자리 끌어 크기 바꾸기)</summary>
     public static Form Modal(string title, Control body, int w = 640, int h = 520)
     {
-        var f = new Form { Text = title, Width = w, Height = h, StartPosition = FormStartPosition.CenterParent, BackColor = Opt.Bg, ForeColor = Opt.Fg, FormBorderStyle = FormBorderStyle.SizableToolWindow, Font = new Font("Malgun Gothic", 9f), KeyPreview = true };
-        body.Dock = DockStyle.Fill;
-        f.Controls.Add(body);
-        var close = new Button { Text = "닫기", Dock = DockStyle.Bottom, Height = 30, FlatStyle = FlatStyle.Flat, BackColor = Opt.Bg2 };
-        close.Click += (_, _) => f.Close();
-        f.Controls.Add(close);
-        f.KeyDown += (_, e) => { if (e.KeyCode == Keys.Escape) f.Close(); };
+        var f = new UI.Dialogs.ModalForm(title, w, h) { Resizable = true };
+        f.SetContent(body);
+        f.AddAction("닫기", () => true, primary: true);
+        f.Primary = null;   // 엔터는 내용 칸에
         return f;
     }
 }
-
-/// <summary>문서 Extra 의 값 하나 바꾸기 (메모·자·타임랩스 등) — 실행취소용</summary>
+// <summary>문서 Extra 의 값 하나 바꾸기 (메모·자·타임랩스 등) — 실행취소용</summary>
 public sealed class ExtraEdit : IEdit
 {
     readonly Document doc; readonly string key; readonly JsonNode before, after;

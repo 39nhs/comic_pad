@@ -1,91 +1,140 @@
-// 도구 옵션·대화상자에서 쓰는 작은 조절 부품 (모든 모듈이 같은 모양으로)
+// 도구 옵션·대화상자에서 쓰는 작은 조절 부품 (모든 모듈이 같은 모양으로) — 웹 app/js/ui/controls.js 와 같은 모양·동작.
+// 실제 부품은 UI/Controls (WebSlider·WebToggle·WebSeg·WebButton·WebSelect …), 이 클래스는 예전 이름 그대로 쓰는 입구.
 using System.Globalization;
+using ComicPadNative.UI.Controls;
+using ComicPadNative.UI.Dialogs;
 
 namespace ComicPadNative.UI;
 
+/// <summary>도구 옵션 판 (웹 .panel-scroll: 여백 4·10·12). 다른 쌓기 안에 들어가면 여백 없음</summary>
+public sealed class OptPanel : WebStack
+{
+    public OptPanel() { Padding = new Padding(10, 4, 10, 12); }
+    protected override void OnParentChanged(EventArgs e)
+    {
+        base.OnParentChanged(e);
+        if (Parent is WebStack || Parent is FlowLayoutPanel || Parent is WebRow) Padding = Padding.Empty;
+        else if (Parent is Panel { Padding.Left: >= 8 }) Padding = new Padding(0, 0, 0, 12);
+        else Padding = new Padding(10, 4, 10, 12);
+    }
+}
+
 public static class Opt
 {
-    public static readonly Color Bg = Color.FromArgb(47, 47, 53), Bg2 = Color.FromArgb(58, 58, 66), Fg = Color.FromArgb(232, 232, 236), Muted = Color.FromArgb(156, 156, 168), Accent = Color.FromArgb(232, 163, 61);
+    public static readonly Color Bg = Theme.Panel, Bg2 = Theme.Panel2, Fg = Theme.Text, Muted = Theme.Muted, Accent = Theme.Accent;
 
+    /// <summary>세로 쌓기 (도구 옵션 판)</summary>
     public static FlowLayoutPanel Panel(params Control[] items)
     {
-        var p = new FlowLayoutPanel { FlowDirection = FlowDirection.TopDown, WrapContents = false, AutoSize = true, AutoSizeMode = AutoSizeMode.GrowAndShrink, BackColor = Bg, Padding = new Padding(6) };
+        var p = new OptPanel();
+        p.SuspendLayout();
         foreach (var c in items) if (c != null) p.Controls.Add(c);
+        p.ResumeLayout();
         return p;
     }
 
-    public static Label Title(string t) => new() { Text = t, AutoSize = true, ForeColor = Accent, Font = new Font(SystemFonts.MessageBoxFont.FontFamily, 9.5f, FontStyle.Bold), Margin = new Padding(0, 8, 0, 2) };
-    public static Label Help(string t) => new() { Text = t, AutoSize = true, MaximumSize = new Size(260, 0), ForeColor = Muted, Margin = new Padding(0, 0, 0, 4) };
+    /// <summary>구역 제목 (웹 .section-title — 흐린 작은 글, 앞 구역과 줄로 나눔)</summary>
+    public static Label Title(string t) => new SectionLabel(t);
+    /// <summary>도움말 (웹 .help)</summary>
+    public static Label Help(string t) => new WebHelp(t);
 
-    /// <summary>이름 + 끌어서 바꾸는 막대 + 숫자</summary>
+    /// <summary>이름 + 끌어서 바꾸는 막대 + 숫자 (웹 slider)</summary>
     public static Control Slider(string label, double min, double max, Func<double> get, Action<double> set, bool pct = false, bool log = false, double step = 0, Action onEnd = null)
     {
-        var box = new Panel { Width = 260, Height = 44, BackColor = Bg, Margin = new Padding(0, 2, 0, 2) };
-        var name = new Label { Text = label, ForeColor = Fg, AutoSize = true, Location = new Point(0, 2) };
-        var val = new Label { ForeColor = Muted, AutoSize = false, Width = 70, TextAlign = ContentAlignment.TopRight, Location = new Point(190, 2) };
-        var tb = new TrackBar { Minimum = 0, Maximum = 1000, TickStyle = TickStyle.None, Width = 260, Location = new Point(0, 18), AutoSize = false, Height = 24 };
-        double ToT(double v) => log && min > 0 ? Math.Log(v / min) / Math.Log(max / min) : (v - min) / (max - min);
-        double FromT(double t) { double v = log && min > 0 ? min * Math.Pow(max / min, t) : min + (max - min) * t; return step > 0 ? Math.Round(v / step) * step : v; }
-        string Fmt(double v) => pct ? $"{v * 100:0}%" : Math.Abs(v) >= 100 ? v.ToString("0", CultureInfo.InvariantCulture) : v.ToString("0.#", CultureInfo.InvariantCulture);
-        void Sync() { double v = get(); tb.Value = (int)Math.Clamp(ToT(v) * 1000, 0, 1000); val.Text = Fmt(v); }
-        tb.Scroll += (_, _) => { double v = FromT(tb.Value / 1000.0); set(v); val.Text = Fmt(v); App.NotifySettings(); };
-        tb.MouseUp += (_, _) => onEnd?.Invoke();
-        box.Controls.AddRange(new Control[] { name, val, tb });
-        Sync();
-        App.SettingsChanged += () => { if (!box.IsDisposed && !tb.Focused) Sync(); };
-        return box;
+        Func<double, string> fmt = pct ? v => $"{v * 100:0}%" : null;
+        var s = new WebSlider(label, min, max, get, v => { set(v); App.NotifySettings(); }, step, log, fmt) { OnEnd = onEnd };
+        Action sync = () => { if (!s.IsDisposed && !s.Capture) s.Sync(); };
+        App.SettingsChanged += sync;
+        s.Disposed += (_, _) => App.SettingsChanged -= sync;
+        return s;
     }
 
+    /// <summary>켜기/끄기 (웹 toggle)</summary>
     public static CheckBox Check(string label, Func<bool> get, Action<bool> set)
     {
-        var c = new CheckBox { Text = label, Checked = get(), ForeColor = Fg, AutoSize = true, Margin = new Padding(0, 2, 0, 2) };
+        var c = new WebToggle(label) { Checked = get() };
         c.CheckedChanged += (_, _) => { set(c.Checked); App.NotifySettings(); };
         return c;
     }
 
+    /// <summary>고르기 (웹 select: 왼쪽 흐린 이름 + 칸)</summary>
     public static Control Choice(string label, (string id, string text)[] items, Func<string> get, Action<string> set)
     {
-        var box = new FlowLayoutPanel { FlowDirection = FlowDirection.TopDown, AutoSize = true, BackColor = Bg, Margin = new Padding(0, 2, 0, 2) };
-        if (label != null) box.Controls.Add(new Label { Text = label, ForeColor = Fg, AutoSize = true });
-        var cb = new ComboBox { DropDownStyle = ComboBoxStyle.DropDownList, Width = 250, BackColor = Bg2, ForeColor = Fg, FlatStyle = FlatStyle.Flat };
-        foreach (var (_, t) in items) cb.Items.Add(t);
-        cb.SelectedIndex = Math.Max(0, Array.FindIndex(items, i => i.id == get()));
-        cb.SelectedIndexChanged += (_, _) => { set(items[cb.SelectedIndex].id); App.NotifySettings(); };
-        box.Controls.Add(cb);
-        return box;
+        Action<string> s2 = v => { set(v); App.NotifySettings(); };
+        return label == null ? new WebSelect(items, get, s2) : new WebSelectRow(label, items, get, s2);
     }
 
+    /// <summary>여러 개 중 하나 (웹 segmented)</summary>
+    public static Control Seg<T>((T id, string text)[] items, Func<T> get, Action<T> set) => WebSeg.Of(items, get, set);
+
+    /// <summary>단추 (웹 .btn / .btn.primary)</summary>
     public static Button Button(string text, Action run, bool primary = false)
     {
-        var b = new Button { Text = text, AutoSize = true, FlatStyle = FlatStyle.Flat, BackColor = primary ? Accent : Bg2, ForeColor = primary ? Color.Black : Fg, Margin = new Padding(0, 2, 6, 2) };
-        b.FlatAppearance.BorderColor = Color.FromArgb(74, 74, 84);
-        b.Click += (_, _) => run();
+        var b = new WebButton(text, primary ? BtnKind.Primary : BtnKind.Normal);
+        b.Click += (_, _) => run?.Invoke();
+        return b;
+    }
+    /// <summary>아이콘 단추 (웹 .icon-btn)</summary>
+    public static WebButton IconButton(string icon, string tip, Action run)
+    {
+        var b = new WebButton("", BtnKind.Icon, icon);
+        if (tip != null) new ToolTip().SetToolTip(b, tip);
+        b.Click += (_, _) => run?.Invoke();
         return b;
     }
 
+    /// <summary>줄 (웹 .row: 옆으로, 넘치면 다음 줄)</summary>
     public static FlowLayoutPanel Row(params Control[] items)
     {
-        var p = new FlowLayoutPanel { FlowDirection = FlowDirection.LeftToRight, AutoSize = true, BackColor = Bg, Margin = new Padding(0) };
+        var p = new WebRow();
         foreach (var c in items) if (c != null) p.Controls.Add(c);
         return p;
     }
 
+    /// <summary>구역 (웹 section: 제목 + 내용, 아래 줄)</summary>
+    public static Control Section(string title, params Control[] items) => new WebSection(title, items);
+
+    /// <summary>색 칸 (웹 colorInput)</summary>
+    public static Control Swatch(string label, Func<string> get, Action<string> set) => new WebSwatch(get, set, label);
+
     /// <summary>값 입력 대화상자: fields = (이름, 기본값) → 확인하면 값 목록</summary>
     public static double[] AskNumbers(string title, params (string label, double value, double min, double max)[] fields)
     {
-        using var f = new Form { Text = title, FormBorderStyle = FormBorderStyle.FixedDialog, StartPosition = FormStartPosition.CenterParent, MinimizeBox = false, MaximizeBox = false, BackColor = Bg, ForeColor = Fg, AutoSize = true, AutoSizeMode = AutoSizeMode.GrowAndShrink, Padding = new Padding(10) };
-        var p = new FlowLayoutPanel { FlowDirection = FlowDirection.TopDown, AutoSize = true, Dock = DockStyle.Fill };
-        var boxes = new List<NumericUpDown>();
-        foreach (var (label, value, min, max) in fields)
+        var list = fields.Select((f, i) => new FormField { Key = "n" + i, Label = f.label, Type = "number", Value = f.value, Min = f.min, Max = f.max, Step = f.value % 1 == 0 && f.min % 1 == 0 ? 1 : 0.01 }).ToList();
+        var r = WebForm.Show(title, list);
+        return r == null ? null : list.Select(f => Convert.ToDouble(r[f.Key], CultureInfo.InvariantCulture)).ToArray();
+    }
+}
+
+/// <summary>Opt.Title 이 돌려주는 구역 제목 (Label 이라 예전 코드와 맞음)</summary>
+public sealed class SectionLabel : Label, IWebBlock
+{
+    public SectionLabel(string text)
+    {
+        Text = text; Font = Web.Tiny; ForeColor = Theme.Muted; AutoSize = false; UseMnemonic = false; Margin = Padding.Empty;
+        SetStyle(ControlStyles.UserPaint | ControlStyles.AllPaintingInWmPaint | ControlStyles.OptimizedDoubleBuffer | ControlStyles.ResizeRedraw, true);
+        Height = 37;
+    }
+    bool First
+    {
+        get
         {
-            p.Controls.Add(new Label { Text = label, AutoSize = true });
-            var n = new NumericUpDown { Minimum = (decimal)min, Maximum = (decimal)max, DecimalPlaces = value % 1 == 0 && min % 1 == 0 ? 0 : 2, Value = (decimal)Math.Clamp(value, min, max), Width = 200, BackColor = Bg2, ForeColor = Fg };
-            boxes.Add(n); p.Controls.Add(n);
+            if (Parent == null) return true;
+            foreach (Control c in Parent.Controls) { if (!BlockLayout.Shown(c) || c.Dock != DockStyle.None) continue; return c == this; }
+            return true;
         }
-        var ok = new Button { Text = "확인", DialogResult = DialogResult.OK, AutoSize = true };
-        var cancel = new Button { Text = "취소", DialogResult = DialogResult.Cancel, AutoSize = true };
-        p.Controls.Add(Row(ok, cancel));
-        f.Controls.Add(p); f.AcceptButton = ok; f.CancelButton = cancel;
-        return f.ShowDialog(App.Main) == DialogResult.OK ? boxes.Select(b => (double)b.Value).ToArray() : null;
+    }
+    int Top0 => First ? 6 : 8 + 1 + 6;
+    public override Size GetPreferredSize(Size proposed)
+    {
+        int w = proposed.Width > 1 && proposed.Width < 100000 ? proposed.Width : Web.Measure(Text, Font).Width + 2;
+        return new Size(w, Top0 + 8 + Font.Height + 6);
+    }
+    protected override void OnPaint(PaintEventArgs e)
+    {
+        var g = e.Graphics;
+        g.Clear(Web.ParentBack(this));
+        if (!First) using (var p = new Pen(Web.Sep)) g.DrawLine(p, 0, 8, Width, 8);
+        TextRenderer.DrawText(g, Text, Font, new Rectangle(0, Top0 + 8, Width, Font.Height + 2), ForeColor, TextFormatFlags.Left | TextFormatFlags.Top | TextFormatFlags.SingleLine | TextFormatFlags.EndEllipsis | TextFormatFlags.NoPrefix | TextFormatFlags.NoPadding);
     }
 }

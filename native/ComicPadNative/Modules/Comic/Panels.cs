@@ -298,6 +298,7 @@ public static class Panels
         string mode = hasPrint ? "safe" : "margin";
         double gx = PanelTool.GutterX > 0 ? PanelTool.GutterX : Math.Round(d.W * 0.02), gy = PanelTool.GutterY > 0 ? PanelTool.GutterY : Math.Round(d.W * 0.035);
         using var f = new Form { Text = "컷 나누기 템플릿", StartPosition = FormStartPosition.CenterParent, BackColor = Opt.Bg, ForeColor = Opt.Fg, Width = 720, Height = 600, Font = new Font("Malgun Gothic", 9f), MinimizeBox = false };
+        UI.Dialogs.Modals.Adopt(f);
         var top = new FlowLayoutPanel { Dock = DockStyle.Top, AutoSize = true, BackColor = Opt.Bg, Padding = new Padding(6) };
         var grid = new FlowLayoutPanel { Dock = DockStyle.Fill, AutoScroll = true, BackColor = Opt.Bg, Padding = new Padding(6) };
         var cb = new ComboBox { DropDownStyle = ComboBoxStyle.DropDownList, Width = 140 };

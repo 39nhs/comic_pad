@@ -71,6 +71,7 @@ public static class AiLicenseExtras
         var reg = AiRuntime.Registry().ToDictionary(m => m.Id);
         foreach (var m in reg.Values) AiRuntime.CopyBundled(m);
         using var f = new Form { Text = "AI 기능 고르기·받기", StartPosition = FormStartPosition.CenterParent, FormBorderStyle = FormBorderStyle.FixedToolWindow, BackColor = Opt.Bg, ForeColor = Opt.Fg, AutoSize = true, AutoSizeMode = AutoSizeMode.GrowAndShrink };
+        UI.Dialogs.Modals.Adopt(f);
         var p = Opt.Panel(Opt.Help("고른 기능의 모델만 이 PC 에 받습니다 (data\\models). 모두 상업용으로 쓸 수 있는 모델이며(일부는 \"확인 필요\"), 비상업 모델은 AI 모델 관리에서 따로 받습니다. 받은 뒤에는 인터넷 없이 이 PC 안에서만 돌아갑니다."));
         var picks = new Dictionary<string, bool>();
         foreach (var b in Bundles)

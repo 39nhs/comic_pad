@@ -46,6 +46,7 @@ public static class AnimDialogs
         if (ts.Count == 0) { App.Toast("애니메이션 트랙이 없습니다"); return; }
         var nums = ts.Select(t => d.ChildrenOf(t).Select((c, k) => (c.Id, k + 1)).ToDictionary(p => p.Id, p => (p.Item2).ToString())).ToList();
         using var f = new Form { Text = "타임시트 (노출표)", StartPosition = FormStartPosition.CenterParent, Size = new Size(Math.Min(1100, 260 + ts.Count * 110), 640), BackColor = Ui.Bg, ForeColor = Ui.Fg, Font = new Font("Malgun Gothic", 9f), ShowInTaskbar = false, MinimizeBox = false };
+        UI.Dialogs.Modals.Adopt(f);
         var grid = new DataGridView { Dock = DockStyle.Fill, AllowUserToAddRows = false, AllowUserToDeleteRows = false, RowHeadersVisible = false, BackgroundColor = Ui.Bg, ForeColor = Color.Black, SelectionMode = DataGridViewSelectionMode.CellSelect, AutoSizeColumnsMode = DataGridViewAutoSizeColumnsMode.Fill };
         grid.Columns.Add("f", "프레임"); grid.Columns.Add("ms", "ms");
         grid.Columns[0].ReadOnly = true; grid.Columns[1].ReadOnly = true;
@@ -258,6 +259,7 @@ public static class AnimDialogs
         var times = AnimCore.Timeline(d);
         var frames = new Dictionary<int, Bitmap>();
         var f = new Form { Text = "미리보기 (카메라·소리·구간 적용)", StartPosition = FormStartPosition.CenterParent, BackColor = Color.FromArgb(30, 30, 34), ClientSize = new Size(Math.Max(200, (int)(d.W * s)), Math.Max(150, (int)(d.H * s))), ShowInTaskbar = false };
+        UI.Dialogs.Modals.Adopt(f);
         var pb = new PictureBox { Dock = DockStyle.Fill, SizeMode = PictureBoxSizeMode.Zoom, BackColor = Color.White };
         f.Controls.Add(pb);
         int k = 0; long last = Environment.TickCount64;

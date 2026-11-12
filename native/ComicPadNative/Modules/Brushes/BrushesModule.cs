@@ -48,6 +48,7 @@ public sealed class BrushesModule : IModule
     static void RadialSymmetry()
     {
         using var f = new Form { Text = "방사 대칭", FormBorderStyle = FormBorderStyle.FixedDialog, StartPosition = FormStartPosition.CenterParent, MinimizeBox = false, MaximizeBox = false, BackColor = Opt.Bg, ForeColor = Opt.Fg, AutoSize = true, AutoSizeMode = AutoSizeMode.GrowAndShrink, Padding = new Padding(10), ShowInTaskbar = false };
+        UI.Dialogs.Modals.Adopt(f);
         var p = new FlowLayoutPanel { FlowDirection = FlowDirection.TopDown, AutoSize = true, Dock = DockStyle.Fill };
         p.Controls.Add(new Label { Text = "조각 수", AutoSize = true });
         var n = new NumericUpDown { Minimum = 2, Maximum = 36, Value = Math.Clamp(App.Get("symN", 6), 2, 36), Width = 200, BackColor = Opt.Bg2, ForeColor = Opt.Fg };
@@ -179,6 +180,7 @@ public static class PenSettings
     public static void Show()
     {
         using var f = new Form { Text = "펜·필압 설정", StartPosition = FormStartPosition.CenterParent, MinimizeBox = false, MaximizeBox = false, BackColor = Opt.Bg, ForeColor = Opt.Fg, ShowInTaskbar = false, Size = new Size(640, 760), Font = new Font("Malgun Gothic", 9f) };
+        UI.Dialogs.Modals.Adopt(f);
         var scroll = new Panel { Dock = DockStyle.Fill, AutoScroll = true, BackColor = Opt.Bg };
         var p = new FlowLayoutPanel { FlowDirection = FlowDirection.TopDown, AutoSize = true, WrapContents = false, BackColor = Opt.Bg, Padding = new Padding(10) };
         var tester = new PressureTester();

@@ -11,7 +11,7 @@ public static class VisionUi
     {
         bool ok = false; string err = null;
         RunProgress(owner, $"{m.Name} 받는 중", async (prog, ct) => { await AiRuntime.Download(m, prog, ct); ok = true; }, e => err = e.Message);
-        if (err != null) MessageBox.Show(owner, err, "모델 받기");
+        if (err != null) UI.Dialogs.Modals.Info(err, "모델 받기");
         return ok && m.Installed;
     }
 
@@ -34,18 +34,19 @@ public static class VisionUi
             try { work(null, cts.Token).GetAwaiter().GetResult(); } catch (Exception e) { onError(e); }
             return;
         }
-        using var f = new Form { Text = label, Width = 420, Height = 140, StartPosition = FormStartPosition.CenterParent, FormBorderStyle = FormBorderStyle.FixedToolWindow, ControlBox = false, BackColor = Opt.Bg, ForeColor = Opt.Fg };
-        var lab = new Label { Text = label + "… (이 PC 안에서)", Dock = DockStyle.Top, Height = 30, Padding = new Padding(8) };
-        var bar = new ProgressBar { Dock = DockStyle.Top, Height = 18, Maximum = 1000, Style = ProgressBarStyle.Marquee };
-        var cancel = new Button { Text = "취소", Dock = DockStyle.Bottom, Height = 30 };
-        cancel.Click += (_, _) => cts.Cancel();
-        f.Controls.Add(cancel); f.Controls.Add(bar); f.Controls.Add(lab);
-        var prog = new Progress<double>(v => { if (bar.IsDisposed) return; bar.Style = ProgressBarStyle.Continuous; bar.Value = (int)Math.Clamp(v * 1000, 0, 1000); });
+        // 웹 .modal 모양: 글 + 진행 막대 + [취소]
+        using var f = new UI.Dialogs.ModalForm(label, 420, 0, closeButton: false);
+        var lab = new Label { Text = label + "… (이 PC 안에서)", AutoSize = true, Font = UI.Controls.Web.Body, ForeColor = Opt.Fg };
+        var bar = new UI.Controls.WebProgress();
+        f.SetContent(new UI.Controls.WebStack { Controls = { lab, bar } });
+        f.AddAction("취소", () => { cts.Cancel(); return false; });
+        f.FormClosing += (_, e) => { if (!cts.IsCancellationRequested && e.CloseReason == CloseReason.UserClosing && f.Tag == null) { cts.Cancel(); e.Cancel = true; } };
+        var prog = new Progress<double>(v => { if (bar.IsDisposed) return; bar.Value = Math.Clamp(v, 0, 1); });
         f.Shown += async (_, _) =>
         {
             try { await work(prog, cts.Token); }
             catch (Exception e) { onError(e); }
-            f.Close();
+            f.Tag = "done"; f.Close();
         };
         f.ShowDialog(owner ?? App.Main);
     }
@@ -55,7 +56,7 @@ public static class VisionUi
     {
         if (m == null) return false;
         if (m.Installed) return true;
-        var q = MessageBox.Show(owner, $"{what}에 쓸 \"{m.Name}\" 모델이 아직 없습니다 ({m.Files.Sum(f => f.size) / 1e6:0.0}MB, {m.License} · {m.Badge}).\n\n지금 받을까요? 받은 뒤에는 인터넷 없이 이 PC 안에서만 돌아갑니다.\n(AI > AI 모델 관리에서도 받을 수 있습니다)", what, MessageBoxButtons.YesNo);
-        return q == DialogResult.Yes && DownloadWithProgress(m, owner);
+        var q = UI.Dialogs.Modals.Confirm($"{what}에 쓸 \"{m.Name}\" 모델이 아직 없습니다 ({m.Files.Sum(f => f.size) / 1e6:0.0}MB, {m.License} · {m.Badge}).\n\n지금 받을까요? 받은 뒤에는 인터넷 없이 이 PC 안에서만 돌아갑니다.\n(AI > AI 모델 관리에서도 받을 수 있습니다)", "받기", false, what);
+        return q && DownloadWithProgress(m, owner);
     }
 }
