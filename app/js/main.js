@@ -39,6 +39,7 @@ import { initAITools } from './ui/aitools.js';
 import { initAI } from './ui/aimodels.js';
 import { initBackup } from './ui/backup.js';
 import { initUpdate } from './ui/update.js';
+import { initAppSwitch } from './ui/appswitch.js';
 import { initReport } from './ui/report.js';
 import { initCursor } from './ui/cursor.js';
 import { initNativePen } from './core/nativepen.js';
@@ -218,6 +219,7 @@ async function boot() {
   initAI();
   initBackup();
   initUpdate();
+  initAppSwitch();
   initReport();
   initVtuber();
   initPSTools();

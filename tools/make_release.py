@@ -11,8 +11,14 @@
        --native 를 붙이면 네이티브 판(native/ComicPadNative, .NET 8)을 dotnet publish 해서 꾸러미의 native/ComicPadNative/ 에 넣음
          (기본: 자체 포함(self-contained) — PC 에 .NET 이 없어도 바로 실행. --native-framework 면 .NET 8 데스크톱 런타임이 필요한 작은 판)
          같은 결과가 dist/native/ComicPadNative 에도 남아 installer\build_setup.ps1 -Native 가 설치파일에 넣을 수 있음
+         --native 는 창 프로그램(ComicPad.exe)도 launcher\\build.ps1 로 다시 만들어 넣음 (웹 판 ↔ 네이티브 판 스위치를 읽는 판)
+       --notes-file 파일 로 바뀐 점을 파일에서 (예: native/릴리스_노트_1.2.0_초안.md)
 시험(올리지 않음):  python tools/make_release.py --native --dry-run --out <임시 폴더>
     서명 키·앱 파일 목록 갱신·업로드 없이 꾸러미 zip 과 서명 없는 update.json 만 만들어 배치를 확인 (기본 동작은 그대로)
+    이어서 tools/release_sim.py 가 그 zip 을 1.1.3 판 server.py 의 업데이트 코드로 임시 설치 폴더에 적용해 보고
+    (data·python 보존, 잠긴 ComicPad.exe 비키기, 새 창 프로그램의 웹/네이티브 판 고르기, 되돌리기) 결과를 알려 줌.
+    --sim-launch 면 네이티브 판을 정말 켜 봄(화면 찍고 끝남), --no-sim 이면 시험 생략.
+    꾸러미 안의 VERSION 은 --version 으로 (기본: 지금 VERSION, 1.1.3 이하면 시험을 위해 1.2.0). VERSION 파일은 바꾸지 않음.
 
 설치된 ComicPad 는 시작할 때(하루 한 번) 최신 릴리스의 update.json 서명을 공개키로 확인하고,
 맞을 때만 꾸러미를 받아 SHA-256 을 확인한 뒤 적용한다. 서명은 표준 라이브러리만으로 만드는 RSA-3072 (PKCS#1 v1.5, SHA-256).
@@ -184,31 +190,14 @@ def cmd_build(args):
     zname = f"ComicPad_update_{version}.zip"
     zpath = os.path.join(out, zname)
     dirs = INCLUDE_DIRS + (["models_bundled"] if args.with_models else [])
+    if args.native:
+        build_launcher()
     native = build_native(os.path.join(ROOT, "dist"), args.native_framework) if args.native else None
-    n = 0
-    with zipfile.ZipFile(zpath, "w", zipfile.ZIP_DEFLATED, compresslevel=6) as z:
-        if native:
-            n += add_native(z, native[0], os.path.join(ROOT, "dist"))
-        for d in dirs:
-            for dp, sub, files in os.walk(os.path.join(ROOT, d)):
-                sub[:] = [s for s in sub if s != "__pycache__"]
-                for fn in files:
-                    if fn.endswith(SKIP_EXT):
-                        continue
-                    full = os.path.join(dp, fn)
-                    z.write(full, os.path.relpath(full, ROOT).replace("\\", "/"))
-                    n += 1
-        for fn in INCLUDE_FILES + [f for f in os.listdir(ROOT) if f.endswith((".bat", ".md")) and f not in INCLUDE_FILES]:
-            full = os.path.join(ROOT, fn)
-            if os.path.isfile(full):
-                z.write(full, fn)
-                n += 1
-            elif fn in ("server.py", "VERSION", "release_pubkey.json"):
-                sys.exit(f"{fn} 이 없습니다")
+    n = write_package(zpath, dirs, native, os.path.join(ROOT, "dist"))
     exe = os.path.join(ROOT, "ComicPad.exe")
     import datetime
     man = {"product": "ComicPad", "version": version, "file": zname, "size": os.path.getsize(zpath), "sha256": sha256_file(zpath),
-           "exe_sha256": sha256_file(exe) if os.path.exists(exe) else "", "notes": args.notes or "",
+           "exe_sha256": sha256_file(exe) if os.path.exists(exe) else "", "notes": notes_of(args),
            "date": datetime.datetime.now(datetime.timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ"),
            "models": bool(args.with_models)}
     if native:
@@ -243,7 +232,7 @@ def upload(version, out, args):
             sys.exit("dist 에 설치파일이 없습니다 (installer\\build_setup.ps1 로 먼저 만들기)")
         shutil.copy2(inst, os.path.join(out, f"ComicPad_Setup_{version}.exe"))
     files = [os.path.join(out, f) for f in sorted(os.listdir(out))]
-    notes = args.notes or f"ComicPad {version}"
+    notes = notes_of(args) or f"ComicPad {version}"
     r = subprocess.run(["gh", "release", "view", tag, "--repo", args.repo], capture_output=True)
     if r.returncode == 0:
         sys.exit(f"{tag} 릴리스가 이미 있습니다. VERSION 을 올리세요")
@@ -278,27 +267,24 @@ def deploy_pages(repo):
     print(f"휴대폰판 올림: https://{owner}.github.io/{name}/ (반영까지 1~2분)")
 
 
-def add_native(z, files, stage):
-    for full in files:
-        z.write(full, os.path.relpath(full, stage).replace("\\", "/"))
-    return len(files)
+UPDATE_MAX = 600 * 1000 * 1000      # server.py (1.1.3 포함) 가 받는 꾸러미 최대 크기
 
 
-def native_info(exe, framework):
-    return {"exe": NATIVE_REL + "/ComicPadNative.exe", "exe_sha256": sha256_file(exe), "self_contained": not framework}
+def build_launcher():
+    """창 프로그램(ComicPad.exe)을 launcher\\build.ps1 로 다시 만든다 (네이티브 판 스위치를 읽는 판인지 확인)"""
+    if os.name != "nt":
+        sys.exit("창 프로그램은 Windows 에서만 만들 수 있습니다")
+    print("창 프로그램 만들기: launcher\\build.ps1")
+    subprocess.run(["powershell", "-NoProfile", "-ExecutionPolicy", "Bypass", "-File", os.path.join(ROOT, "launcher", "build.ps1")], check=True, cwd=ROOT)
+    exe = os.path.join(ROOT, "ComicPad.exe")
+    with open(exe, "rb") as f:
+        if "app.json".encode("utf-16-le") not in f.read():
+            sys.exit("만든 ComicPad.exe 가 네이티브 판 스위치(data/config/app.json)를 읽지 않습니다")
+    return exe
 
 
-def cmd_dry_run(args, version):
-    """올리지 않는 시험: 서명 키·precache·업로드 없이 zip + 서명 없는 update.json 을 --out 에"""
-    if args.upload:
-        sys.exit("--dry-run 과 --upload 는 함께 쓸 수 없습니다")
-    out = args.out or os.path.join(ROOT, "dist", "release_dryrun")
-    os.makedirs(out, exist_ok=True)
-    stage = os.path.join(out, "_stage")
-    native = build_native(stage, args.native_framework) if args.native else None
-    zname = f"ComicPad_update_{version}.zip"
-    zpath = os.path.join(out, zname)
-    dirs = INCLUDE_DIRS + (["models_bundled"] if args.with_models else [])
+def write_package(zpath, dirs, native=None, stage=None, version=None):
+    """업데이트 꾸러미 zip. native = (파일 목록, exe) 이면 native/ComicPadNative/ 로. version 을 주면 꾸러미 안 VERSION 만 그 값으로 (시험용)"""
     n = 0
     with zipfile.ZipFile(zpath, "w", zipfile.ZIP_DEFLATED, compresslevel=6) as z:
         if native:
@@ -314,18 +300,79 @@ def cmd_dry_run(args, version):
                     n += 1
         for fn in INCLUDE_FILES + [f for f in os.listdir(ROOT) if f.endswith((".bat", ".md")) and f not in INCLUDE_FILES]:
             full = os.path.join(ROOT, fn)
-            if os.path.isfile(full):
+            if fn == "VERSION" and version:
+                z.writestr("VERSION", version + "\n")
+                n += 1
+            elif os.path.isfile(full):
                 z.write(full, fn)
                 n += 1
-    man = {"product": "ComicPad", "version": version, "file": zname, "size": os.path.getsize(zpath), "sha256": sha256_file(zpath),
-           "notes": args.notes or "", "dry_run": True, "models": bool(args.with_models)}
+            elif fn in ("server.py", "VERSION", "release_pubkey.json"):
+                sys.exit(f"{fn} 이 없습니다")
+            elif fn == "ComicPad.exe" and native:
+                sys.exit("ComicPad.exe 가 없습니다 (네이티브 판 꾸러미에는 스위치를 읽는 새 창 프로그램이 꼭 들어가야 함)")
+    size = os.path.getsize(zpath)
+    if size > UPDATE_MAX:
+        sys.exit(f"꾸러미가 {size / 1e6:.0f}MB 로 설치된 ComicPad 가 받는 최대 {UPDATE_MAX / 1e6:.0f}MB 를 넘습니다 (--native-framework 로 작게)")
+    return n
+
+
+def add_native(z, files, stage):
+    for full in files:
+        z.write(full, os.path.relpath(full, stage).replace("\\", "/"))
+    return len(files)
+
+
+def native_info(exe, framework):
+    return {"exe": NATIVE_REL + "/ComicPadNative.exe", "exe_sha256": sha256_file(exe), "self_contained": not framework}
+
+
+def notes_of(args):
+    if getattr(args, "notes_file", None):
+        with open(args.notes_file, encoding="utf-8") as f:
+            return f.read().strip()
+    return args.notes or ""
+
+
+def cmd_dry_run(args, version):
+    """올리지 않는 시험: 서명 키·precache·업로드 없이 zip + 서명 없는 update.json 을 --out 에, 이어서 1.1.3 업데이트로 적용 시험"""
+    if args.upload:
+        sys.exit("--dry-run 과 --upload 는 함께 쓸 수 없습니다")
+    out = args.out or os.path.join(ROOT, "dist", "release_dryrun")
+    os.makedirs(out, exist_ok=True)
+    stage = os.path.join(out, "_stage")
+
+    # 꾸러미 안 VERSION: 1.1.3 설치에 "새 버전"으로 보여야 시험이 되므로 (VERSION 파일 자체는 그대로)
+    def vt(v):
+        return tuple(int(x) for x in v.split(".")[:3])
+    pkg_version = args.version or (version if vt(version) > (1, 1, 3) else "1.2.0")
+    if args.native:
+        build_launcher()
+    native = build_native(stage, args.native_framework) if args.native else None
+    zname = f"ComicPad_update_{pkg_version}.zip"
+    zpath = os.path.join(out, zname)
+    for f in os.listdir(out):
+        if f.startswith("ComicPad_update_") and f.endswith(".zip"):
+            os.remove(os.path.join(out, f))
+    dirs = INCLUDE_DIRS + (["models_bundled"] if args.with_models else [])
+    n = write_package(zpath, dirs, native, stage, pkg_version if pkg_version != version else None)
+    exe = os.path.join(ROOT, "ComicPad.exe")
+    man = {"product": "ComicPad", "version": pkg_version, "file": zname, "size": os.path.getsize(zpath), "sha256": sha256_file(zpath),
+           "exe_sha256": sha256_file(exe) if os.path.exists(exe) else "", "notes": notes_of(args), "dry_run": True, "models": bool(args.with_models)}
     if native:
         man["native"] = native_info(native[1], args.native_framework)
     with open(os.path.join(out, "update.json"), "w", encoding="utf-8") as f:
         json.dump(man, f, ensure_ascii=False, indent=1)
-    print(f"[시험] v{version}: {zname} ({man['size'] / 1e6:.1f}MB, 파일 {n}개) + update.json (서명 없음) -> {out}")
+    note = "" if pkg_version == version else f" (VERSION 은 {version} 그대로, 꾸러미 안만 {pkg_version})"
+    print(f"[시험] v{pkg_version}{note}: {zname} ({man['size'] / 1e6:.1f}MB, 파일 {n}개) + update.json (서명 없음) -> {out}")
     if native:
         print(f"[시험] 네이티브 판: {os.path.join(stage, *NATIVE_REL.split('/'))} ({'자체 포함' if not args.native_framework else '.NET 8 런타임 필요'})")
+    if args.no_sim:
+        return
+    sys.path.insert(0, os.path.join(ROOT, "tools"))
+    import release_sim   # noqa: E402
+    fails = release_sim.simulate(zpath, man, launch=args.sim_launch, keep=args.sim_keep)
+    if fails:
+        sys.exit(f"[시험] 1.1.3 업데이트 적용 시험 실패 {fails}개")
 
 
 def main():
@@ -343,8 +390,15 @@ def main():
     ap.add_argument("--repo", default=REPO)
     ap.add_argument("--native", action="store_true", help="네이티브 판(.NET 8)을 publish 해서 꾸러미 native/ComicPadNative/ 에 넣기")
     ap.add_argument("--native-framework", action="store_true", help="네이티브 판을 자체 포함 대신 .NET 8 런타임이 필요한 작은 판으로")
-    ap.add_argument("--dry-run", action="store_true", help="시험: 서명·업로드 없이 --out 에 꾸러미만 (기본 dist/release_dryrun)")
+    ap.add_argument("--dry-run", action="store_true", help="시험: 서명·업로드 없이 --out 에 꾸러미만 (기본 dist/release_dryrun) + 1.1.3 업데이트 적용 시험")
+    ap.add_argument("--notes-file", help="바뀐 점을 이 파일에서 (UTF-8)")
+    ap.add_argument("--version", help="--dry-run 꾸러미 안 VERSION (기본: 지금 VERSION, 1.1.3 이하면 1.2.0)")
+    ap.add_argument("--no-sim", action="store_true", help="--dry-run 뒤 1.1.3 업데이트 적용 시험(tools/release_sim.py) 생략")
+    ap.add_argument("--sim-launch", action="store_true", help="적용 시험에서 창 프로그램 → 네이티브 판을 정말 켜 보기")
+    ap.add_argument("--sim-keep", action="store_true", help="적용 시험 임시 폴더 남기기")
     args = ap.parse_args()
+    if args.version and not args.dry_run:
+        sys.exit("--version 은 --dry-run 에서만 씁니다 (실제 릴리스는 VERSION 파일)")
     cmd_genkey(args) if args.genkey else cmd_build(args)
 
 

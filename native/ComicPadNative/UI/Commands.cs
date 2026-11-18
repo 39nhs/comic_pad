@@ -79,8 +79,10 @@ public static class FileCommands
         try
         {
             // 덮어쓰기 전에 이전 판을 versions 폴더에 (웹 판과 같이 작품마다 최근 30개)
-            if (File.Exists(path) && path.StartsWith(ProjectsDir, StringComparison.OrdinalIgnoreCase)) BackupVersion(path);
+            bool inProjects = path.StartsWith(ProjectsDir, StringComparison.OrdinalIgnoreCase);
+            if (File.Exists(path) && inProjects) BackupVersion(path);
             CpadIO.Save(d, path);
+            if (inProjects) WriteThumb(d, Path.ChangeExtension(path, ".png"));   // 웹 판 "프로젝트 열기" 카드의 미리보기
             AddRecent(path);
             App.Toast("저장함: " + path);
             (App.Main as MainForm)?.UpdateTitle();
@@ -89,15 +91,39 @@ public static class FileCommands
         catch (Exception ex) { MessageBox.Show(App.Main, "저장하지 못했습니다: " + ex.Message, "ComicPad"); return false; }
     }
 
-    static void BackupVersion(string full)
+    /// <summary>이전 판 보관: data/versions/작품/날짜.cpad (server.py backup_version 과 같게 — 이름은 덮어쓸 파일의 마지막 저장 시각이라 두 판이 같은 파일을 두 번 넣지 않음)</summary>
+    public static void BackupVersion(string full)
     {
         try
         {
             string rel = Path.GetRelativePath(ProjectsDir, full)[..^5];
             string dir = Path.Combine(App.DataDir, "versions", rel);
             Directory.CreateDirectory(dir);
-            File.Copy(full, Path.Combine(dir, DateTime.Now.ToString("yyyyMMdd-HHmmss") + ".cpad"), true);
+            File.Copy(full, Path.Combine(dir, File.GetLastWriteTime(full).ToString("yyyyMMdd-HHmmss") + ".cpad"), true);
             foreach (var old in Directory.GetFiles(dir, "*.cpad").OrderByDescending(f => f).Skip(30)) File.Delete(old);
+        }
+        catch { }
+    }
+
+    /// <summary>작품 미리보기 PNG (웹 판 io.js thumbnail 과 같게: 긴 변 320px, 종이 포함, 밑그림 포함)</summary>
+    public static void WriteThumb(Document d, string png)
+    {
+        try
+        {
+            var flat = App.Comp.Flatten(d, new RenderOptions { ExcludeDraft = false });
+            using var full = CpadIO.ToBitmap(flat, flat.Full);
+            double s = Math.Min(1, 320.0 / Math.Max(d.W, d.H));
+            int w = Math.Max(1, (int)Math.Round(d.W * s)), h = Math.Max(1, (int)Math.Round(d.H * s));
+            using var t = new Bitmap(w, h, PixelFormat.Format32bppArgb);
+            using (var g = Graphics.FromImage(t))
+            {
+                g.InterpolationMode = System.Drawing.Drawing2D.InterpolationMode.HighQualityBicubic;
+                g.PixelOffsetMode = System.Drawing.Drawing2D.PixelOffsetMode.HighQuality;
+                g.DrawImage(full, new Rectangle(0, 0, w, h));
+            }
+            string tmp = png + ".tmp";
+            t.Save(tmp, ImageFormat.Png);
+            File.Move(tmp, png, true);
         }
         catch { }
     }
@@ -125,7 +151,8 @@ public static class FileCommands
         App.SaveSettingsSoon();
     }
 
-    /// <summary>자동 저장: data/autosave 에 3분마다 (바뀐 게 있을 때)</summary>
+    /// <summary>자동 저장: data/autosave 에 3분마다 (바뀐 게 있을 때).
+    /// 웹 판은 "이름.cpad", 네이티브 판은 "이름 (네이티브).cpad" — 두 판을 오가도 서로의 자동 저장본을 덮어쓰지 않음 (둘 다 어느 판에서나 열림)</summary>
     public static void Autosave()
     {
         var d = App.Doc;
@@ -133,10 +160,13 @@ public static class FileCommands
         try
         {
             string dir = Path.Combine(App.DataDir, "autosave"); Directory.CreateDirectory(dir);
-            File.WriteAllText(Path.Combine(dir, MakeSafe(d.Name) + ".cpad"), CpadIO.ToJson(d).ToJsonString());
+            string p = Path.Combine(dir, AutosaveName(d.Name)), tmp = p + ".tmp";
+            File.WriteAllText(tmp, CpadIO.ToJson(d).ToJsonString());
+            File.Move(tmp, p, true);
         }
         catch { }
     }
+    public static string AutosaveName(string docName) => MakeSafe(docName) + " (네이티브).cpad";
     static string MakeSafe(string n) { foreach (var c in Path.GetInvalidFileNameChars()) n = n.Replace(c, '_'); return n; }
 }
 
