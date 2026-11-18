@@ -28,6 +28,16 @@ async function stroke(tool, pts) {
 const line = (x0, y0, x1, y1, n = 24) => Array.from({ length: n + 1 }, (_, i) => [x0 + (x1 - x0) * i / n, y0 + (y1 - y0) * i / n]);
 
 const TESTS = [
+  ['.cpad 의 모르는 값 지키기 (네이티브 판 일정·리그 등)', async () => {
+    const src = { format: 'comicpad', version: 1, name: 't', width: 32, height: 32, dpi: 350, paper: { color: '#ffffff' }, activeId: 'L1',
+      schedule: { due: '2026-12-01' }, workLog: { '2026-11-19': 60 }, vtRig: { v: 2 },
+      layers: [{ id: 'L1', name: 'x', kind: 'raster', visible: true, opacity: 1, blend: 'source-over', clipStudio: { blend: 33 }, meta: { i18n: { en: { text: 'Hi' } } }, data: null }] };
+    const out = await (await Doc.deserialize(src)).serialize();
+    if (out.schedule?.due !== '2026-12-01' || out.workLog?.['2026-11-19'] !== 60 || out.vtRig?.v !== 2) throw new Error('문서의 모르는 값이 사라짐');
+    if (out.layers[0].clipStudio?.blend !== 33 || out.layers[0].meta?.i18n?.en?.text !== 'Hi') throw new Error('레이어의 모르는 값이 사라짐');
+    if (out.name !== 't' || out.width !== 32 || out.format !== 'comicpad') throw new Error('아는 값이 덮어써짐');
+    return '문서·레이어의 모르는 값 그대로';
+  }],
   ['레이어 추가·삭제·되돌리기', async () => {
     const n = app.doc.layers.length;
     ops.addLayer({ name: 't' });

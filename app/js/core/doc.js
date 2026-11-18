@@ -47,6 +47,15 @@ function rleDecode(runs, ctx, w, hgt) {
   }
 }
 
+// .cpad 안에서 이 판이 아는 값. 나머지(네이티브 판의 일정·작업 기록·리그, 클립 스튜디오 정보 등)는 그대로 들고 있다가 저장할 때 돌려준다
+const DOC_KEYS = new Set(['format', 'version', 'name', 'width', 'height', 'dpi', 'paper', 'activeId', 'rulers', 'anim', 'print', 'notes', 'timelapse', 'aiLog', 'vtuber', 'pixel', 'paths', 'workTime', 'layers']);
+const LAYER_KEYS = new Set(['id', 'name', 'kind', 'visible', 'opacity', 'blend', 'locked', 'alphaLock', 'clip', 'draft', 'tint', 'meta', 'ref', 'maskOn', 'parent', 'expanded', 'rough', 'tone', 'fx', 'data', 'rect', 'mask']);
+function unknownKeys(o, known) {
+  let out = null;
+  for (const k of Object.keys(o || {})) if (!known.has(k) && o[k] !== undefined) (out ??= {})[k] = structuredClone(o[k]);
+  return out;
+}
+
 export class Layer {
   /** 메모리 절약: 쉬는 레이어는 압축해 두고 캔버스를 비운다. 코드가 canvas/ctx 를 쓰면 저절로 되살아남 */
   get canvas() { if (this._frozen) this.thaw(); return this._canvas; }
@@ -111,6 +120,7 @@ export class Layer {
     this.rough = o.rough ?? false;       // 러프 전용 레이어 (러프 연필은 여기서만)
     this.tone = o.tone ? { ...o.tone } : null;   // 톤화(망점) { spacing, angle, shape, color }
     this.fx = o.fx ? structuredClone(o.fx) : null;  // 레이어 효과 { stroke, shadow, glow }
+    this.extra = unknownKeys(o, LAYER_KEYS);         // 이 판이 모르는 값 (네이티브 판 등) — 저장할 때 그대로 돌려줌
     this.version = 0;
   }
 
@@ -153,7 +163,7 @@ export class Layer {
   }
 
   clone(name) {
-    const l = new Layer(this.doc, { ...this.props(), name: name ?? this.name + ' 복사' });
+    const l = new Layer(this.doc, { ...(this.extra ? structuredClone(this.extra) : {}), ...this.props(), name: name ?? this.name + ' 복사' });
     l.ctx.drawImage(this.canvas, 0, 0);
     if (this.mask) l.createMask(this.mask);
     return l;
@@ -161,7 +171,7 @@ export class Layer {
 
   /** fast: 자동 저장용. 레이어 변경 번호가 그대로면 픽셀을 다시 읽지 않는다 */
   async serialize({ fast = false } = {}) {
-    const out = { id: this.id, ...this.props(), data: null };
+    const out = { ...(this.extra || {}), id: this.id, ...this.props(), data: null };
     if (this._frozen && this._ser && this._ser.version === this.version && !this.mask) fast = true;
     if (fast && this._ser && this._ser.version === this.version && (!this.mask || this._mser)) {
       out.data = this._ser.data; out.rect = this._ser.rect;
@@ -308,6 +318,7 @@ export class Doc {
     const layers = [];
     for (const l of this.layers) layers.push(await l.serialize(opt));
     return {
+      ...(this.extra || {}),                 // 이 판이 모르는 값 (네이티브 판의 일정·리그 등) — 그대로 돌려줌
       format: 'comicpad', version: 1,
       name: this.name, width: this.width, height: this.height, dpi: this.dpi,
       paper: this.paper, activeId: this.activeId, rulers: this.rulers, anim: { ...this.anim, playing: false }, print: this.print || null, notes: this.notes || [], timelapse: this.timelapse || null, aiLog: this.aiLog?.length ? this.aiLog : undefined, vtuber: this.vtuber || undefined, pixel: this.pixel || undefined, paths: this.paths?.length ? this.paths : undefined, workTime: Math.round(this.workTime || 0), layers,
@@ -327,6 +338,7 @@ export class Doc {
     doc.pixel = json.pixel || null;          // 픽셀아트: { art, lock, palette }
     doc.paths = json.paths || [];
     doc.workTime = json.workTime || 0;
+    doc.extra = unknownKeys(json, DOC_KEYS);
     if (json.anim) doc.anim = { ...doc.anim, ...json.anim, playing: false };
     for (const ld of json.layers) {
       // 예전 파일: 파란선+밑그림 레이어는 러프 레이어로 본다
