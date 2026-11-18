@@ -28,6 +28,8 @@ public sealed class CanvasView : Control
     readonly Dictionary<IntPtr, RectangleF[]> devRects = new();
     // 측정
     public double LatencyMs; public int PenRate; int samples; long secStart = Stopwatch.GetTimestamp();
+    /// <summary>펜 진단: 입력 시각(QPC) → 화면에 올린 시각(QPC), 그리는 중인지 (그림판에서 실제로 잰 지연)</summary>
+    public static event Action<long, long, bool> InputPresented;
     public event Action ViewChanged;
 
     // ---- 확장 지점 (Shell2 모듈: 원형 메뉴·브러시 커서 모양 등) ----------------------------------
@@ -207,6 +209,7 @@ public sealed class CanvasView : Control
         {
             double ms = (Stopwatch.GetTimestamp() - inputQpc) * 1000.0 / Stopwatch.Frequency;
             if (ms >= 0 && ms < 500) LatencyMs = LatencyMs == 0 ? ms : LatencyMs * 0.9 + ms * 0.1;
+            InputPresented?.Invoke(inputQpc, Stopwatch.GetTimestamp(), drawing);
         }
     }
     static Rectangle Nz(Rectangle r) => r.IsEmpty ? Rectangle.Empty : r;

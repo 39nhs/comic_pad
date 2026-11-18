@@ -101,7 +101,7 @@ public sealed class PenFeel
     public double Curve(double p, BrushPreset preset = null)
     {
         double x = Math.Clamp((p - PMin) / Math.Max(0.05, PMax - PMin), 0, 1);
-        var pl = preset?.PressurePts != null && preset.PressurePts.Length >= 2 ? Pressure.CurveLut(preset.PressurePts) : lut;
+        var pl = preset?.PressurePts != null && preset.PressurePts.Length >= 2 ? Pressure.CurveLut(preset.PressurePts) : lut ??= Pts != null && Pts.Length >= 2 ? Pressure.CurveLut(Pts) : null;   // 직접 만든 PenFeel (펜 진단 미리 보기) 도 곡선 점을 씀
         if (pl != null) return pl[(int)Math.Floor(x * 255 + 0.5)];
         return Math.Pow(x, Gamma);
     }

@@ -17,7 +17,7 @@ public static class Shell2Settings
         var p = Opt.Panel();   // 웹 .settings: 구역 제목 + 부품 (세로 쌓기)
         void Add(params Control[] cs) { foreach (var c in cs) if (c != null) p.Controls.Add(c); }
         Add(Opt.Title("펜 (S펜·와콤·휴이온·XP-Pen·서피스 펜)"),
-            Opt.Row(Opt.Button("필압 곡선·흔들림 보정…", PenSettings.Show), Opt.Button("펜 필기감 진단…", () => WebIds.Run("pen.diagnose"))),
+            Opt.Row(Opt.Button("필압 곡선·흔들림 보정…", PenSettings.Show), Opt.Button("펜 진단 (필압·지연·곡선)…", () => WebIds.Run("pen.diagnose"))),
             Opt.Choice("브러시 커서 모양", new[] { ("nib", "펜촉 + 크기 원 (클립스튜디오식)"), ("circle", "크기 원 + 십자"), ("cross", "십자만"), ("dot", "점만") }, () => App.Get("brushCursor", "nib"), v => { App.Set("brushCursor", v); CursorLook.Apply(); }),
             Opt.Choice("측면 버튼 누르고 그리기", new[] { ("eyedropper", "스포이트"), ("eraser", "지우개"), ("pan", "화면 이동"), ("radial", "원형 메뉴"), ("none", "사용 안 함") }, () => App.Get("penButton", "eyedropper"), v => App.Set("penButton", v)),
             Opt.Choice("두 번째 측면 버튼 (와콤 등)", new[] { ("pan", "화면 이동"), ("eyedropper", "스포이트"), ("eraser", "지우개"), ("radial", "원형 메뉴"), ("none", "사용 안 함") }, () => App.Get("penButton2", "pan"), v => App.Set("penButton2", v)),
