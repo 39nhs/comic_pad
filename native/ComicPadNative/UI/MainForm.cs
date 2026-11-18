@@ -96,10 +96,21 @@ public sealed class MainForm : Form
     // ---- 메뉴 ----------------------------------------------------------------------
     public void BuildMenus() => TopBar.BuildMenus();
 
+    /// <summary>명령 실행 기록 (오류 보고서의 "최근 명령")</summary>
+    public static Action<string> Ran;
+    /// <summary>명령 오류 처리 (Crash 모듈: 긴급 저장·보고서 창). true = 처리함</summary>
+    public static Func<Exception, string, bool> Failed;
+
     public static void Run(Action a, string name)
     {
+        try { Ran?.Invoke(name); } catch { }
         try { a(); }
-        catch (Exception ex) { App.Toast($"{name}: {ex.Message}"); File.AppendAllText(Path.Combine(Path.GetTempPath(), "comicpad-native-error.log"), DateTime.Now + " " + name + "\r\n" + ex + "\r\n\r\n"); }
+        catch (Exception ex)
+        {
+            try { File.AppendAllText(Path.Combine(Path.GetTempPath(), "comicpad-native-error.log"), DateTime.Now + " " + name + "\r\n" + ex + "\r\n\r\n"); } catch { }
+            if (Failed?.Invoke(ex, name) == true) return;
+            App.Toast($"{name}: {ex.Message}");
+        }
     }
 
     // ---- 키보드 ----------------------------------------------------------------------
