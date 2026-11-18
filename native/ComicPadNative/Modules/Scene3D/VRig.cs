@@ -16,9 +16,25 @@ public sealed class VPart
     public Bitmap Img; public double X, Y, W, H;
 }
 
+/// <summary>다른 방식의 리그 (메쉬·디포머 리깅, Modules/VRig2). 있으면 스튜디오의 그리기·녹화·.cpvt 가 이것을 쓴다</summary>
+public interface IVAltRig : IDisposable
+{
+    int W { get; }
+    int H { get; }
+    /// <summary>한 장 진행 (추적 상태 → 파라미터, 물리)</summary>
+    void Step(VRigData rig, VState st, double dt);
+    /// <summary>g 의 (0,0) 에 rig.W×rig.H × scale 크기로 그림</summary>
+    void Render(Graphics g, VRigData rig, VState st, double scale, Color? bg, bool fast);
+    /// <summary>.cpvt 안에 넣을 리그 (그림 포함)</summary>
+    System.Text.Json.Nodes.JsonObject ToFile();
+    /// <summary>예전 방식 부위 (웹 판·예전 스튜디오에서도 열리게 .cpvt 에 함께 저장)</summary>
+    List<VPart> LegacyParts();
+}
+
 public sealed class VRigData
 {
     public int W, H; public List<VPart> Parts = new();
+    public IVAltRig Alt;                   // 메쉬 리그 (있으면 이것으로 그림)
     public double NeckX, NeckY, FaceH; public bool Png;
     public JsonObject Opts = new();
     public double Motion { get => J.Num(Opts["motion"], 1); set => Opts["motion"] = value; }
@@ -226,6 +242,7 @@ public static class VRig
     /// <summary>한 장 그리기. g 는 rig.W×rig.H 기준 (scale 로 맞춤). sway: 머리카락 값(-0.35~0.35), bg: 배경 (null = 투명)</summary>
     public static void Render(Graphics g, VRigData rig, VState st, double sway = 0, double scale = 1, Color? bg = null, bool fast = false)
     {
+        if (rig.Alt != null) { rig.Alt.Render(g, rig, st, scale, bg, fast); return; }
         double M = rig.Motion;
         var saved = g.Save();
         g.ResetTransform();
@@ -379,7 +396,9 @@ public static class VRig
         var parts = new JsonArray();
         foreach (var p in rig.Parts)
             parts.Add(new JsonObject { ["name"] = p.Name, ["role"] = p.Role, ["depth"] = p.Depth, ["key"] = p.Key, ["x"] = p.X, ["y"] = p.Y, ["w"] = p.W, ["h"] = p.H, ["png"] = PngUrl(p.Img) });
-        return new JsonObject { ["format"] = "comicpad-vtuber", ["version"] = 1, ["name"] = name, ["w"] = rig.W, ["h"] = rig.H, ["opts"] = rig.Opts.DeepClone(), ["parts"] = parts };
+        var o = new JsonObject { ["format"] = "comicpad-vtuber", ["version"] = 1, ["name"] = name, ["w"] = rig.W, ["h"] = rig.H, ["opts"] = rig.Opts.DeepClone(), ["parts"] = parts };
+        if (rig.Alt != null) o["rig2"] = rig.Alt.ToFile();    // 메쉬 리그 (웹 판은 모르는 키라 parts 만 씀)
+        return o;
     }
     public static VRigData FromFile(JsonNode json)
     {
@@ -402,6 +421,8 @@ public static class VRig
             catch (Exception e) { img.Dispose(); throw new InvalidDataException("아바타 그림을 읽지 못했습니다", e); }
             parts.Add(new VPart { Name = J.Str(p["name"], ""), Role = J.Str(p["role"], "none"), Depth = J.Num(p["depth"], 0.3), Key = (int)J.Num(p["key"], 0), X = J.Num(p["x"], 0), Y = J.Num(p["y"], 0), W = w, H = h, Img = img });
         }
-        return BuildRig(parts, (int)J.Num(json["w"], 512), (int)J.Num(json["h"], 512), json["opts"] as JsonObject);
+        var rig = BuildRig(parts, (int)J.Num(json["w"], 512), (int)J.Num(json["h"], 512), json["opts"] as JsonObject);
+        if (json["rig2"] != null && Vtuber.AltFromFile != null) rig.Alt = Vtuber.AltFromFile(json["rig2"]);
+        return rig;
     }
 }

@@ -106,11 +106,17 @@ public static class Vtuber
     {
         if (live != null && !live.IsDisposed) { App.Toast("버튜버 스튜디오가 이미 열려 있습니다"); live.Activate(); return; }
         var doc = App.Doc;
-        if (rigIn == null && (doc?.Extra["vtuber"] as JsonObject)?["parts"] == null) { SetupDialog(); return; }
-        VRigData rig;
-        try { rig = rigIn ?? VRig.FromDoc(doc); }
+        VRigData rig = rigIn;
+        // 메쉬 리그(리깅 편집기에서 만든 것)가 있으면 그것을 씀
+        if (rig == null && AltFromDoc != null && doc?.Extra["vtRig"] != null)
+        {
+            try { var alt = AltFromDoc(doc); if (alt != null) { rig = VRig.BuildRig(alt.LegacyParts(), alt.W, alt.H, (doc.Extra["vtuber"] as JsonObject)?["opts"] as JsonObject); rig.Alt = alt; } }
+            catch (Exception e) { App.Toast("메쉬 리그를 읽지 못해 예전 방식으로 엽니다: " + e.Message); rig = null; }
+        }
+        if (rig == null && (doc?.Extra["vtuber"] as JsonObject)?["parts"] == null) { SetupDialog(); return; }
+        try { rig ??= VRig.FromDoc(doc); }
         catch (Exception e) { App.Toast("아바타를 만들지 못했습니다: " + e.Message); return; }
-        if (rig.Parts.Count == 0) { App.Toast("부위가 정해진 레이어가 없습니다. 부위를 먼저 정하세요"); SetupDialog(); return; }
+        if (rig.Parts.Count == 0 && rig.Alt == null) { App.Toast("부위가 정해진 레이어가 없습니다. 부위를 먼저 정하세요"); SetupDialog(); return; }
         live = new StudioForm(rig, rigIn == null ? doc : null);
         live.FormClosed += (_, _) => live = null;
         live.Show(App.Main);
@@ -127,6 +133,11 @@ public static class Vtuber
 
     /// <summary>웹캠 얼굴 추적기를 만드는 곳 (Vision 모듈이 채움). 없으면 카메라 단추는 안내만</summary>
     public static Func<IVFaceSource> FaceSourceFactory;
+    /// <summary>메쉬 리그 만들기 (VRig2 모듈이 채움): 작품의 vtRig / .cpvt 의 rig2</summary>
+    public static Func<Document, IVAltRig> AltFromDoc;
+    public static Func<JsonNode, IVAltRig> AltFromFile;
+    /// <summary>리깅 편집기 열기 (VRig2 모듈이 채움)</summary>
+    public static Action OpenRigEditor;
 
     internal sealed class StudioForm : Form
     {
@@ -214,7 +225,9 @@ public static class Vtuber
 
             side.Controls.Add(ui.Section("아바타", Ui3.Row(
                 doc != null ? Ui3.Button("부위 다시 정하기", () => { Close(); App.Main?.BeginInvoke(SetupDialog); }) : null,
-                Ui3.Button(".cpvt 로 저장", SaveFile))));
+                doc != null && OpenRigEditor != null ? Ui3.Button("리깅 편집기", () => { Close(); App.Main?.BeginInvoke(OpenRigEditor); }) : null,
+                Ui3.Button(".cpvt 로 저장", SaveFile)),
+                rig.Alt != null ? Ui3.Help("메쉬 리그(리깅 편집기)로 움직이는 중입니다.") : null));
 
             timer.Tick += (_, _) => Frame();
             Shown += (_, _) => { last = clock.Elapsed.TotalSeconds; timer.Start(); };
@@ -332,6 +345,7 @@ public static class Vtuber
             state = VRig.SmoothState(state, next, rig.Smooth);
             state.T = next.T; state.Expr = expr;
             double sway = VRig.StepPhysics(ph, state, dt);
+            rig.Alt?.Step(rig, state, dt);
             view.Set(state, sway);
             if (popup != null && !popup.IsDisposed) popup.Set(state, sway);
             if (rec != null && rec.Due())
@@ -413,6 +427,7 @@ public static class Vtuber
                 doc.Extra["vtuber"] = vt;
             }
             foreach (var p in rig.Parts) p.Img?.Dispose();
+            rig.Alt?.Dispose();
         }
 
         /// <summary>미리보기 (작게 그림 · 투명 배경은 바둑판)</summary>
