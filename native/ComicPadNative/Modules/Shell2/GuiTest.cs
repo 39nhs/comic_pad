@@ -70,7 +70,14 @@ public static class GuiTest
             Ok(main.TopBar.Visible && main.Side.Visible, "패널 다시 보이기");
             T("패널 탭 숨기기·되돌리기", () => { UiMode.Ui()["hiddenPanels"] = new System.Text.Json.Nodes.JsonArray("history"); UiMode.ApplyPanels(); UiMode.Ui().Remove("hiddenPanels"); UiMode.ApplyPanels(); });
             Ok(main.Side.Selected("top") == "tool" && main.Side.Selected("bottom") == "layers", "패널 기본 탭: 위 = 도구, 아래 = 레이어");
-            Ok(string.Join(",", main.Side.Defs.Select(d => d.Dock + ":" + d.Id)) == "top:tool,top:color,top:nav,top:pages,bottom:layers,bottom:assets,bottom:history,bottom:anim", "패널 탭 배치 (웹 판과 같음)");
+            {
+                // 웹 판 탭은 같은 자리·순서, 네이티브에만 있는 탭(일정 등)은 각 칸의 맨 뒤에만
+                string[] web = { "top:tool", "top:color", "top:nav", "top:pages", "bottom:layers", "bottom:assets", "bottom:history", "bottom:anim" };
+                var all = main.Side.Defs.Select(d => d.Dock + ":" + d.Id).ToList();
+                var webOnly = all.Where(web.Contains).ToList();
+                bool extrasAtEnd = all.Select((x, i) => (x, i)).Where(t => !web.Contains(t.x)).All(t => all.Skip(t.i + 1).All(y => !web.Contains(y) || y.Split(':')[0] != t.x.Split(':')[0]));
+                Ok(string.Join(",", webOnly) == string.Join(",", web) && extrasAtEnd, "패널 탭 배치 (웹 판과 같음, 네이티브 전용 탭은 뒤에): " + string.Join(",", all));
+            }
             T("패널 앱 밖으로 꺼냈다 되돌리기", () =>
             {
                 Popout.Panel("내비", false); Application.DoEvents();
