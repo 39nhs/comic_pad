@@ -24,6 +24,12 @@ ROOT = os.path.dirname(os.path.abspath(__file__))
 APP_DIR = os.path.join(ROOT, "app")
 PLUGIN_DIR = os.path.join(ROOT, "plugins")
 DATA_DIR = os.path.join(ROOT, "data")
+# 다른 작업물 폴더 (시험·화면 비교용): --data <폴더> 또는 COMICPAD_DATA_DIR. 이때는 app/precache.json 을 다시 쓰지 않음
+CUSTOM_DATA = False
+if "--data" in sys.argv:
+    DATA_DIR, CUSTOM_DATA = os.path.abspath(sys.argv[sys.argv.index("--data") + 1]), True
+elif os.environ.get("COMICPAD_DATA_DIR"):
+    DATA_DIR, CUSTOM_DATA = os.path.abspath(os.environ["COMICPAD_DATA_DIR"]), True
 PORT = int(os.environ.get("COMICPAD_PORT", "8787"))
 if "--port" in sys.argv:
     PORT = int(sys.argv[sys.argv.index("--port") + 1])
@@ -1397,7 +1403,8 @@ def main():
         if k != "colorprofiles":
             os.makedirs(d, exist_ok=True)
     try:
-        make_precache()
+        if not CUSTOM_DATA:          # 임시 작업물 폴더로 띄울 때는 저장소의 app/precache.json 을 건드리지 않음
+            make_precache()
     except OSError as e:
         print("precache.json 을 만들지 못했습니다:", e)
     if "--precache-only" in sys.argv:

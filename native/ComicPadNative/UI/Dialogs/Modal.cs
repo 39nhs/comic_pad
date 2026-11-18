@@ -262,6 +262,8 @@ public static class Modals
                     g.DrawImage(db, p.X, p.Y);
                 }
                 bmp.Save(shot);
+                // 배치 기록 (웹 #modal-root .modal 과 맞대 보기, 메인 창 안쪽 좌표)
+                File.WriteAllText(shot + ".txt", $"modal {new Rectangle(App.Main.PointToClient(f.Location), f.Size)}\r\n");
             }
             catch (Exception ex) { File.WriteAllText(shot + ".error.txt", ex.ToString()); }
             Environment.Exit(0);

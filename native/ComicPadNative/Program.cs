@@ -57,6 +57,7 @@ static class Program
             if (args[1] == "vectortools") { Environment.ExitCode = Modules.VectorTools.VectorToolsTest.Run(args[2]); return; }
             if (args[1] == "pendiag") { Environment.ExitCode = Modules.PenDiagnosis.PenDiagTest.Run(args[2]); return; }   // 펜 진단 (만든 포인터 점으로)
             if (args[1] == "workflow") { Environment.ExitCode = Modules.Workflow.WorkflowTest.Run(args[2]); return; }   // 작업 일정·참고 자료 보드·A/B 비교·피드백 보기
+            if (args[1] == "crash") { Environment.ExitCode = Modules.Crash.CrashSelfTest.Run(args[2]); return; }   // 오류 보고·긴급 저장·안전 모드
             if (args[1] == "brushes")
             {
                 var res = Modules.BrushEngine.SelfTest.Run(args[2]);
@@ -70,13 +71,16 @@ static class Program
         ApplicationConfiguration.Initialize();
         Application.SetUnhandledExceptionMode(UnhandledExceptionMode.CatchException);
         Application.ThreadException += (_, e) => Report(e.Exception);
-        AppDomain.CurrentDomain.UnhandledException += (_, e) => Report(e.ExceptionObject as Exception);
+        AppDomain.CurrentDomain.UnhandledException += (_, e) => Report(e.ExceptionObject as Exception, e.IsTerminating);
 
         App.LoadSettings();
         Modules.Shell2.WebImport.ImportOnStart();   // 처음 켤 때 한 번: 웹 판 설정(data\config\settings.json) 가져오기 (화면을 만들기 전에)
+        Modules.Crash.CrashGuard.BeginStart();       // 시작 꺼짐 반복 막기: 지난 두 번 창이 뜨기 전에 꺼졌으면 안전 모드
         InitModules();
+        Modules.Crash.CrashGuard.Probe();            // (시험용, 평소에는 아무것도 안 함)
 
         var form = new MainForm();
+        form.Shown += (_, _) => Modules.Crash.CrashGuard.WindowShown();
         form.Shown += (_, _) =>
         {
             App.SetTool("brush");
@@ -127,14 +131,18 @@ static class Program
             .OrderBy(t => t == typeof(CoreModule) ? 0 : t.Name == "BasicToolsModule" ? 1 : 2).ThenBy(t => t.FullName);
         foreach (var t in mods)
         {
+            if (Modules.Crash.CrashGuard.Skip(t)) continue;   // 안전 모드: 지난번 시작을 망가뜨린 부가 모듈은 건너뜀
+            Modules.Crash.CrashGuard.BeginModule(t.Name);
             try { ((IModule)Activator.CreateInstance(t)).Init(); }
-            catch (Exception ex) { try { File.AppendAllText(Path.Combine(Path.GetTempPath(), "comicpad-native-error.log"), $"{DateTime.Now} 모듈 {t.Name}: {ex}\r\n"); } catch { } }
+            catch (Exception ex) { try { File.AppendAllText(Path.Combine(Path.GetTempPath(), "comicpad-native-error.log"), $"{DateTime.Now} 모듈 {t.Name}: {ex}\r\n"); } catch { } Modules.Crash.CrashGuard.ModuleFailed(t.Name, ex); }
         }
+        Modules.Crash.CrashGuard.BeginModule(null);
     }
 
-    static void Report(Exception e)
+    static void Report(Exception e, bool fatal = false)
     {
         try { File.AppendAllText(Path.Combine(Path.GetTempPath(), "comicpad-native-error.log"), DateTime.Now + " " + e + "\r\n\r\n"); } catch { }
+        if (Modules.Crash.CrashHandler.Handle(e, null, fatal)) return;   // 긴급 저장 + 보고서 창 (설정에 따라)
         App.Toast("오류: " + e?.Message);
     }
 

@@ -49,8 +49,12 @@ public static class Shell2Settings
         Add(Opt.Title("업데이트"),
             Opt.Check("켤 때 새 버전 확인 (하루 한 번)", () => Updater.Conf()["auto"]?.GetValue<bool>() != false, v => { Updater.Conf()["auto"] = v; App.SaveSettingsSoon(); }),
             Opt.Button("업데이트 확인…", () => UpdateUi.Dialog()));
+        foreach (var extra in Extra) { try { Add(extra()); } catch { } }
         return p;
     }
+
+    /// <summary>다른 모듈이 붙이는 설정 구역 (제목 + 부품들). 설정 창을 열 때마다 새로 만듦</summary>
+    public static readonly List<Func<Control[]>> Extra = new();
 
     public static void Dialog()
     {

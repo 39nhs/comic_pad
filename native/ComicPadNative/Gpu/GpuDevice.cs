@@ -32,7 +32,16 @@ public sealed class GpuDevice : IDisposable
         {
             string env = Environment.GetEnvironmentVariable("COMICPAD_GPU");
             if (!string.IsNullOrEmpty(env)) return env.Trim().ToLowerInvariant();
-            try { return App.Get("gpu", "auto"); } catch { return "auto"; }
+            // 안전 모드(시작 중 꺼짐이 되풀이됨)·COMICPAD_NO_GPU 면 GPU 를 쓰지 않음
+            if (Environment.GetEnvironmentVariable("COMICPAD_NO_GPU") == "1" || Environment.GetEnvironmentVariable("COMICPAD_SAFE_MODE") == "1") return "off";
+            // 설정 값: "auto"|"on"|"off"|"warp", 예전·다른 모듈이 쓴 true/false 도 받음
+            var n = App.Settings["gpu"];
+            if (n is System.Text.Json.Nodes.JsonValue v)
+            {
+                if (v.TryGetValue(out bool b)) return b ? "on" : "off";
+                if (v.TryGetValue(out string str) && !string.IsNullOrWhiteSpace(str)) return str.Trim().ToLowerInvariant();
+            }
+            return "auto";
         }
     }
     public static bool Wanted => Mode != "off";
