@@ -676,6 +676,20 @@ public static class RigSelfTest
             c.Size = new Size(860, 780);
             f.TestSelect(rt.Rig.Parts.First(p => p.Role == "face").Id);
             using (var bmp = new Bitmap(c.Width, c.Height)) { c.DrawToBitmap(bmp, new Rectangle(0, 0, c.Width, c.Height)); bmp.Save(Path.Combine(outDir, "editor_canvas.png"), ImageFormat.Png); }
+            // 창 모습 (COMICPAD_VRIG2_GUI=1 일 때만 실제로 창을 띄움 — 평소 시험은 창 없이)
+            if (Environment.GetEnvironmentVariable("COMICPAD_VRIG2_GUI") == "1")
+            {
+                f.StartPosition = FormStartPosition.Manual; f.Location = new Point(0, 0);
+                f.Show();
+                for (int i = 0; i < 40; i++) { Application.DoEvents(); Thread.Sleep(25); }
+                f.TestSelectDef("D_HeadWarp");
+                for (int i = 0; i < 20; i++) { Application.DoEvents(); Thread.Sleep(25); }
+                using (var bmp = new Bitmap(f.Width, f.Height)) { f.DrawToBitmap(bmp, new Rectangle(0, 0, f.Width, f.Height)); bmp.Save(Path.Combine(outDir, "editor_window.png"), ImageFormat.Png); }
+                f.TestSelect(rt.Rig.Parts.First(p => p.Role == "mouth").Id);
+                for (int i = 0; i < 20; i++) { Application.DoEvents(); Thread.Sleep(25); }
+                using (var bmp = new Bitmap(f.Width, f.Height)) { f.DrawToBitmap(bmp, new Rectangle(0, 0, f.Width, f.Height)); bmp.Save(Path.Combine(outDir, "editor_window_part.png"), ImageFormat.Png); }
+                f.Hide();
+            }
             // 자동 리그 → 되돌리기 → 같은 JSON
             string before = f.TestRig.ToJsonString();
             f.TestAutoRig();

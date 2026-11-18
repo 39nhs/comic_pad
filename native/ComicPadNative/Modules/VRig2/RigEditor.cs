@@ -70,7 +70,9 @@ public sealed class RigEditorForm : Form
         top.Controls.Add(Ui3.Button("자동 리그", AutoRigNow, true));
         top.Controls.Add(Ui3.Button("되돌리기", Undo));
         top.Controls.Add(Ui3.Button("다시하기", Redo));
-        top.Controls.Add(ui.Segmented(new[] { ("view", "보기"), ("mesh", "메쉬 편집"), ("deform", "변형 편집") }, () => mode, v => { mode = v; Changed(false); SetHint(); }));
+        var modeSeg = ui.Segmented(new[] { ("view", "보기"), ("mesh", "메쉬 편집"), ("deform", "변형 편집") }, () => mode, v => { mode = v; Changed(false); SetHint(); });
+        modeSeg.Width = 280; modeSeg.Height = 34;
+        top.Controls.Add(modeSeg);
         top.Controls.Add(ui.Toggle("메쉬·격자 보기", () => showMesh, v => { showMesh = v; canvas.Invalidate(); }));
         top.Controls.Add(Ui3.Button("작품에 저장", () => { Apply(); SetStatus("작품에 저장했습니다 (Ctrl+Z 로 되돌릴 수 있음)"); }));
         top.Controls.Add(Ui3.Button("스튜디오에서 움직이기", OpenStudio));
@@ -122,6 +124,7 @@ public sealed class RigEditorForm : Form
     internal Control TestCanvas => canvas;
     internal Rig2 TestRig => rig;
     internal void TestSelect(string partId) => Select(partId, null);
+    internal void TestSelectDef(string defId) => Select(null, defId);
     internal void TestAutoRig() => AutoRigNow();
     internal void TestUndo() => Undo();
 
@@ -286,9 +289,9 @@ public sealed class RigEditorForm : Form
             var cov = rt.Tex.TryGetValue(p.LayerId ?? "", out var tx) ? MeshGen.Coverage(p.Mesh, tx, p.Region) : (0, 0);
             propBox.Controls.Add(u.Section("부위: " + p.Name,
                 Ui3.Help($"레이어: {doc.ById(p.LayerId)?.Name ?? "(없음)"} · 꼭짓점 {p.Mesh.N} · 삼각형 {p.Mesh.T.Length / 3} · 그림 덮음 {(cov.Item2 == 0 ? 100 : 100.0 * cov.Item1 / cov.Item2):0.0}%"),
-                u.Select("역할", RigRoles.All.Select(r => (r.Id, r.Name)).ToArray(), () => p.Role, v => { Snapshot("역할"); p.Role = v; BuildTree(); }).box,
-                u.Select("쪽", new[] { ("", "가운데"), ("L", "왼 (화면 오른쪽)"), ("R", "오른 (화면 왼쪽)") }, () => p.Side, v => { Snapshot("쪽"); p.Side = v; }).box,
-                u.Select("부모", parentOpts, () => p.Parent ?? "", v => { Snapshot("부모"); p.Parent = v == "" ? null : v; Changed(true); BuildTree(); }).box,
+                Ui3.Help("역할"), u.Select(null, RigRoles.All.Select(r => (r.Id, r.Name)).ToArray(), () => p.Role, v => { Snapshot("역할"); p.Role = v; BuildTree(); }).box,
+                Ui3.Help("쪽"), u.Select(null, new[] { ("", "가운데"), ("L", "왼 (화면 오른쪽)"), ("R", "오른 (화면 왼쪽)") }, () => p.Side, v => { Snapshot("쪽"); p.Side = v; }).box,
+                Ui3.Help("부모"), u.Select(null, parentOpts, () => p.Parent ?? "", v => { Snapshot("부모"); p.Parent = v == "" ? null : v; Changed(true); BuildTree(); }).box,
                 u.Slider("그리기 순서", -100, Math.Max(100, rig.Parts.Max(q => q.Order) + 100), 1, () => p.Order, v => { Snapshot("순서", true); p.Order = v; BuildTree(); Changed(false); }),
                 u.Slider("깊이 (자동 리그 시차)", -1, 1.5, 0.05, () => p.Depth, v => { Snapshot("깊이", true); p.Depth = v; }),
                 u.Toggle("편집기에서 숨기기", () => p.Hide, v => { Snapshot("숨김"); p.Hide = v; BuildTree(); Changed(false); })));
@@ -319,7 +322,7 @@ public sealed class RigEditorForm : Form
             var items = new List<Control>
             {
                 Ui3.Help(d.IsWarp ? $"워프 디포머 · 격자 {d.Cols}×{d.Rows} 칸" : "회전 디포머 · 중심을 끌어 옮기고, 손잡이 끝을 끌어 돌립니다 (변형 편집)"),
-                u.Select("부모", parentOpts, () => d.Parent ?? "", v => { if (v != "" && rig.WouldCycle(d.Id, v)) return; Snapshot("부모"); d.Parent = v == "" ? null : v; Changed(true); BuildTree(); }).box,
+                Ui3.Help("부모"), u.Select(null, parentOpts, () => d.Parent ?? "", v => { if (v != "" && rig.WouldCycle(d.Id, v)) return; Snapshot("부모"); d.Parent = v == "" ? null : v; Changed(true); BuildTree(); }).box,
             };
             if (d.IsWarp)
             {
@@ -337,7 +340,7 @@ public sealed class RigEditorForm : Form
             string pick = null;
             propBox.Controls.Add(u.Section("리그",
                 Ui3.Help($"부위 {rig.Parts.Count} · 디포머 {rig.Deformers.Count} · 파라미터 {rig.Params.Count} · 물리 {rig.Physics.Count}\n나무에서 부위나 디포머를 고르세요. 레이어 이름으로 역할을 짐작하지만, 부위의 역할을 바꾸고 \"자동 리그\"를 다시 누르면 그 역할로 다시 만듭니다."),
-                layers.Length > 0 ? u.Select("레이어", layers, () => pick ?? layers[0].Id, v => pick = v).box : Ui3.Help("부위가 아닌 레이어가 없습니다"),
+                layers.Length > 0 ? u.Select(null, layers, () => pick ?? layers[0].Id, v => pick = v).box : Ui3.Help("부위가 아닌 레이어가 없습니다"),
                 layers.Length > 0 ? Ui3.Row(Ui3.Button("레이어를 부위로 넣기", () => AddLayerPart(pick ?? layers[0].Id))) : null,
                 Ui3.Row(Ui3.Button("새 워프 디포머", () => AddDeformer("warp", null)), Ui3.Button("새 회전 디포머", () => AddDeformer("rot", null)))));
         }
@@ -532,7 +535,8 @@ public sealed class RigEditorForm : Form
         }
         if (g.Axes.Count == 0) items.Add(Ui3.Help("파라미터 축이 없습니다 (늘 같은 모양)."));
         items.Add(Ui3.Help(exact >= 0 ? "▶ 지금 값이 키 위에 있습니다 — 변형 편집으로 이 키폼을 고칠 수 있습니다." : "지금 값은 키 사이 (보간 중) — 고치려면 \"현재 값에 키 추가\"."));
-        items.Add(keyUi.Select("파라미터", rig.Params.Select(p => (p.Id, p.Name)).ToArray(), () => keyParam, v => { keyParam = v; }).box);
+        items.Add(Ui3.Help("키를 넣을 파라미터"));
+        items.Add(keyUi.Select(null, rig.Params.Select(p => (p.Id, p.Name)).ToArray(), () => keyParam, v => { keyParam = v; }).box);
         items.Add(Ui3.Row(
             Ui3.Button("현재 값에 키 추가", () =>
             {
