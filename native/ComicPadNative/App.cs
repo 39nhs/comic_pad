@@ -61,14 +61,19 @@ public static class Registry
     public static readonly List<PanelDef> Panels = new();
     public static readonly Dictionary<string, Action> Commands = new();   // 기능 검색·단축키용 (이름 → 동작)
 
-    public static void Tool(ToolBase t) { Tools.RemoveAll(x => x.Id == t.Id); Tools.Add(t); }
+    public static void Tool(ToolBase t) { Tools.RemoveAll(x => x.Id == t.Id); Tools.Add(t); if (CaptureSource) Src["tool:" + t.Id] = new System.Diagnostics.StackTrace(1, true); }
+
+    /// <summary>기능 지도(--dump-features)용: 등록한 곳(호출 스택)을 모아 둘지. 평소에는 끔 (시작 속도)</summary>
+    public static bool CaptureSource;
+    public static readonly Dictionary<string, System.Diagnostics.StackTrace> Src = new();
     public static void Menu(string path, Action run, Keys key = Keys.None, Func<bool> enabled = null, Func<bool> check = null, int order = 500)
     {
         Menus.RemoveAll(m => m.Path == path);
         Menus.Add(new MenuItemDef(path, run, key, enabled, check, order));
+        if (CaptureSource) Src["menu:" + path] = new System.Diagnostics.StackTrace(1, true);
         Commands[path] = run;
     }
-    public static void Panel(string title, Func<Control> create, string dock = "right", int order = 500) { Panels.RemoveAll(p => p.Title == title); Panels.Add(new PanelDef(title, create, dock, order)); }
+    public static void Panel(string title, Func<Control> create, string dock = "right", int order = 500) { Panels.RemoveAll(p => p.Title == title); Panels.Add(new PanelDef(title, create, dock, order)); if (CaptureSource) Src["panel:" + title] = new System.Diagnostics.StackTrace(1, true); }
 
     /// <summary>도구와 상관없이 늘 그리는 화면 겹침 그림 (자·원고 가이드 등, 화면 좌표). 모양이 바뀌면 그림판 RedrawAll</summary>
     public static readonly List<Action<Graphics, ViewXf>> Overlays = new();
