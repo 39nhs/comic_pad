@@ -49,6 +49,7 @@ static class Program
             if (args[1] == "script") { Environment.ExitCode = Modules.Comic.ScriptTest.Run(args[2]); return; }
             if (args[1] == "menus") { Environment.ExitCode = UI.Chrome.WebMenus.Report(args[2]); return; }   // 위 메뉴 ↔ 웹 판 대조
             if (args[1] == "3d") { Environment.ExitCode = Modules.Scene3D.SelfTest3D.Run(args[2]); return; }
+            if (args[1] == "clip") { Environment.ExitCode = Modules.ClipImport.ClipSelfTest.Run(args[2]); return; }   // 합성 .clip 가져오기
             if (args[1] == "brushes")
             {
                 var res = Modules.BrushEngine.SelfTest.Run(args[2]);

@@ -31,7 +31,7 @@ public static class FileCommands
     public static void Open()
     {
         if (!ConfirmDiscard()) return;
-        using var dlg = new OpenFileDialog { Filter = "ComicPad·이미지|*.cpad;*.png;*.jpg;*.jpeg;*.bmp;*.gif;*.webp;*.psd;*.psb|ComicPad (*.cpad)|*.cpad|모든 파일|*.*", InitialDirectory = ProjectsDir };
+        using var dlg = new OpenFileDialog { Filter = "ComicPad·이미지|*.cpad;*.png;*.jpg;*.jpeg;*.bmp;*.gif;*.webp;*.psd;*.psb;*.clip|ComicPad (*.cpad)|*.cpad|클립 스튜디오 (*.clip)|*.clip|모든 파일|*.*", InitialDirectory = ProjectsDir };
         if (dlg.ShowDialog(App.Main) != DialogResult.OK) return;
         OpenPath(dlg.FileName);
     }
