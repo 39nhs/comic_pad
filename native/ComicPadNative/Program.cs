@@ -56,6 +56,7 @@ static class Program
             if (args[1] == "switch") { Environment.ExitCode = Modules.Shell2.AppSwitchTest.Run(args[2]); return; }   // 웹 판 ↔ 네이티브 판 오가기·설정 가져오기
             if (args[1] == "vectortools") { Environment.ExitCode = Modules.VectorTools.VectorToolsTest.Run(args[2]); return; }
             if (args[1] == "pendiag") { Environment.ExitCode = Modules.PenDiagnosis.PenDiagTest.Run(args[2]); return; }   // 펜 진단 (만든 포인터 점으로)
+            if (args[1] == "workflow") { Environment.ExitCode = Modules.Workflow.WorkflowTest.Run(args[2]); return; }   // 작업 일정·참고 자료 보드·A/B 비교·피드백 보기
             if (args[1] == "brushes")
             {
                 var res = Modules.BrushEngine.SelfTest.Run(args[2]);
