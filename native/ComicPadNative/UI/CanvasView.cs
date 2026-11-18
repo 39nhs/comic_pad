@@ -1,5 +1,7 @@
-// 그림판: 펜·마우스·터치를 Windows 포인터 메시지로 직접 받아 도구로, 문서를 합성해 화면에 바로 올림(GDI).
+// 그림판: 펜·마우스·터치를 Windows 포인터 메시지로 직접 받아 도구로, 문서를 합성해 화면에 바로 올림(GDI 또는 GPU).
 //  - 합성 결과는 문서 크기 캐시(comp)에 두고, 바뀐 영역만 다시 합성 → 화면은 캐시에서 확대·회전해 그림
+//  - 그래픽 가속(설정 gpu, Gpu/): 켜져 있으면 합성·확대·회전·선택 테두리를 GPU 로 (Gpu.GpuView), 겹침 그림은 GDI+ 그대로.
+//    GPU 가 없거나 오류(장치 빠짐 등)면 창을 새로 만들어 예전 GDI 길로 자동으로 돌아감
 //  - 펜: 지난번 이후 모든 점, 1픽셀보다 작은 위치, 필압·기울기, 측면 버튼(스포이트), 지우개 끝(지우개)
 //  - 손가락: 1개 이동, 2개 확대·회전 / 펜이 가까이 있으면 손바닥으로 보고 무시
 //  - 스페이스+끌기·가운데 버튼 = 이동, Ctrl+스페이스 = 확대, Shift+스페이스 = 회전, Alt = 스포이트
@@ -44,15 +46,134 @@ public sealed class CanvasView : Control
         SetStyle(ControlStyles.Opaque | ControlStyles.AllPaintingInWmPaint | ControlStyles.UserPaint | ControlStyles.Selectable, true);
         App.Invalidated += r => { Recomposite(r); Present(); };
         App.ToolChanged += () => { Cursor = CursorOf(App.Tool); Present(); };
-        App.SettingsChanged += () => { if (!SpaceDown && !panning) Cursor = CursorOf(App.Tool); };
+        App.SettingsChanged += () => { if (!SpaceDown && !panning) Cursor = CursorOf(App.Tool); ApplyGpuSetting(); };
         longPress.Tick += (_, _) => LongPressTick();
-        App.DocChanged += () => { comp = null; Fit(); };
+        App.DocChanged += () => { comp = null; gpu?.ResetComp(); Fit(); };
+        App.History.Changed += () => gpu?.NoteSelection(Rect.Empty);   // 선택 바꾸기(제자리 반전 등)는 기록에 남음 → GPU 선택 마스크 확인
     }
 
     protected override void OnHandleCreated(EventArgs e)
     {
         base.OnHandleCreated(e);
         foreach (int k in new[] { 2, 3, 4, 5, 6 }) { int no = 0; SetWindowFeedbackSetting(Handle, k, 0, 4, ref no); }   // 펜 길게 누르기 오른쪽 클릭 등 끔
+        StartGpu();
+    }
+
+    protected override void OnHandleDestroyed(EventArgs e)
+    {
+        var g = gpu; gpu = null;
+        try { g?.Dispose(); } catch { }
+        base.OnHandleDestroyed(e);
+    }
+
+    // ---- 그래픽 가속 (GPU) ---------------------------------------------------------------
+    Gpu.GpuView gpu;
+    int gpuFailures; string gpuMode;
+    bool printing;
+    /// <summary>GPU 로 화면을 그리는 중</summary>
+    public bool GpuActive => gpu != null;
+    /// <summary>GPU 로 합성까지 (끄면 합성은 CPU, 화면만 GPU) — 시험·비교용</summary>
+    public static bool GpuComposite = true;
+    /// <summary>GPU 화면 객체 (시험·시간 재기)</summary>
+    public Gpu.GpuView Gpu_ => gpu;
+    /// <summary>마지막 한 장을 그리고 올리는 데 걸린 시간 (ms)</summary>
+    public double FrameMs;
+    /// <summary>마지막 다시 합성에 걸린 시간 (ms)</summary>
+    public double CompositeMs;
+    /// <summary>포인터 메시지 하나를 처리하는 중: GPU 면 중간의 화면 올리기를 모아 마지막 Present(입력 시각) 한 번으로</summary>
+    public bool InputBatch;
+
+    void StartGpu()
+    {
+        gpuMode = Gpu.GpuDevice.Mode;
+        if (gpu != null || !IsHandleCreated || gpuFailures >= 3 || !Gpu.GpuDevice.Wanted) return;
+        try
+        {
+            var dev = Gpu.GpuDevice.Shared;
+            if (dev == null) return;
+            gpu = new Gpu.GpuView(dev, Handle, Math.Max(1, ClientSize.Width), Math.Max(1, ClientSize.Height));
+            FreeDib();
+            bw = gpu.W; bh = gpu.H;
+            comp = null;
+        }
+        catch (Exception ex) { gpu = null; Gpu.GpuDevice.Status = "CPU (GPU 화면을 못 만듦: " + ex.Message + ")"; LogGpu(ex); }
+    }
+
+    /// <summary>설정 gpu 가 바뀌면 GPU ↔ CPU 로 바꿈 (창을 새로 만들어야 GDI 그리기가 다시 보임)</summary>
+    public void ApplyGpuSetting()
+    {
+        string m = Gpu.GpuDevice.Mode;
+        if (gpuMode == null || m == gpuMode) return;
+        gpuMode = m; gpuFailures = 0;
+        SwitchRenderer();
+    }
+
+    void SwitchRenderer()
+    {
+        var g = gpu; gpu = null;
+        try { g?.Dispose(); } catch { }
+        comp = null;
+        FreeDib();
+        if (IsHandleCreated) RecreateHandle();
+        if (IsHandleCreated) { EnsureBuffer(); RedrawAll(); }
+    }
+
+    /// <summary>GPU 오류 (장치 빠짐·드라이버 재시작 등): 장치를 버리고 다시 만들어 보거나(3번까지) CPU 로</summary>
+    void GpuFailed(Exception ex, bool count = true)
+    {
+        LogGpu(ex);
+        if (count) gpuFailures++;
+        Gpu.GpuDevice.ResetShared(gpuFailures < 3);
+        Gpu.GpuDevice.Status = gpuFailures < 3 ? "GPU 다시 시작 (" + ex.Message + ")" : "CPU (GPU 오류: " + ex.Message + ")";
+        var g = gpu; gpu = null;
+        try { g?.Dispose(); } catch { }
+        comp = null;
+        if (IsHandleCreated) BeginInvoke((Action)(() => { if (gpu == null) SwitchRenderer(); }));
+    }
+    /// <summary>시험용: 장치가 빠진 것처럼 (다시 만들기·CPU 로 돌아가기 확인)</summary>
+    public void SimulateGpuFailure() { if (gpu != null) GpuFailed(new InvalidOperationException("시험: 장치 빠짐")); }
+    static void LogGpu(Exception ex)
+    {
+        try { File.AppendAllText(Path.Combine(Path.GetTempPath(), "comicpad-native-error.log"), $"{DateTime.Now} GPU: {ex}\r\n"); } catch { }
+    }
+
+    bool CompReady => gpu != null ? gpu.CompReady && App.Doc != null && gpu.CompW == App.Doc.W && gpu.CompH == App.Doc.H : comp != null;
+
+    /// <summary>GPU 로 한 장 그려 올림. area = 바뀐 화면 영역만 (null = 전체)</summary>
+    void RenderGpuFrame(Rectangle? area = null)
+    {
+        if (gpu == null) return;
+        long t0 = Stopwatch.GetTimestamp();
+        try
+        {
+            var d = App.Doc;
+            if (!gpu.Render(V, CompReady ? d : null, d != null && CrispView?.Invoke(d) == true, area)) { FrameMs = 0; return; }
+            if (!gpu.Present())
+            {
+                // 그래픽 카드 구성이 바뀜(모니터·도킹 등) = 고장 아님 → 새 장치로 (실패 횟수에 넣지 않음)
+                if (gpu.AdapterChanged) { GpuFailed(new InvalidOperationException(gpu.Error), count: false); return; }
+                throw new InvalidOperationException(gpu.Error ?? "Present 실패");
+            }
+        }
+        catch (Exception ex) { GpuFailed(ex); return; }
+        FrameMs = (Stopwatch.GetTimestamp() - t0) * 1000.0 / Stopwatch.Frequency;
+    }
+
+    /// <summary>지금 화면을 그림으로 (GPU 면 GPU 가 그린 것을 읽어 옴)</summary>
+    public unsafe Bitmap Snapshot()
+    {
+        if (gpu != null)
+        {
+            var d = App.Doc;
+            gpu.Render(V, CompReady ? d : null, d != null && CrispView?.Invoke(d) == true);
+            return gpu.Snapshot();
+        }
+        EnsureBuffer();
+        var bmp = new Bitmap(bw, bh, System.Drawing.Imaging.PixelFormat.Format32bppArgb);
+        var bd = bmp.LockBits(new Rectangle(0, 0, bw, bh), System.Drawing.Imaging.ImageLockMode.WriteOnly, System.Drawing.Imaging.PixelFormat.Format32bppArgb);
+        for (int y = 0; y < bh; y++) { uint* s = bits + y * bw, dd = (uint*)((byte*)bd.Scan0 + (long)y * bd.Stride); for (int x = 0; x < bw; x++) dd[x] = s[x] | 0xFF000000; }
+        bmp.UnlockBits(bd);
+        return bmp;
     }
 
     // ---- 합성 캐시 ---------------------------------------------------------------
@@ -60,6 +181,7 @@ public sealed class CanvasView : Control
     {
         var d = App.Doc;
         if (d == null) return;
+        if (gpu != null) { RecompositeGpu(d, r); return; }
         if (comp == null || comp.W != d.W || comp.H != d.H) { comp = new Surface(d.W, d.H); r = new Rect(0, 0, d.W, d.H); }
         r = r.Clip(d.W, d.H);
         if (r.IsEmpty) return;
@@ -76,12 +198,50 @@ public sealed class CanvasView : Control
     }
     Rectangle pendingScreen = Rectangle.Empty;
 
+    /// <summary>GPU 화면일 때: GPU 합성(못 하는 레이어만 CPU) 또는 CPU 합성 후 그 영역만 올림</summary>
+    void RecompositeGpu(Document d, Rect r)
+    {
+        long t0 = Stopwatch.GetTimestamp();
+        try
+        {
+            if (gpu.EnsureComp(d.W, d.H) || !gpu.CompReady) r = new Rect(0, 0, d.W, d.H);
+            gpu.NoteSelection(r);
+            r = r.Clip(d.W, d.H);
+            if (r.IsEmpty) return;
+            var o = new RenderOptions { Onion = true };
+            if (GpuComposite && Gpu.GpuCompositor.Supports(d, o)) gpu.Composite(d, r, o);
+            else
+            {
+                for (int y = r.Y; y < r.B; y += Surface.TS)
+                    for (int x = r.X; x < r.R; x += Surface.TS)
+                    {
+                        var part = Rect.FromLTRB(x, y, Math.Min(r.R, x + Surface.TS), Math.Min(r.B, y + Surface.TS));
+                        gpu.UploadRect(part, App.Comp.Render(d, part, o));
+                    }
+                gpu.CompReady = true;
+            }
+        }
+        catch (Exception ex) { GpuFailed(ex); return; }
+        CompositeMs = (Stopwatch.GetTimestamp() - t0) * 1000.0 / Stopwatch.Frequency;
+        var sr = DocToScreen(r);
+        pendingScreen = pendingScreen.IsEmpty ? sr : Rectangle.Union(pendingScreen, sr);
+    }
+
     // ---- 화면 버퍼 -----------------------------------------------------------------
     unsafe void EnsureBuffer()
     {
         int w = Math.Max(1, ClientSize.Width), h = Math.Max(1, ClientSize.Height);
+        if (gpu != null)
+        {
+            // GPU: 스왑 체인 크기만 맞춤 (최소화로 0 이면 그대로)
+            if (ClientSize.Width > 0 && ClientSize.Height > 0 && (w != gpu.W || h != gpu.H))
+            {
+                try { gpu.Resize(w, h); } catch (Exception ex) { GpuFailed(ex); }
+            }
+            if (gpu != null) { bw = gpu.W; bh = gpu.H; return; }
+        }
         if (dib != IntPtr.Zero && w == bw && h == bh) return;
-        if (dib != IntPtr.Zero) { SelectObject(memDC, oldBmp); DeleteObject(dib); DeleteDC(memDC); }
+        FreeDib();
         var bi = new BITMAPINFO { biSize = 40, biWidth = w, biHeight = -h, biPlanes = 1, biBitCount = 32 };
         memDC = CreateCompatibleDC(IntPtr.Zero);
         dib = CreateDIBSection(memDC, ref bi, 0, out IntPtr p, IntPtr.Zero, 0);
@@ -90,10 +250,34 @@ public sealed class CanvasView : Control
         RenderScreen(new Rectangle(0, 0, w, h));
     }
 
-    protected override void OnResize(EventArgs e) { base.OnResize(e); if (IsHandleCreated) { EnsureBuffer(); RenderScreen(new Rectangle(0, 0, bw, bh)); Invalidate(); } }
+    unsafe void FreeDib()
+    {
+        if (dib == IntPtr.Zero) return;
+        SelectObject(memDC, oldBmp); DeleteObject(dib); DeleteDC(memDC);
+        dib = IntPtr.Zero; memDC = IntPtr.Zero; bits = null;
+    }
+
+    protected override void OnResize(EventArgs e)
+    {
+        base.OnResize(e);
+        if (!IsHandleCreated) return;
+        if (gpu != null) { EnsureBuffer(); if (gpu != null && ClientSize.Width > 0 && ClientSize.Height > 0) RedrawAll(); return; }
+        EnsureBuffer(); RenderScreen(new Rectangle(0, 0, bw, bh)); Invalidate();
+    }
 
     protected override void OnPaint(PaintEventArgs e)
     {
+        if (gpu != null)
+        {
+            EnsureBuffer();
+            if (gpu != null)
+            {
+                // DrawToBitmap(화면 찍기) 이면 GPU 가 그린 화면을 읽어서, 보통 그리기면 다시 올림
+                if (printing) { try { using var shot = Snapshot(); e.Graphics.DrawImageUnscaled(shot, 0, 0); } catch (Exception ex) { LogGpu(ex); } }
+                else RenderGpuFrame();
+                return;
+            }
+        }
         EnsureBuffer();
         IntPtr hdc = e.Graphics.GetHdc();
         BitBlt(hdc, 0, 0, bw, bh, memDC, 0, 0, SRCCOPY);
@@ -178,6 +362,11 @@ public sealed class CanvasView : Control
     public void Present(long inputQpc = 0)
     {
         if (!IsHandleCreated) return;
+        if (gpu != null)
+        {
+            if (InputBatch && inputQpc == 0) return;   // 이 메시지 끝의 Present(입력 시각) 가 한 번에 그림
+            PresentGpu(inputQpc); return;
+        }
         EnsureBuffer();
         var dirty = pendingScreen;
         pendingScreen = Rectangle.Empty;
@@ -210,6 +399,50 @@ public sealed class CanvasView : Control
         }
     }
     static Rectangle Nz(Rectangle r) => r.IsEmpty ? Rectangle.Empty : r;
+
+    /// <summary>GPU 화면: 겹침 그림만 GDI+ 로 (CPU 길과 같은 규칙으로 지우고 다시 그림), 화면 전체는 GPU 가 새로 그려 올림</summary>
+    void PresentGpu(long inputQpc)
+    {
+        EnsureBuffer();
+        if (gpu == null) return;
+        var dirty = pendingScreen;
+        pendingScreen = Rectangle.Empty;
+        var ov = OverlayRect();
+        try
+        {
+            if (!lastOverlay.IsEmpty) gpu.ClearOverlay(lastOverlay);
+            if (!dirty.IsEmpty) gpu.ClearOverlay(dirty);
+            var re = Rectangle.Union(Nz(dirty), Nz(lastOverlay));
+            if (!re.IsEmpty && Registry.Overlays.Count > 0 && App.Doc != null)
+            {
+                using var g0 = OverlayGraphics(); g0.SetClip(re); DrawGlobalOverlays(g0);
+                gpu.MarkOverlay(re);
+            }
+            if (!ov.IsEmpty)
+            {
+                using var g = OverlayGraphics();
+                g.SmoothingMode = System.Drawing.Drawing2D.SmoothingMode.AntiAlias;
+                DrawOverlay(g);
+                gpu.MarkOverlay(ov);
+            }
+        }
+        catch (Exception ex) { LogGpu(ex); }
+        var all = Rectangle.Union(Rectangle.Union(Nz(dirty), Nz(lastOverlay)), Nz(ov));
+        if (all.IsEmpty) all = dirty.IsEmpty ? (lastOverlay.IsEmpty ? ov : lastOverlay) : dirty;
+        lastOverlay = ov;
+        RenderGpuFrame(all);
+        if (inputQpc > 0)
+        {
+            double ms = (Stopwatch.GetTimestamp() - inputQpc) * 1000.0 / Stopwatch.Frequency;
+            if (ms >= 0 && ms < 500) LatencyMs = LatencyMs == 0 ? ms : LatencyMs * 0.9 + ms * 0.1;
+        }
+    }
+    Graphics OverlayGraphics()
+    {
+        var g = gpu.OverlayGraphics();
+        g.TextRenderingHint = System.Drawing.Text.TextRenderingHint.AntiAliasGridFit;   // 투명 바탕이라 ClearType 대신 회색 다듬기
+        return g;
+    }
 
     Rectangle OverlayRect()
     {
@@ -258,6 +491,28 @@ public sealed class CanvasView : Control
     }
     public void RedrawAll()
     {
+        if (gpu != null)
+        {
+            if (!CompReady) App.InvalidateAll();
+            if (gpu == null) { RedrawAll(); return; }
+            pendingScreen = Rectangle.Empty;
+            try
+            {
+                gpu.ClearOverlay(new Rectangle(0, 0, gpu.W, gpu.H));
+                lastOverlay = Rectangle.Empty;
+                if (App.Doc != null)
+                {
+                    using var g = OverlayGraphics();
+                    DrawGlobalOverlays(g);
+                    var ov = OverlayRect();
+                    if (!ov.IsEmpty && App.Tool != null) { g.SmoothingMode = System.Drawing.Drawing2D.SmoothingMode.AntiAlias; DrawOverlay(g); lastOverlay = ov; }
+                }
+            }
+            catch (Exception ex) { LogGpu(ex); }
+            RenderGpuFrame();
+            ViewChanged?.Invoke();
+            return;
+        }
         if (comp == null) App.InvalidateAll();
         RenderScreen(new Rectangle(0, 0, bw, bh)); lastOverlay = Rectangle.Empty;
         if (dib != IntPtr.Zero && App.Doc != null)
@@ -311,6 +566,11 @@ public sealed class CanvasView : Control
                 return;
             }
             case WM_POINTERACTIVATE: m.Result = (IntPtr)1; return;   // PA_ACTIVATE
+            case WM_PRINTCLIENT:
+                // DrawToBitmap(화면 찍기): GPU 화면은 창 DC 로 못 읽으므로 OnPaint 가 GPU 결과를 읽어 그리게
+                printing = true;
+                try { base.WndProc(ref m); } finally { printing = false; }
+                return;
         }
         base.WndProc(ref m);
     }
@@ -360,6 +620,9 @@ public sealed class CanvasView : Control
         }
         var origin = PointToScreen(Point.Empty);
         long qpc = 0;
+        InputBatch = true;
+        try
+        {
         for (int i = (int)n - 1; i >= 0; i--)
         {
             var a = Args(ref hist[i], type, origin);
@@ -386,6 +649,8 @@ public sealed class CanvasView : Control
                 else App.Tool?.Hover(a);
             }
         }
+        }
+        finally { InputBatch = false; }
         if (m.Msg == WM_POINTERDOWN) { Capture = true; Focus(); }
         if (m.Msg == WM_POINTERUP) Capture = false;
         Present(qpc);
@@ -581,12 +846,14 @@ public sealed class CanvasView : Control
 
     protected override void Dispose(bool disposing)
     {
-        if (dib != IntPtr.Zero) { SelectObject(memDC, oldBmp); DeleteObject(dib); DeleteDC(memDC); dib = IntPtr.Zero; }
+        FreeDib();
+        var g = gpu; gpu = null;
+        try { g?.Dispose(); } catch { }
         base.Dispose(disposing);
     }
 
     // ---- Win32 -------------------------------------------------------------------
-    const int WM_POINTERUPDATE = 0x245, WM_POINTERDOWN = 0x246, WM_POINTERUP = 0x247, WM_POINTERLEAVE = 0x24A, WM_POINTERACTIVATE = 0x24B, WM_POINTERCAPTURECHANGED = 0x24C, WM_MOUSEWHEEL = 0x20A;
+    const int WM_POINTERUPDATE = 0x245, WM_POINTERDOWN = 0x246, WM_POINTERUP = 0x247, WM_POINTERLEAVE = 0x24A, WM_POINTERACTIVATE = 0x24B, WM_POINTERCAPTURECHANGED = 0x24C, WM_MOUSEWHEEL = 0x20A, WM_PRINTCLIENT = 0x318;
     const int PT_TOUCH = 2, PT_PEN = 3;
     const int POINTER_FLAG_INCONTACT = 0x4, POINTER_FLAG_FIRSTBUTTON = 0x10, POINTER_FLAG_SECONDBUTTON = 0x20, POINTER_FLAG_THIRDBUTTON = 0x40;
     const int PEN_FLAG_BARREL = 1, PEN_FLAG_INVERTED = 2, PEN_FLAG_ERASER = 4;
