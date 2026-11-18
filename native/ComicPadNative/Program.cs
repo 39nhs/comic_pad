@@ -51,6 +51,7 @@ static class Program
             if (args[1] == "menus") { Environment.ExitCode = UI.Chrome.WebMenus.Report(args[2]); return; }   // 위 메뉴 ↔ 웹 판 대조
             if (args[1] == "3d") { Environment.ExitCode = Modules.Scene3D.SelfTest3D.Run(args[2]); return; }
             if (args[1] == "vrig2") { Environment.ExitCode = Modules.VRig2.RigSelfTest.Run(args[2]); return; }
+            if (args[1] == "lettering") { Environment.ExitCode = Modules.Lettering.LetteringTest.Run(args[2]); return; }   // 번역·식자·폰 미리보기
             if (args[1] == "clip") { Environment.ExitCode = Modules.ClipImport.ClipSelfTest.Run(args[2]); return; }   // 합성 .clip 가져오기
             if (args[1] == "switch") { Environment.ExitCode = Modules.Shell2.AppSwitchTest.Run(args[2]); return; }   // 웹 판 ↔ 네이티브 판 오가기·설정 가져오기
             if (args[1] == "vectortools") { Environment.ExitCode = Modules.VectorTools.VectorToolsTest.Run(args[2]); return; }

@@ -210,7 +210,14 @@ public static class Bubbles
     {
         var m = J.Clone(baseMeta);
         if (m["mat"] is JsonArray mat && mat.Count >= 6) { mat[4] = J.R(J.Num(mat[4]) + dx); mat[5] = J.R(J.Num(mat[5]) + dy); }
-        else { m["x"] = J.R(J.Num(m, "x") + dx); m["y"] = J.R(J.Num(m, "y") + dy); }
+        else
+        {
+            m["x"] = J.R(J.Num(m, "x") + dx); m["y"] = J.R(J.Num(m, "y") + dy);
+            // 번역본(meta.i18n)이 따로 놓인 자리도 함께 옮김
+            if (m["i18n"] is JsonObject all)
+                foreach (var (_, v) in all)
+                    if (v is JsonObject t && t["x"] != null && t["y"] != null) { t["x"] = J.R(J.Num(t, "x") + dx); t["y"] = J.R(J.Num(t, "y") + dy); }
+        }
         return m;
     }
 
@@ -274,6 +281,9 @@ public sealed class BubbleTool : ToolBase
         };
         return b;
     }
+
+    /// <summary>고른 말풍선 (번역·식자 모듈의 "말풍선에 맞추기")</summary>
+    public JsonObject SelectedBubble => Selected();
 
     JsonObject Selected()
     {
@@ -577,6 +587,8 @@ public sealed class BubbleTool : ToolBase
                     else { var bl = sel.Value.l; string id = sel.Value.id; TextTool.CreateAt(J.Num(cur, "x") + J.Num(cur, "w") / 2, J.Num(cur, "y") + J.Num(cur, "h") / 2, center: true, also: tl => LinkText(bl, id, tl)); }
                 }),
                 Opt.Button("삭제", () => DeleteSelected()));
+            if (J.Str(b, "textId") is { } fitId && App.Doc?.ById(fitId)?.Kind == "text")
+                yield return Opt.Button("대사를 풍선에 맞추기 (크기·줄바꿈)", () => Lettering.LetteringUi.FitBubbleText(fitId));
             string grp = J.Str(b, "group");
             if (grp != null)
                 yield return Opt.Button("이어 붙인 것 떼기", () => { UnGroup(grp); host?.Rebuild(); });
