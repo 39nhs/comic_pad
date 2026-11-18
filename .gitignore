@@ -21,3 +21,7 @@ release_key.json
 # 네이티브 시제품 빌드 결과
 native/**/bin/
 native/**/obj/
+
+# tools/ui_compare.py 결과 (웹 ↔ 네이티브 화면 비교 보고서·그림) 와 그 Playwright venv
+native/ui_compare/
+tools/.pwenv/

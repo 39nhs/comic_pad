@@ -44,22 +44,28 @@ public static class UiShot
         {
             f.ClientSize = new Size(1600, 900);
             Pump(5);
-            string run = Environment.GetEnvironmentVariable("COMICPAD_UI_SHOT_RUN") ?? "";
+            string runAll = Environment.GetEnvironmentVariable("COMICPAD_UI_SHOT_RUN") ?? "";
             var popups = new List<ToolStripDropDown>();
-            if (run.StartsWith("menu:"))
+            // 여러 단계는 " ; " 로 (예: "tool:fill ; tab:tool") — tools/ui_compare.py
+            foreach (var step in runAll.Split(" ; ", StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries).DefaultIfEmpty(""))
             {
-                var parts = run[5..].Split(':');
-                var ti = f.TopBar.Open(parts[0], parts.Length > 1 && parts[1] == "all");
-                Pump(8);
-                if (ti != null) popups.Add(ti.DropDown);
+                string run = step;
+                if (run.StartsWith("menu:"))
+                {
+                    var parts = run[5..].Split(':');
+                    var ti = f.TopBar.Open(parts[0], parts.Length > 1 && parts[1] == "all");
+                    Pump(8);
+                    if (ti != null) popups.Add(ti.DropDown);
+                }
+                else if (run == "more") { f.Tools.OpenMore(); Pump(8); if (f.Tools.LastPopup != null) popups.Add(f.Tools.LastPopup); }
+                else if (run.StartsWith("tool:")) { App.SetTool(Modules.Extras.KeyMap.NativeTool(run[5..])); Pump(10); }
+                else if (run.StartsWith("tab:")) { f.Side.ShowTab(run[4..]); Pump(10); }   // 오른쪽 패널 탭 (웹 패널 id: color, nav, layers …)
+                else if (run.StartsWith("web:")) { f.BeginInvoke((Action)(() => WebIds.Run(run[4..]))); Pump(30); }
+                else if (run.Length > 0 && Registry.Commands.TryGetValue(run, out var cmd)) { f.BeginInvoke(cmd); Pump(30); }
             }
-            else if (run == "more") { f.Tools.OpenMore(); Pump(8); if (f.Tools.LastPopup != null) popups.Add(f.Tools.LastPopup); }
-            else if (run.StartsWith("tool:")) { App.SetTool(run[5..]); Pump(10); }
-            else if (run.StartsWith("web:")) { f.BeginInvoke((Action)(() => WebIds.Run(run[4..]))); Pump(30); }
-            else if (run.Length > 0 && Registry.Commands.TryGetValue(run, out var cmd)) { f.BeginInvoke(cmd); Pump(30); }
             Save(f, shot, popups);
             // 배치 기록 (웹 판 layout.json 과 맞대 보기)
-            Rectangle B(Control c) => c.Visible ? f.RectangleToClient(c.RectangleToScreen(c.ClientRectangle)) : Rectangle.Empty;
+            Rectangle B(Control c) => c != null && c.Visible ? f.RectangleToClient(c.RectangleToScreen(c.ClientRectangle)) : Rectangle.Empty;
             File.WriteAllLines(shot + ".txt", new[]
             {
                 $"topbar {B(f.TopBar)}", $"menubar {B(f.MenuBar)}", $"toolbar {B(f.Tools)}", $"stage {B(f.Canvas)}", $"sidepanel {B(f.Side)}", $"bottombar {B(f.BottomBar)}", $"statusbar {B(f.Status)}",
@@ -67,11 +73,16 @@ public static class UiShot
                 "menus: " + string.Join(" ", f.MenuBar.Items.Cast<ToolStripItem>().Where(i => i.Visible).Select(i => $"{i.Text}@{i.Bounds.X}")),
                 "tools: " + string.Join(" ", f.Tools.Shown.Select(t => t.Id)),
                 "popups: " + string.Join(" ; ", popups.Where(p => p != null).Select(p => $"{p.Bounds} pad={p.Padding} items=" + string.Join(",", p.Items.Cast<ToolStripItem>().Take(3).Select(i => i.Bounds.ToString())))),
+                // 웹 #dock-top · #dock-bottom · 펼친 메뉴 (.menu) 와 맞대 보기용 (창 안쪽 좌표)
+                $"dock_top {B(Docks(f).ElementAtOrDefault(0))}", $"dock_bottom {B(Docks(f).ElementAtOrDefault(1))}",
+                $"popup {(popups.FirstOrDefault(p => p != null && p.Visible) is { } pp ? new Rectangle(f.PointToClient(pp.Bounds.Location), pp.Size) : Rectangle.Empty)}",
             });
         }
         catch (Exception ex) { File.WriteAllText(shot + ".error.txt", ex.ToString()); }
         Environment.Exit(0);
     }
+
+    static List<Control> Docks(MainForm f) => f.Side.Controls.Cast<Control>().Where(c => c.GetType().Name == "DockArea").ToList();
 
     static IEnumerable<Control> All(Control root) { foreach (Control c in root.Controls) { yield return c; foreach (var k in All(c)) yield return k; } }
 

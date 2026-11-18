@@ -27,6 +27,7 @@ public static class CrashHandler
     public static bool Handle(Exception ex, string command, bool fatal)
     {
         if (!Active || ex == null) return false;
+        if (!Headless && (Shell2.GuiTest.On || UI.Chrome.UiShot.Active)) return false;   // 화면 자동 시험·화면 찍기 중에는 예전처럼 (창을 띄우지 않음)
         lock (gate)
         {
             if (busy) return false;   // 처리 중에 또 오류 (저장·보고서 만들기 안에서) → 예전처럼
