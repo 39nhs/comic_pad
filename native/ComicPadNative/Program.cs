@@ -45,6 +45,7 @@ static class Program
                 File.WriteAllLines(Path.Combine(args[2], "icons_order.txt"), names);
                 return;
             }
+            if (args[1] == "gpu") { Environment.ExitCode = Gpu.GpuSelfTest.Run(args[2]); return; }   // GPU 합성·화면 = CPU, 시간 재기
             if (args[1] == "gaps") { Environment.ExitCode = Modules.Gaps.GapsTest.Run(args[2]); return; }
             if (args[1] == "script") { Environment.ExitCode = Modules.Comic.ScriptTest.Run(args[2]); return; }
             if (args[1] == "menus") { Environment.ExitCode = UI.Chrome.WebMenus.Report(args[2]); return; }   // 위 메뉴 ↔ 웹 판 대조

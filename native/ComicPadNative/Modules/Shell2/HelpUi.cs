@@ -179,6 +179,7 @@ public static class HelpUi
         sb.AppendLine($"- Windows: {RuntimeInformation.OSDescription} {RuntimeInformation.OSArchitecture}");
         var scr = Screen.PrimaryScreen;
         sb.AppendLine($"- 화면: {scr?.Bounds.Width}×{scr?.Bounds.Height}, 펜 입력: {(Shell2Ui.Canvas?.PenRate > 0 ? $"있음 ({Shell2Ui.Canvas.PenRate}점/초)" : "?")}");
+        sb.AppendLine($"- 그래픽 가속: {(Shell2Ui.Canvas?.GpuActive == true ? "" : "(그림판은 CPU) ")}{Gpu.GpuDevice.Status}");
         sb.AppendLine($"- 메모리: {Environment.WorkingSet / 1_000_000}MB 사용 중");
         sb.AppendLine().AppendLine("## 최근 오류");
         string log = Path.Combine(Path.GetTempPath(), "comicpad-native-error.log");

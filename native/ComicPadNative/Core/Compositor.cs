@@ -47,10 +47,8 @@ public sealed class Compositor
     /// <summary>문서의 영역 r 을 합성해서 r.W*r.H 배열로 (미리 곱한 알파)</summary>
     public uint[] Render(Document d, Rect r, RenderOptions opt = null)
     {
-        doc = d; o = opt ?? new RenderOptions();
+        Begin(d, opt);
         var buf = new uint[r.W * r.H];
-        kids = new();
-        foreach (var l in d.Layers) { var p = d.ParentOf(l) ?? ""; if (!kids.TryGetValue(p, out var list)) kids[p] = list = new(); list.Add(l); }
         List<Layer> roots = o.Only != null ? d.Layers.Where(l => o.Only.Contains(l) && !l.IsFolder).ToList() : kids.GetValueOrDefault("") ?? new();
         bool paper = o.Paper && d.PaperVisible;
         bool paperInLevel = paper && roots.Any(l => l.IsAdjust && !l.Clip && l.Visible);
@@ -58,6 +56,14 @@ public sealed class Compositor
         RenderList(buf, r, roots, 0, paperInLevel);
         if (paper) Hooks.PaperOver(buf, r, d);
         return buf;
+    }
+
+    /// <summary>문서·옵션·폴더 구조를 준비 (Render 가 부름. GPU 합성이 레이어 하나만 CPU 로 그릴 때 RenderLayer 전에 부름)</summary>
+    public void Begin(Document d, RenderOptions opt)
+    {
+        doc = d; o = opt ?? new RenderOptions();
+        kids = new();
+        foreach (var l in d.Layers) { var p = d.ParentOf(l) ?? ""; if (!kids.TryGetValue(p, out var list)) kids[p] = list = new(); list.Add(l); }
     }
 
     public List<Layer> KidsOf(Layer f) => kids.GetValueOrDefault(f?.Id ?? "") ?? new();

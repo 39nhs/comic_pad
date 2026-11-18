@@ -37,6 +37,8 @@ public static class Shell2Settings
             Opt.Check("큰 버튼 (터치용)", () => App.Get("largeUI", false), v => { App.Set("largeUI", v); UiMode.ApplyLarge(); }),
             Opt.Check("왼손잡이 배치 (패널을 왼쪽에)", () => App.Get("leftHanded", false), v => { App.Set("leftHanded", v); Workspaces.ApplyLayout(); }),
             Opt.Check("간단히 보기 (자주 쓰는 도구·메뉴만)", () => UiMode.IsSimple, v => UiMode.SetMode(v ? "simple" : "full")),
+            Opt.Choice("그래픽 가속 (GPU)", new[] { ("auto", "자동 (그래픽 카드가 있으면 GPU)"), ("on", "켜기 (카드가 없으면 소프트웨어 D3D)"), ("off", "끄기 (CPU 만)") }, () => App.Get("gpu", "auto"), v => App.Set("gpu", v)),
+            W(Opt.Help("그림판 화면(확대·회전·선택 테두리)과 레이어 합성을 Direct3D 11 로. 결과는 CPU 와 같고, 효과·조정 계산 등 GPU 가 못 하는 부분만 CPU 로 합니다. 지금: " + Gpu.GpuDevice.Status)),
             Opt.Slider("격자 간격 (px)", 10, 500, () => App.Get("gridSize", 100.0), v => { App.Set("gridSize", Math.Round(v / 10) * 10); Shell2Ui.Canvas?.RedrawAll(); }, step: 10),
             Opt.Row(Opt.Button("화면 꾸미기…", UiMode.Customize), Opt.Button("퀵바 버튼…", Bars.EditQuick), Opt.Button("아래 막대 버튼…", Bars.EditBottom)));
         Add(Opt.Title("저장"),

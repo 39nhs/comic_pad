@@ -18,5 +18,35 @@
   <ItemGroup>
     <!-- AI 기능 (선화·따기·깊이·키우기·AI 고르기): 마이크로소프트 ONNX Runtime, 그래픽 가속(DirectML) 포함 -->
     <PackageReference Include="Microsoft.ML.OnnxRuntime.DirectML" Version="1.20.1" />
+    <!-- 그래픽 가속 (Gpu/): Direct3D 11 + DXGI 연결 (Vortice.Windows, MIT). 셰이더 컴파일러는 윈도우에 들어 있는 d3dcompiler_47 -->
+    <PackageReference Include="Vortice.Direct3D11" Version="3.8.3" />
+    <PackageReference Include="Vortice.DXGI" Version="3.8.3" />
+    <PackageReference Include="Vortice.D3DCompiler" Version="3.8.3" />
+  </ItemGroup>
+  <!-- GPU 셰이더: 빌드할 때 Windows SDK 의 fxc 로 미리 컴파일해 넣음 (없으면 실행할 때 HLSL 원본을 컴파일) -->
+  <ItemGroup>
+    <GpuShader Include="Gpu\Shaders\Composite.hlsl" Entry="CSMain" Profile="cs_5_0" />
+    <GpuShader Include="Gpu\Shaders\View.hlsl" Entry="VSMain" Profile="vs_5_0" />
+    <GpuShader Include="Gpu\Shaders\View.hlsl" Entry="PSCanvas" Profile="ps_5_0" />
+    <EmbeddedResource Include="Gpu\Shaders\*.hlsl" LogicalName="ComicPadNative.Gpu.Shaders.%(Filename).hlsl" />
+  </ItemGroup>
+  <Target Name="CompileGpuShaders" BeforeTargets="PrepareForBuild">
+    <ItemGroup>
+      <FxcCandidate Include="$(MSBuildProgramFiles32)\Windows Kits\10\bin\10.*\x64\fxc.exe" />
+    </ItemGroup>
+    <PropertyGroup>
+      <FxcExe Condition="'%(FxcCandidate.Identity)' != ''">%(FxcCandidate.FullPath)</FxcExe>
+      <GpuShaderDir>$(IntermediateOutputPath)shaders\</GpuShaderDir>
+    </PropertyGroup>
+    <MakeDir Directories="$(GpuShaderDir)" Condition="'$(FxcExe)' != ''" />
+    <Exec Condition="'$(FxcExe)' != ''" Command="&quot;$(FxcExe)&quot; /nologo /T %(GpuShader.Profile) /E %(GpuShader.Entry) /O3 /Fo &quot;$(GpuShaderDir)%(GpuShader.Filename).%(GpuShader.Entry).cso&quot; &quot;%(GpuShader.FullPath)&quot;" StandardOutputImportance="low" />
+    <ItemGroup Condition="'$(FxcExe)' != ''">
+      <_GpuCso Include="$(GpuShaderDir)*.cso" />
+      <EmbeddedResource Include="@(_GpuCso)" LogicalName="ComicPadNative.Gpu.Shaders.%(_GpuCso.Filename).cso" />
+    </ItemGroup>
+  </Target>
+  <ItemGroup>
+    <!-- 함께 들어 있는 라이브러리 라이선스 (빌드·publish 결과의 licenses 폴더로) -->
+    <None Include="..\licenses\*.txt" Link="licenses\%(Filename)%(Extension)" CopyToOutputDirectory="PreserveNewest" />
   </ItemGroup>
 </Project>

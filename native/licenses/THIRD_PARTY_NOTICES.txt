@@ -1,0 +1,17 @@
+ComicPad 네이티브 판 — 함께 들어 있는 것들의 라이선스
+==============================================================================
+ComicPad 자체는 Apache-2.0 (설치 폴더의 LICENSE, NOTICE).
+
+1. ONNX Runtime (Microsoft.ML.OnnxRuntime.DirectML 1.20.1) — MIT
+   AI 모델 실행기. 전문: OnnxRuntime-LICENSE.txt
+2. DirectML (Microsoft.AI.DirectML 1.15.2) — Microsoft 소프트웨어 사용 조건 (재배포 허용 구성 요소)
+   AI 모델을 그래픽 카드로 돌리는 Windows 구성 요소. 전문: DirectML-LICENSE.txt
+3. Vortice.Windows (Vortice.Direct3D11 / Vortice.DXGI / Vortice.D3DCompiler 3.8.3) — MIT
+   그래픽 가속(Direct3D 11) 연결 라이브러리. 전문: Vortice.Windows-LICENSE.txt
+4. Vortice.Mathematics 2.1.0 — MIT. 전문: Vortice.Mathematics-LICENSE.txt
+5. SharpGen.Runtime / SharpGen.Runtime.COM 2.4.2-beta — MIT. 전문: SharpGen-LICENSE.txt
+6. AI 모델 (앱 안에서 받을 때 목록·크기·SHA-256 을 확인하고, 모델 관리 창에 라이선스·출처를 보여 줌)
+   - BlazePose / BlazeHand / BlazeFace (Google MediaPipe, Unity 가 ONNX 로 옮김) — Apache-2.0
+   - FaceMesh (PINTO0309 facemesh_onnx_tensorrt) — Apache-2.0
+   - MediaPipe Iris (keijiro/IrisBarracuda ONNX) — Apache-2.0
+   - MobileSAM, Real-ESRGAN 등 웹 판과 같은 모델 — 웹 판 app/LICENSES.txt 참고
