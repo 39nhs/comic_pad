@@ -113,34 +113,48 @@ public static class ExportCommands
         long maxBytes = v.N("maxMB") > 0 ? (long)(v.N("maxMB") * 1048576) : 0;
         Ui.Busy(() =>
         {
-            using var full = ImageIO.FlattenBitmap(d, W / (double)d.W, 0xFFFFFFFF);
-            var bd = full.LockBits(new Rectangle(0, 0, full.Width, full.Height), ImageLockMode.ReadOnly, PixelFormat.Format32bppArgb);
-            byte* p0 = (byte*)bd.Scan0; int stride = bd.Stride;
-            (int, int, int) Px(int x, int y) { uint c = *(uint*)(p0 + y * stride + x * 4); return ((int)((c >> 16) & 255), (int)((c >> 8) & 255), (int)(c & 255)); }
-            var cuts = new List<int>();
-            int y = 0;
-            while (y < full.Height)
+            int n = 0;
+            foreach (var sl in WebtoonSlicesOf(d, W, H, v.S("fmt"), maxBytes, v.B("smart")))
             {
-                int cut = Math.Min(full.Height, y + H);
-                if (v.B("smart") && cut < full.Height) cut = BestCut(Px, full.Width, cut, (int)Math.Round(H * 0.2), full.Height);
-                if (cut <= y) cut = Math.Min(full.Height, y + H);
-                cuts.Add(cut); y = cut;
-            }
-            full.UnlockBits(bd);
-            int n = 0, prev = 0;
-            foreach (int cut in cuts)
-            {
-                using var c = full.Clone(new Rectangle(0, prev, full.Width, cut - prev), PixelFormat.Format32bppArgb);
-                var bytes = Encode(c, v.S("fmt"), maxBytes);
-                File.WriteAllBytes(Path.Combine(dir, $"{++n:000}.{v.S("fmt")}"), bytes);
-                sizes.Add(bytes.Length);
-                prev = cut;
+                File.WriteAllBytes(Path.Combine(dir, $"{++n:000}.{v.S("fmt")}"), sl.Bytes);
+                sizes.Add(sl.Bytes.Length);
             }
         });
         double total = sizes.Sum() / 1048576.0;
         bool over = maxBytes > 0 && sizes.Any(s => s > maxBytes);
         string totalWarn = preset != null && preset.TotalMB > 0 && total > preset.TotalMB ? $" · ⚠ 합계가 {preset.TotalMB}MB 를 넘습니다" : "";
         App.Toast($"{sizes.Count}장 ({total:0.0}MB){(over ? " · ⚠ 화질을 낮춰도 용량을 넘는 장이 있습니다" : "")}{totalWarn} → data/exports/{folder}");
+    }
+
+    /// <summary>웹툰 규격 내보내기 한 장 (파일로 쓰기 전): 인코딩한 바이트, 합친 그림에서의 위치(가로폭 W 기준 px)</summary>
+    public sealed record WebtoonSlice(byte[] Bytes, int Y, int H);
+
+    /// <summary>웹툰 규격 내보내기의 실제 결과 (가로폭 맞춤 → 나누기 → 장당 용량 맞춤). 내보내기·폰 미리보기가 함께 씀</summary>
+    public static unsafe List<WebtoonSlice> WebtoonSlicesOf(Document d, int W, int H, string fmt, long maxBytes, bool smart)
+    {
+        var res = new List<WebtoonSlice>();
+        using var full = ImageIO.FlattenBitmap(d, W / (double)d.W, 0xFFFFFFFF);
+        var bd = full.LockBits(new Rectangle(0, 0, full.Width, full.Height), ImageLockMode.ReadOnly, PixelFormat.Format32bppArgb);
+        byte* p0 = (byte*)bd.Scan0; int stride = bd.Stride;
+        (int, int, int) Px(int x, int y) { uint c = *(uint*)(p0 + y * stride + x * 4); return ((int)((c >> 16) & 255), (int)((c >> 8) & 255), (int)(c & 255)); }
+        var cuts = new List<int>();
+        int y = 0;
+        while (y < full.Height)
+        {
+            int cut = Math.Min(full.Height, y + H);
+            if (smart && cut < full.Height) cut = BestCut(Px, full.Width, cut, (int)Math.Round(H * 0.2), full.Height);
+            if (cut <= y) cut = Math.Min(full.Height, y + H);
+            cuts.Add(cut); y = cut;
+        }
+        full.UnlockBits(bd);
+        int prev = 0;
+        foreach (int cut in cuts)
+        {
+            using var c = full.Clone(new Rectangle(0, prev, full.Width, cut - prev), PixelFormat.Format32bppArgb);
+            res.Add(new WebtoonSlice(Encode(c, fmt, maxBytes), prev, cut - prev));
+            prev = cut;
+        }
+        return res;
     }
 
     // ---------------------------------------------------------------- 레이어별 PNG

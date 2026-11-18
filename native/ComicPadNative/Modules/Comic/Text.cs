@@ -316,11 +316,15 @@ public sealed class TextTool : ToolBase
         return l;
     }
 
+    /// <summary>편집 갈래 (번역·식자 모듈: 보기 언어가 있으면 번역 편집 창). true = 처리함</summary>
+    public static Func<Layer, bool> EditOverride;
+
     /// <summary>있는 글자(효과음) 레이어 편집</summary>
     public static void Edit(Layer l)
     {
         if (l?.Meta == null) return;
         if (!App.CheckEditable(l)) return;
+        if (EditOverride?.Invoke(l) == true) return;
         if (J.Bool(l.Meta, "sfx")) { SfxDialog.EditExisting(l); return; }
         var prev = new MetaPreview(l);
         bool ok = TextDialog.Show(l, false, prev);

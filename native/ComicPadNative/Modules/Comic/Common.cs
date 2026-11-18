@@ -428,10 +428,12 @@ public static class MetaLayers
         {
             "panel" => Panels.Render(d, l),
             "bubble" => Bubbles.Render(d, l),
-            "text" => J.Bool(l.Meta, "sfx") ? Sfx.Render(d, l) : TextRender.Render(d, l),
+            "text" => TextHook?.Invoke(d, l) ?? (J.Bool(l.Meta, "sfx") ? Sfx.Render(d, l) : TextRender.Render(d, l)),
             _ => (l.Px, Rect.Empty),
         };
     }
+    /// <summary>글자 레이어 그리기 갈래 (번역·식자 모듈: 보기 언어 번역본으로). null 을 돌려주면 원래대로</summary>
+    public static Func<Document, Layer, (Surface s, Rect r)?> TextHook;
     public static bool IsMeta(Layer l) => l?.Meta != null && (l.Kind == "panel" && l.Meta["panels"] is JsonArray || l.Kind == "bubble" && l.Meta["bubbles"] is JsonArray || l.Kind == "text");
 
     /// <summary>새 레이어를 맨 위(또는 지정 위치)에 추가 (실행취소 가능)</summary>
