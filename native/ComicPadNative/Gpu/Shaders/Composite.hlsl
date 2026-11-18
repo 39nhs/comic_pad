@@ -3,6 +3,7 @@
 //  - Tiles: 레이어·마스크 타일 저장소 (256×256 조각 배열). lut 로 "이 조각 영역의 타일 → 칸 번호"
 //  - Src: 다른 작업 버퍼 (폴더·클리핑 결과 등), Dst: 지금 그리는 버퍼 (읽고 쓰기)
 // 합성 모드 번호는 Core.Blend 와 같음.
+#pragma warning(disable : 3556 3577 4000)   // 정수 나머지 속도·isnan 생략 가능·초기화 추정 경고 (일부러 그렇게 씀)
 
 #define OP_LAYER 0   // 레이어 타일을 Dst 에 mode 로 (s==0 이면 건너뜀, Copy·DestIn 제외)
 #define OP_BUF   1   // Src 버퍼를 Dst 에 mode 로 (Compositor.CompositeAll)
