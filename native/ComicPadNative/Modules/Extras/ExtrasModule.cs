@@ -81,7 +81,7 @@ public sealed class ExtrasModule : IModule
 
         // 도움말: 펜 진단·세팅 프리셋·키 바꾸기
         M("도움말/-extras", null, order: 50);
-        M("도움말/펜 필기감 진단 (이 기기·이 펜에 맞추기)…", PenDiag.Dialog, order: 51);
+        // 51: 펜 필기감 진단 → Modules/PenDiag (PenDiagModule)
         M("도움말/초기 세팅 프리셋 고르기 (클립스튜디오식·포토샵식·웹툰·태블릿)…", () => Setup.ChooseDialog(), order: 52);
         M("도움말/내 세팅 내보내기 (.cpset)…", Setup.ExportSetDialog, order: 53);
         M("도움말/세팅 가져오기 (.cpset)…", Setup.ImportSetDialog, order: 54);
