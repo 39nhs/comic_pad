@@ -1,6 +1,7 @@
 ﻿// ComicPad 전용 창: 이 PC 의 ComicPad 서버(server.py)를 켜고, Windows 에 들어 있는 WebView2 로 앱 화면을 띄운다.
 // Edge 창이 아니라 ComicPad 만의 창 (자기 아이콘·작업 표시줄, 주소창·브라우저 알림 없음).
 // 빌드: launcher\build.ps1 (C# 5 / .NET Framework 4.x 의 csc.exe 로)
+// 네이티브 판(베타)으로 바꿔 두었으면(data\config\app.json) 서버·창 없이 네이티브 판을 켜고 끝남 (AppSwitch.cs, Shift = 이번만 웹 판)
 using System;
 using System.Diagnostics;
 using System.Drawing;
@@ -38,6 +39,13 @@ static class Program
         Application.SetUnhandledExceptionMode(UnhandledExceptionMode.CatchException);
         Application.ThreadException += (s, e) => ShowError(e.Exception);
         AppDomain.CurrentDomain.UnhandledException += (s, e) => ShowError(e.ExceptionObject as Exception);
+
+        // 어느 판으로 켤지 (웹 판 / 네이티브 판 베타). --which 결과파일 = 고르기만 하고 파일에 적은 뒤 끝냄 (시험용)
+        string why;
+        string choice = AppSwitch.Choose(args, out why);
+        for (int i = 0; i < args.Length - 1; i++)
+            if (args[i] == "--which") { AppSwitch.WriteWhich(args[i + 1], choice, why); return; }
+        if (choice == "native" && AppSwitch.StartNative(args)) return;   // 네이티브 판이 켜졌으면 서버·웹 창 없이 끝
 
         if (!Ping())
         {
@@ -281,14 +289,20 @@ class AppWindow : Form
             {
                 pen = new PenOverlay(this, web);
                 await c.AddScriptToExecuteOnDocumentCreatedAsync("window.comicpadNative={pen:1,version:1,wintab:" + (Wintab.Available ? "1" : "0") + "};");
-                c.WebMessageReceived += (s3, e3) =>
-                {
-                    string msg = null;
-                    try { msg = e3.TryGetWebMessageAsString(); } catch { }
-                    if (pen != null) pen.OnMessage(msg);
-                };
             }
             catch (Exception ex) { pen = null; try { File.AppendAllText(Path.Combine(Program.DataDir, "error.log"), DateTime.Now + " 네이티브 펜 입력 꺼짐: " + ex.Message + "\r\n"); } catch { } }
+        }
+        if (main)
+        {
+            // 이 창 프로그램이 할 수 있는 것 (웹 판 → 네이티브 판으로 바꿀 때 창을 닫는 "app:close")
+            try { await c.AddScriptToExecuteOnDocumentCreatedAsync("window.comicpadLauncher={version:2,close:1,appSwitch:1};"); } catch { }
+            c.WebMessageReceived += (s3, e3) =>
+            {
+                string msg = null;
+                try { msg = e3.TryGetWebMessageAsString(); } catch { }
+                if (msg == "app:close") { BeginInvoke((Action)(() => { closeOk = true; Close(); })); return; }
+                if (pen != null) pen.OnMessage(msg);
+            };
         }
         if (pending != null)
         {

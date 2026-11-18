@@ -90,6 +90,8 @@ public static class WebIds
         ["help.keys"] = "도움말/단축키 ∕ 제스처 안내", ["help.report"] = "도움말/문제 보내기 (오류 보고)…", ["help.update"] = "도움말/업데이트 확인…", ["settings.keys"] = "도움말/단축키·도구 키 바꾸기…",
         ["pen.diagnose"] = "도움말/펜 필기감 진단 (이 기기·이 펜에 맞추기)…", ["setup.choose"] = "도움말/초기 세팅 프리셋 고르기 (클립스튜디오식·포토샵식·웹툰·태블릿)…", ["setup.undo"] = "도움말/세팅 되돌리기 (마지막 프리셋·가져오기 전으로)",
         ["setup.export"] = "도움말/내 세팅 내보내기 (.cpset)…", ["setup.import"] = "도움말/세팅 가져오기 (.cpset)…", ["selftest.run"] = "도움말/자동 점검 (주요 기능 시험)",
+        // 웹 판 ↔ 네이티브 판 (웹 판의 짝은 app.switchNative "새 네이티브 판 써 보기 (베타)…")
+        ["app.switchWeb"] = AppSwitch.BackMenu, ["app.importWebSettings"] = AppSwitch.ImportMenu,
     };
 
     /// <summary>웹 판 메뉴 id → 네이티브 위 메뉴 이름</summary>

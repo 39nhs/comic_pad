@@ -69,7 +69,7 @@ public static class UiMode
     }
 
     /// <summary>네이티브 창에만 있어 간단히 모드에서도 늘 보이는 항목</summary>
-    static readonly HashSet<string> AlwaysShow = new() { "파일/끝내기" };
+    static readonly HashSet<string> AlwaysShow = new() { "파일/끝내기", AppSwitch.BackMenu };
 
     /// <summary>웹 menuItems: 간단히 모드에서는 고른 것만 (구분선 정리), 숨긴 개수</summary>
     public static (List<MenuNode> items, int hidden) FilterMenu(string id, List<MenuNode> items, bool showAll)

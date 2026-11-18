@@ -838,6 +838,72 @@ def update_rollback():
         st.update(state="error", error=str(e) if isinstance(e, ValueError) else f"되돌리기 실패: {e}")
 
 
+# ---------------------------------------------------------------------------
+# 판 고르기 (웹 판 ↔ 네이티브 판 베타): data/config/app.json 의 {"app": "native"|"web"} 를 창 프로그램(ComicPad.exe)이 켤 때 읽는다.
+# 네이티브 판 파일(native/ComicPadNative)은 업데이트 꾸러미(make_release.py --native)로 들어온다.
+# ---------------------------------------------------------------------------
+APP_SWITCH = os.path.join(DATA_DIR, "config", "app.json")
+NATIVE_EXE = os.path.join(ROOT, "native", "ComicPadNative", "ComicPadNative.exe")
+
+
+def app_switch_read():
+    try:
+        with open(APP_SWITCH, encoding="utf-8") as fh:
+            v = json.load(fh).get("app")
+        return v if v in ("native", "web") else "web"
+    except (OSError, ValueError, AttributeError):
+        return "web"
+
+
+def app_switch_write(which, by="web"):
+    os.makedirs(os.path.dirname(APP_SWITCH), exist_ok=True)
+    tmp = APP_SWITCH + ".tmp"
+    with open(tmp, "w", encoding="utf-8") as fh:
+        json.dump({"app": which, "by": by, "at": time.strftime("%Y-%m-%dT%H:%M:%S")}, fh, ensure_ascii=False)
+    os.replace(tmp, APP_SWITCH)
+
+
+def launcher_supports_switch():
+    """설치 폴더의 ComicPad.exe 가 app.json 을 읽는 판인지 (1.2.0 부터). 다음에 켤 때 네이티브 판으로 열리는지 알려 주려고"""
+    exe = os.path.join(ROOT, "ComicPad.exe")
+    try:
+        with open(exe, "rb") as fh:
+            return "app.json".encode("utf-16-le") in fh.read()
+    except OSError:
+        return False
+
+
+def app_info():
+    present = os.path.isfile(NATIVE_EXE)
+    size = 0
+    if present:
+        for dp, _d, fs in os.walk(os.path.dirname(NATIVE_EXE)):
+            size += sum(os.path.getsize(os.path.join(dp, f)) for f in fs)
+    return {"app": app_switch_read(), "launcher": launcher_supports_switch(),
+            "native": {"present": present, "exe": "native/ComicPadNative/ComicPadNative.exe", "size": size}}
+
+
+def app_switch(which, launch=False, open_name=""):
+    """판 바꾸기. launch 면 네이티브 판을 바로 켠다 (열던 작품이 있으면 그것을 열며)."""
+    if which not in ("native", "web"):
+        raise ValueError("native 또는 web 만 됩니다")
+    if which == "native" and not os.path.isfile(NATIVE_EXE):
+        raise ValueError("네이티브 판 파일이 없습니다. 도움말 > 업데이트 확인 으로 1.2.0 이상을 받으면 생깁니다")
+    app_switch_write(which)
+    pid = None
+    if which == "native" and launch:
+        args = [NATIVE_EXE]
+        if open_name:
+            full = safe_join(KINDS["projects"], open_name)
+            if full.endswith(".cpad") and os.path.isfile(full):
+                args.append(full)
+        flags = 0
+        if os.name == "nt":
+            flags = getattr(subprocess, "DETACHED_PROCESS", 0x8) | getattr(subprocess, "CREATE_NEW_PROCESS_GROUP", 0x200)
+        pid = subprocess.Popen(args, cwd=os.path.dirname(NATIVE_EXE), creationflags=flags, close_fds=True).pid
+    return {"ok": True, "app": which, "pid": pid}
+
+
 def cleanup_old_files():
     """지난 업데이트 때 비켜 둔 옛 파일(.cpold) 지우기."""
     for dirpath, dirs, files in os.walk(ROOT):
@@ -952,7 +1018,7 @@ class Handler(http.server.BaseHTTPRequestHandler):
     @staticmethod
     def protected(full):
         """서버 설정·연결 키 (휴대폰 등 다른 기기는 못 바꿈)"""
-        return os.path.normcase(os.path.abspath(full)) in {os.path.normcase(SERVER_CONF), os.path.normcase(KEY_FILE)}
+        return os.path.normcase(os.path.abspath(full)) in {os.path.normcase(SERVER_CONF), os.path.normcase(KEY_FILE), os.path.normcase(APP_SWITCH)}
 
     def is_local(self):
         return self.client_address[0] in LOCAL_ADDRS
@@ -991,7 +1057,7 @@ class Handler(http.server.BaseHTTPRequestHandler):
             return False
         if self.is_local():
             return True
-        if path in ("/api/open-folder", "/api/lan", "/api/info", "/api/drive/config", "/api/models/fetch", "/api/backup/now", "/api/backup/config", "/api/backup/restore") or path.startswith("/api/update") or path in ("/api/shutdown", "/api/diag"):
+        if path in ("/api/open-folder", "/api/lan", "/api/info", "/api/drive/config", "/api/models/fetch", "/api/backup/now", "/api/backup/config", "/api/backup/restore") or path.startswith("/api/update") or path.startswith("/api/app") or path in ("/api/shutdown", "/api/diag"):
             self.send_json({"error": "PC 에서만 쓸 수 있는 기능입니다"}, 403)
             return False
         if path.startswith("/api/") or path.startswith("/data/"):
@@ -1038,6 +1104,8 @@ class Handler(http.server.BaseHTTPRequestHandler):
                 rb = rollback_info()
                 return self.send_json({"current": app_version(), "conf": update_conf(), "signed": bool(release_pubkey()),
                                        "rollback": {"from": rb["from"], "to": rb["to"]} if rb else None, **st})
+            if path == "/api/app":
+                return self.send_json(app_info())
             if path == "/api/drive":
                 return self.send_json(DRIVE.status())
             if path == "/api/ai":
@@ -1211,6 +1279,9 @@ class Handler(http.server.BaseHTTPRequestHandler):
                 self.send_json({"ok": True})
                 threading.Timer(0.3, self.server.shutdown).start()
                 return
+            if path == "/api/app/switch":
+                body = json.loads(self.read_body() or b"{}")
+                return self.send_json(app_switch(str(body.get("app", "")), bool(body.get("launch")), str(body.get("open") or "")))
             if path == "/api/backup/now":
                 if not BACKUP_STATE["running"]:
                     threading.Thread(target=make_backup, daemon=True).start()

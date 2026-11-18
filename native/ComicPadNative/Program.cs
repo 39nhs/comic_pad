@@ -49,6 +49,7 @@ static class Program
             if (args[1] == "script") { Environment.ExitCode = Modules.Comic.ScriptTest.Run(args[2]); return; }
             if (args[1] == "menus") { Environment.ExitCode = UI.Chrome.WebMenus.Report(args[2]); return; }   // 위 메뉴 ↔ 웹 판 대조
             if (args[1] == "3d") { Environment.ExitCode = Modules.Scene3D.SelfTest3D.Run(args[2]); return; }
+            if (args[1] == "switch") { Environment.ExitCode = Modules.Shell2.AppSwitchTest.Run(args[2]); return; }   // 웹 판 ↔ 네이티브 판 오가기·설정 가져오기
             if (args[1] == "brushes")
             {
                 var res = Modules.BrushEngine.SelfTest.Run(args[2]);
@@ -65,6 +66,7 @@ static class Program
         AppDomain.CurrentDomain.UnhandledException += (_, e) => Report(e.ExceptionObject as Exception);
 
         App.LoadSettings();
+        Modules.Shell2.WebImport.ImportOnStart();   // 처음 켤 때 한 번: 웹 판 설정(data\config\settings.json) 가져오기 (화면을 만들기 전에)
         InitModules();
 
         var form = new MainForm();
