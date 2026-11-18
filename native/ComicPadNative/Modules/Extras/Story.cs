@@ -246,6 +246,10 @@ public sealed class PagesPanel : Panel
         ["conti"] = ("콘티", ColorTranslator.FromHtml("#8e5bd6")), ["line"] = ("선화", ColorTranslator.FromHtml("#3d7be0")),
         ["color"] = ("채색", ColorTranslator.FromHtml("#f08c2e")), ["done"] = ("완료", ColorTranslator.FromHtml("#2fa35b")),
     };
+    /// <summary>다른 모듈이 카드의 단계 표시를 바꿀 때 (작품, 페이지) → (이름, 색). null 이면 story.json status</summary>
+    public static Func<string, string, (string label, Color color)?> Badge;
+    /// <summary>카드 오른쪽 클릭 (작품, 페이지, 컨트롤, 위치) — 작업 일정 모듈이 단계 메뉴를 띄움</summary>
+    public static Action<string, string, Control, Point> CardMenu;
     // 웹 .panel-scroll
     readonly UI.Controls.WebStack body = new() { Padding = new Padding(10, 4, 10, 12) };
     bool pending;
@@ -296,13 +300,16 @@ public sealed class PagesPanel : Panel
         {
             string p = pages[i];
             string st = (string)info["status"]?[p];
-            grid.Items.Add((p, (i + 1).ToString(), Img.Load(Path.ChangeExtension(Story.Full(p), ".png")), st != null && ST.TryGetValue(st, out var s) ? s : ((string, Color)?)null));
+            (string, Color)? badge = null;
+            try { badge = Badge?.Invoke(story, p); } catch { }
+            grid.Items.Add((p, (i + 1).ToString(), Img.Load(Path.ChangeExtension(Story.Full(p), ".png")), badge ?? (st != null && ST.TryGetValue(st, out var s) ? s : ((string, Color)?)null)));
         }
         grid.Current = cur;
         grid.Open += p => { if (p != Story.CurrentRel) Story.GotoPage(p); };
         grid.Move += (from, to) => Story.MovePage(story, from, to);
+        grid.RightClick = (p, pt) => CardMenu?.Invoke(story, p, grid, pt);
         body.Controls.Add(grid);
-        body.Controls.Add(Opt.Help("페이지 카드를 끌어다 다른 카드 위에 놓으면 순서가 바뀝니다 (펜·터치는 위 버튼으로)."));
+        body.Controls.Add(Opt.Help("페이지 카드를 끌어다 다른 카드 위에 놓으면 순서가 바뀝니다 (펜·터치는 위 버튼으로). 오른쪽 클릭: 작업 단계·마감일."));
         body.ResumeLayout();
     }
 
@@ -313,6 +320,7 @@ public sealed class PagesPanel : Panel
         public string Current;
         public event Action<string> Open;
         public new event Action<int, int> Move;
+        public Action<string, Point> RightClick;
         int hot = -1, down = -1, drop = -1; Point downAt; bool dragging;
         public PageGrid() { SetStyle(ControlStyles.UserPaint | ControlStyles.AllPaintingInWmPaint | ControlStyles.OptimizedDoubleBuffer | ControlStyles.ResizeRedraw, true); Cursor = Cursors.Hand; }
         int Cols(int w) => Math.Max(1, (w + 6) / (70 + 6));
@@ -364,6 +372,7 @@ public sealed class PagesPanel : Panel
         {
             base.OnMouseUp(e);
             int h = Hit(e.Location);
+            if (e.Button == MouseButtons.Right) { if (h >= 0) RightClick?.Invoke(Items[h].rel, e.Location); return; }
             if (dragging) { dragging = false; if (down >= 0 && h >= 0 && h != down) Move?.Invoke(down, h); }
             else if (h >= 0 && h == down) Open?.Invoke(Items[h].rel);
             down = -1; drop = -1; Invalidate();

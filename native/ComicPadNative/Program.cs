@@ -51,6 +51,7 @@ static class Program
             if (args[1] == "3d") { Environment.ExitCode = Modules.Scene3D.SelfTest3D.Run(args[2]); return; }
             if (args[1] == "vrig2") { Environment.ExitCode = Modules.VRig2.RigSelfTest.Run(args[2]); return; }
             if (args[1] == "clip") { Environment.ExitCode = Modules.ClipImport.ClipSelfTest.Run(args[2]); return; }   // 합성 .clip 가져오기
+            if (args[1] == "workflow") { Environment.ExitCode = Modules.Workflow.WorkflowTest.Run(args[2]); return; }   // 작업 일정·참고 자료 보드·A/B 비교·피드백 보기
             if (args[1] == "brushes")
             {
                 var res = Modules.BrushEngine.SelfTest.Run(args[2]);
