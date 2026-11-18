@@ -108,6 +108,9 @@ public static class Raster
         public double Tolerance = 10;   // 0~255
         public double Gap;              // 틈 막기 (px)
         public double Expand;           // 영역 확장 (px)
+        public double Close;            // 틈 닫기: 이 칸 수 이하로 끊긴 선 끝을 보이지 않는 선으로 이음 (0 = 끔, GapClose)
+        public double Leftover;         // 덜 칠한 곳 메우기: 영역 안에 갇힌 이 크기(px) 이하 구멍을 채움 (0 = 끔)
+        public List<GapClose.Seg> Closings;   // 틈 닫기 선: 미리 넣어 두면 다시 찾지 않음 (여러 칸 칠하기), 없으면 찾아서 여기에 남김
     }
 
     /// <summary>
@@ -134,6 +137,19 @@ public static class Raster
                 match[i] = d <= tol ? (byte)1 : (byte)0;
             }
         });
+        ct.ThrowIfCancellationRequested();
+        // 틈 닫기: 끊긴 선 끝을 이어 막음 (닫는 선 자리는 나중에 칠한 쪽에 붙여 줌)
+        List<int> burned = null;
+        if (opt.Close > 0)
+        {
+            if (opt.Closings == null)
+            {
+                var wall = new byte[n];
+                for (int i = 0; i < n; i++) wall[i] = match[i] != 0 ? (byte)0 : (byte)1;
+                opt.Closings = GapClose.Find(wall, w, h, opt.Close, ct);
+            }
+            if (opt.Closings.Count > 0) burned = GapClose.Burn(match, w, h, opt.Closings, sy * w + sx);
+        }
         ct.ThrowIfCancellationRequested();
         // 틈 막기: gap(px) 너비 이하의 빈틈은 선이 이어진 것으로 (선을 gap/2 만큼 두껍게 해서 막음)
         int r = (int)Math.Ceiling(gap / 2.0);
@@ -177,6 +193,8 @@ public static class Raster
             }
             for (int i = 0; i < n; i++) if (own[i] == 1) mask[i] = 1;
         }
+        if (burned != null) GapClose.Unburn(mask, w, h, burned);
+        if (opt.Leftover > 0) GapClose.FillHoles(mask, w, h, MaskBounds(mask, w, h), JsRound(opt.Leftover));
         if (expand > 0) mask = Dilate(mask, w, h, expand);
         return (mask, MaskBounds(mask, w, h));
     }

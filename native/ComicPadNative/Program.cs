@@ -52,6 +52,7 @@ static class Program
             if (args[1] == "vrig2") { Environment.ExitCode = Modules.VRig2.RigSelfTest.Run(args[2]); return; }
             if (args[1] == "clip") { Environment.ExitCode = Modules.ClipImport.ClipSelfTest.Run(args[2]); return; }   // 합성 .clip 가져오기
             if (args[1] == "switch") { Environment.ExitCode = Modules.Shell2.AppSwitchTest.Run(args[2]); return; }   // 웹 판 ↔ 네이티브 판 오가기·설정 가져오기
+            if (args[1] == "vectortools") { Environment.ExitCode = Modules.VectorTools.VectorToolsTest.Run(args[2]); return; }
             if (args[1] == "brushes")
             {
                 var res = Modules.BrushEngine.SelfTest.Run(args[2]);
