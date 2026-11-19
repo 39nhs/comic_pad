@@ -600,7 +600,6 @@ public sealed class PanelTool : ToolBase
             if (l == null || ps.Count == 0 || !App.CheckEditable(l)) return;
             Panels.Set(m => { m["panels"] = Panels.PanelsJson(ps.Take(ps.Count - 1)); return m; });
         }));
-        yield return Opt.Button("컷 나누기 템플릿…", Panels.TemplatesDialog);
         yield return Opt.Title("컷 설정");
         yield return Opt.Slider("테두리 굵기", 0, 40, () => J.Num(Panels.PanelLayer(false)?.Meta, "line", 6), v =>
         {
@@ -620,5 +619,7 @@ public sealed class PanelTool : ToolBase
             if (Panels.PanelLayer(false) == null) return;
             Panels.Set(m => { m["color"] = v; return m; }, "컷 편집");
         });
+        // 네이티브에만: 템플릿 (웹은 만화 메뉴에만) — 웹과 같은 머리 배치를 지키려고 맨 아래
+        yield return Opt.Button("컷 나누기 템플릿…", Panels.TemplatesDialog);
     }
 }

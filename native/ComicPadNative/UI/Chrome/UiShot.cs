@@ -13,6 +13,14 @@ public static class UiShot
     /// <summary>찍을 파일 (환경 변수는 지우므로 대화상자 찍기가 여기서 읽음)</summary>
     public static string ShotPath;
 
+    /// <summary>메인 창 큰 칸들의 배치 (창 안쪽 좌표) — 대화상자 장면에서도 같이 적음 (Modals.ShotHook)</summary>
+    public static string MainBoxes(MainForm f)
+    {
+        Rectangle B(Control c) => c != null && c.Visible ? f.RectangleToClient(c.RectangleToScreen(c.ClientRectangle)) : Rectangle.Empty;
+        return string.Join(Environment.NewLine, $"topbar {B(f.TopBar)}", $"menubar {B(f.MenuBar)}", $"toolbar {B(f.Tools)}", $"stage {B(f.Canvas)}", $"sidepanel {B(f.Side)}", $"bottombar {B(f.BottomBar)}", $"statusbar {B(f.Status)}",
+            $"dock_top {B(Docks(f).ElementAtOrDefault(0))}", $"dock_bottom {B(Docks(f).ElementAtOrDefault(1))}");
+    }
+
     public static void Hook(MainForm f)
     {
         string shot = Environment.GetEnvironmentVariable("COMICPAD_UI_SHOT");
@@ -68,7 +76,7 @@ public static class UiShot
             Rectangle B(Control c) => c != null && c.Visible ? f.RectangleToClient(c.RectangleToScreen(c.ClientRectangle)) : Rectangle.Empty;
             File.WriteAllLines(shot + ".txt", new[]
             {
-                $"topbar {B(f.TopBar)}", $"menubar {B(f.MenuBar)}", $"toolbar {B(f.Tools)}", $"stage {B(f.Canvas)}", $"sidepanel {B(f.Side)}", $"bottombar {B(f.BottomBar)}", $"statusbar {B(f.Status)}",
+                MainBoxes(f),
                 "status: " + string.Join(" | ", f.Status.Items.Cast<ToolStripItem>().Select(i => $"{i.Text}@{i.Bounds.X}")),
                 "menus: " + string.Join(" ", f.MenuBar.Items.Cast<ToolStripItem>().Where(i => i.Visible).Select(i => $"{i.Text}@{i.Bounds.X}")),
                 "tools: " + string.Join(" ", f.Tools.Shown.Select(t => t.Id)),

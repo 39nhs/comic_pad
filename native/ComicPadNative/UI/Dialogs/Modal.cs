@@ -227,7 +227,8 @@ public static class Modals
 
     internal static void CenterOn(Form f, Form owner)
     {
-        Rectangle area = owner != null && owner.Visible && owner.WindowState != FormWindowState.Minimized ? owner.Bounds : Screen.FromPoint(Cursor.Position).WorkingArea;
+        // 웹 .modal-backdrop 은 창 안쪽(제목 막대·테두리 빼고) 가운데 — 창 바깥 테두리 기준이면 최대화 창에서 위로 몇 px 어긋남
+        Rectangle area = owner != null && owner.Visible && owner.WindowState != FormWindowState.Minimized ? owner.RectangleToScreen(owner.ClientRectangle) : Screen.FromPoint(Cursor.Position).WorkingArea;
         var wa = Screen.FromRectangle(area).WorkingArea;
         int x = area.X + (area.Width - f.Width) / 2, y = area.Y + (area.Height - f.Height) / 2;
         f.Location = new Point(Math.Clamp(x, wa.X, Math.Max(wa.X, wa.Right - f.Width)), Math.Clamp(y, wa.Y, Math.Max(wa.Y, wa.Bottom - f.Height)));
@@ -263,7 +264,7 @@ public static class Modals
                 }
                 bmp.Save(shot);
                 // 배치 기록 (웹 #modal-root .modal 과 맞대 보기, 메인 창 안쪽 좌표)
-                File.WriteAllText(shot + ".txt", $"modal {new Rectangle(App.Main.PointToClient(f.Location), f.Size)}\r\n");
+                File.WriteAllText(shot + ".txt", (App.Main is MainForm mf ? Chrome.UiShot.MainBoxes(mf) + "\r\n" : "") +$"modal {new Rectangle(App.Main.PointToClient(f.Location), f.Size)}\r\n");
             }
             catch (Exception ex) { File.WriteAllText(shot + ".error.txt", ex.ToString()); }
             Environment.Exit(0);

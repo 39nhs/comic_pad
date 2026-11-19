@@ -19,6 +19,13 @@ public sealed class WorkflowModule : IModule
         Registry.Menu("만화/지금 페이지 다음 단계로", ScheduleUi.AdvanceCurrent, Keys.None, HasDoc, order: 844);
         Registry.Menu("만화/작업 단계 바꾸기 (콘티→…→완료)…", () => { var ws = WorkSchedule.Current; if (ws != null) ScheduleUi.EditStages(ws); }, Keys.None, HasDoc, order: 845);
         Registry.Menu("만화/작품 마감일…", () => { var ws = WorkSchedule.Current; if (ws != null) ScheduleUi.EditDeadline(ws); }, Keys.None, HasDoc, order: 846);
+        Registry.Menu("만화/작업 일정 패널 (오른쪽 탭)", () =>
+        {
+            bool v = !Modules.Shell2.UiMode.PanelShown("일정");
+            Modules.Shell2.UiMode.SetPanelShown("일정", v);
+            Modules.Shell2.UiMode.ApplyPanels();
+            if (v) Modules.Shell2.Shell2Ui.Side?.ShowTab("일정");
+        }, Keys.None, null, () => Modules.Shell2.UiMode.PanelShown("일정"), order: 848);
         Registry.Menu("만화/회차(에피소드) 마감…", () => { var ws = WorkSchedule.Current; if (ws?.IsStory == true) ScheduleUi.EditEpisodes(ws); else App.Toast("여러 페이지 작품에서 쓸 수 있습니다"); }, Keys.None, () => WorkSchedule.Current?.IsStory == true, order: 847);
 
         // 보기: 참고 자료 보드 · 피드백 보기

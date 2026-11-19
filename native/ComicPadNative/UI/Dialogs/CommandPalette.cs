@@ -52,7 +52,8 @@ public static class CommandPalette
         f.Shown += (_, _) =>
         {
             var owner = App.Main;
-            if (owner != null && owner.Visible) f.Top = owner.Top + Math.Max(40, (int)(owner.Height * 0.08));
+            // 웹 .modal-backdrop padding 16px + .palette-modal margin-top 8vh (창 안쪽 높이 기준)
+            if (owner != null && owner.Visible) f.Top = owner.PointToScreen(Point.Empty).Y + 16 + (int)(owner.ClientSize.Height * 0.08);
             q.Box.Focus();
         };
         f.ShowDialog(App.Main);

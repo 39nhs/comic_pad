@@ -118,9 +118,20 @@ static class Program
             };
             form.Shown += (_, _) => t.Start();
         }
-        var auto = new System.Windows.Forms.Timer { Interval = Math.Max(1, App.Get("autosaveMin", 3)) * 60_000 };
+        // 자동 저장 (웹과 같이 0 = 끔). 설정이 바뀌면 바로 적용 (값이 바뀔 때만 시계를 다시 맞춤)
+        var auto = new System.Windows.Forms.Timer();
         auto.Tick += (_, _) => FileCommands.Autosave();
-        auto.Start();
+        int autoMin = -1;
+        void ApplyAutosave()
+        {
+            int m = Math.Clamp(App.Get("autosaveMin", 3), 0, 30);
+            if (m == autoMin) return;
+            autoMin = m;
+            auto.Stop();
+            if (m > 0) { auto.Interval = m * 60_000; auto.Start(); }
+        }
+        ApplyAutosave();
+        App.SettingsChanged += ApplyAutosave;
         Application.Run(form);
     }
 

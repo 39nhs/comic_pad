@@ -224,8 +224,13 @@ public sealed class WebColorButton : WebButton, ISyncable
     }
     public string Hex { get { try { return get() ?? "#000000"; } catch { return "#000000"; } } }
     public void Sync() { Text = showHex ? (label.Length > 0 ? label + "  " : "") + Hex : label; Invalidate(); }
+    /// <summary>웹 colorInput (label.ctl.color = 흐린 글 + input[type=color] 42×32) 모양: 이름이 있고 hex 를 안 보일 때</summary>
+    bool WebLook => !showHex && label.Length > 0;
+    const int BoxW = 42, BoxH = 32, Gap = 7;
+    int LabelW => TextRenderer.MeasureText(label, Font, new Size(int.MaxValue, int.MaxValue), TextFormatFlags.NoPadding | TextFormatFlags.NoPrefix).Width;
     public override Size GetPreferredSize(Size proposed)
     {
+        if (WebLook) return new Size(LabelW + Gap + BoxW, BoxH);
         var s = base.GetPreferredSize(proposed);
         return new Size(s.Width + 26 + (string.IsNullOrEmpty(Text) ? 8 : 0), s.Height);
     }
@@ -234,6 +239,17 @@ public sealed class WebColorButton : WebButton, ISyncable
         var g = e.Graphics;
         g.Clear(Web.ParentBack(this));
         var r = ClientRectangle;
+        if (WebLook)
+        {
+            int lw = LabelW, by = (r.Height - BoxH) / 2;
+            TextRenderer.DrawText(g, label, Font, new Rectangle(0, 0, lw + 2, r.Height), Enabled ? Theme.Muted : Theme.Blend(Theme.Panel, Theme.Muted, 0.5), TextFormatFlags.Left | TextFormatFlags.VerticalCenter | TextFormatFlags.NoPadding | TextFormatFlags.NoPrefix | TextFormatFlags.SingleLine);
+            var box = new Rectangle(lw + Gap, by, BoxW - 1, BoxH - 1);
+            Web.Box(g, box, 6, Color.Empty, hover ? Theme.Muted : Theme.Line);
+            var sw = new Rectangle(box.X + 3, box.Y + 5, BoxW - 7, BoxH - 11);
+            using (var b = new SolidBrush(WebSwatch.ColorOf(Hex))) g.FillRectangle(b, sw);
+            using (var pn = new Pen(Color.FromArgb(119, 119, 119))) g.DrawRectangle(pn, sw);
+            return;
+        }
         Web.Box(g, r, 7, hover ? Theme.Panel3 : Theme.Panel2, Theme.Line);
         var chip = new Rectangle(8, (r.Height - 20) / 2, string.IsNullOrEmpty(Text) ? r.Width - 16 : 22, 20);
         Web.Box(g, chip, 4, WebSwatch.ColorOf(Hex), Color.FromArgb(90, 0, 0, 0));

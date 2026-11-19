@@ -114,7 +114,7 @@ public class PenInputControl : Control
 }
 
 /// <summary>필압 곡선 편집기: 점을 끌어 옮기고, 빈 곳을 두 번 탭하면 점 추가, 점을 두 번 탭하면 지우기</summary>
-public sealed class CurveEditor : FlowLayoutPanel
+public sealed class CurveEditor : WebStack
 {
     const int S = 180, PAD = 8;
     readonly Func<double[][]> get; readonly Action<double[][]> set;
@@ -125,28 +125,28 @@ public sealed class CurveEditor : FlowLayoutPanel
     public CurveEditor(string title, Func<double[][]> get, Action<double[][]> set)
     {
         this.get = get; this.set = set;
-        FlowDirection = FlowDirection.TopDown; AutoSize = true; WrapContents = false; BackColor = Opt.Bg; Margin = new Padding(0, 4, 0, 4);
+        BackColor = Opt.Bg; Margin = new Padding(0, 4, 0, 4);
         Load();
         c.Paint += (_, e) => Draw(e.Graphics);
         c.PenDown += (x, y, pr, pen) => OnDown(x, y);
         c.PenMove += (x, y, pr, pen) => { if (pen) live = pr; OnMove(x, y); };
         c.PenUp += (x, y, pr, pen) => { if (drag >= 0) Commit(); drag = -1; };
         c.Hover += pr => { live = pr; c.Invalidate(); };
-        var presetSel = new ComboBox { DropDownStyle = ComboBoxStyle.DropDownList, Width = BUI.Width - 10, BackColor = Opt.Bg2, ForeColor = Opt.Fg, FlatStyle = FlatStyle.Flat };
-        presetSel.Items.Add("곡선 고르기…");
-        foreach (var (n, _) in Pressure.Presets) presetSel.Items.Add(n);
-        presetSel.SelectedIndex = 0;
-        presetSel.SelectedIndexChanged += (_, _) =>
+        // 웹 curveEditor (.curve-box .row: 곡선 칸 + 옆 칸이 넘쳐서 아래로 = 곡선 / 굵은 제목 / 곡선 고르기 / 도움말 / 곧게)
+        var items = new List<(string, string)> { ("", "곡선 고르기…") };
+        items.AddRange(Pressure.Presets.Select(x => (x.name, x.name)));
+        var presetSel = new WebSelect(items, () => "", v =>
         {
-            if (presetSel.SelectedIndex <= 0) return;
-            pts = Pressure.Presets[presetSel.SelectedIndex - 1].pts.Select(p => (double[])p.Clone()).ToList();
-            presetSel.SelectedIndex = 0; c.Invalidate(); Commit();
-        };
-        Controls.Add(Opt.Title(title));
+            int i = Array.FindIndex(Pressure.Presets, x => x.name == v);
+            if (i < 0) return;
+            pts = Pressure.Presets[i].pts.Select(p => (double[])p.Clone()).ToList();
+            c.Invalidate(); Commit();
+        }).Stretch();
         Controls.Add(c);
+        Controls.Add(new Label { Text = title, AutoSize = true, Font = Web.BodyBold, ForeColor = Theme.Text, BackColor = Color.Transparent, Margin = new Padding(0, 6, 0, 4) });
         Controls.Add(presetSel);
         Controls.Add(BUI.Help("점을 끌어 모양 바꾸기 · 빈 곳 두 번 탭 = 점 추가 · 점 두 번 탭 = 지우기. 왼쪽 = 약하게 누름, 오른쪽 = 세게. 위로 갈수록 굵게·진하게."));
-        Controls.Add(Opt.Button("곧게 (초기화)", () => { pts = new() { new[] { 0.0, 0 }, new[] { 1.0, 1 } }; c.Invalidate(); Commit(); }));
+        Controls.Add(Opt.Button("곧게 (초기화)", () => { pts = new() { new[] { 0.0, 0 }, new[] { 1.0, 1 } }; c.Invalidate(); Commit(); }).Inline(false).Stretch());
     }
 
     void Load() => pts = (get() ?? new[] { new[] { 0.0, 0 }, new[] { 1.0, 1 } }).Select(p => (double[])p.Clone()).ToList();

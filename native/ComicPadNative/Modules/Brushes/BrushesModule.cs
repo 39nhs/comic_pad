@@ -177,56 +177,80 @@ public static class PenSettings
     static void Save() { App.NotifySettings(); }
     static double N(string key, double fb) => BrushPreset.Num(App.Settings[key]) ?? fb;
 
-    public static void Show()
+    /// <summary>환경 설정 "펜" 구역 (웹 ui/settings.js 와 같은 순서·글). 네이티브에만 있는 것(마우스 오른쪽 = 원형 메뉴·마우스 필압)은 끝에</summary>
+    public static Control[] Section()
     {
-        using var f = new Form { Text = "펜·필압 설정", StartPosition = FormStartPosition.CenterParent, MinimizeBox = false, MaximizeBox = false, BackColor = Opt.Bg, ForeColor = Opt.Fg, ShowInTaskbar = false, Size = new Size(640, 760), Font = new Font("Malgun Gothic", 9f) };
-        UI.Dialogs.Modals.Adopt(f);
-        var scroll = new Panel { Dock = DockStyle.Fill, AutoScroll = true, BackColor = Opt.Bg };
-        var p = new FlowLayoutPanel { FlowDirection = FlowDirection.TopDown, AutoSize = true, WrapContents = false, BackColor = Opt.Bg, Padding = new Padding(10) };
         var tester = new PressureTester();
         var s = App.Settings;
-        p.Controls.Add(Opt.Title("펜 (S펜·와콤·휴이온·XP-Pen·서피스 펜·애플 펜슬)"));
-        p.Controls.Add(new CurveEditor("필압 곡선 (모든 브러시)",
-            // 예전 감마 값만 있으면 그 모양을 점으로 바꿔서 보여 줌
-            () => Pressure.ParsePts(s["pressurePts"]) ?? ((N("pressureGamma", 1) is double gm && gm != 1 && gm > 0) ? new[] { 0, 0.25, 0.5, 0.75, 1 }.Select(x => new[] { x, Math.Round(Math.Pow(x, gm), 3) }).ToArray() : null),
-            pts => { App.Settings["pressurePts"] = Pressure.ToJson(pts); App.Settings["pressureGamma"] = 1; tester.Invalidate(); Save(); }));
-        p.Controls.Add(BUI.Slider("가장 약한 힘 (이보다 약하면 0)", 0, 0.5, () => BrushPreset.Num(Feel()["pmin"]) ?? 0, v => { Feel()["pmin"] = Math.Round(v, 2); tester.Invalidate(); Save(); }, BUI.Pct, step: 0.01));
-        p.Controls.Add(BUI.Slider("가장 센 힘 (이만큼만 눌러도 최대)", 0.4, 1, () => BrushPreset.Num(Feel()["pmax"]) ?? 1, v => { Feel()["pmax"] = Math.Round(v, 2); tester.Invalidate(); Save(); }, BUI.Pct, step: 0.01));
-        p.Controls.Add(tester);
-        p.Controls.Add(BUI.Toggle("필압 없이 쓰기 (필압을 못 보내는 펜: 굵기 고정)", () => App.Get("penNoPressure", false), v => { App.Set("penNoPressure", v); Save(); }));
-        p.Controls.Add(BUI.Help("와콤·휴이온·XP-Pen 등 PC 용 태블릿은 드라이버 설정에서 \"Windows Ink\" 를 켜야 필압·기울기가 옵니다. 펜 뒤쪽 지우개는 자동으로 지우개가 됩니다."));
-        p.Controls.Add(BUI.Seg(new[] { ("euro", "자동 보정"), ("avg", "평균"), ("lazy", "끈 당기기"), ("spring", "무거운 펜") }, () => (string)Feel()["filter"] ?? "euro", v => { Feel()["filter"] = v; Save(); }));
-        p.Controls.Add(BUI.Help("흔들림 보정 방식 (브러시 옵션에서 브러시마다 따로 정할 수도 있음). 끈 당기기 = 펜이 끈 길이만큼 멀어질 때만 선이 따라옴, 무거운 펜 = 살짝 늦게 부드럽게 따라옴."));
-        p.Controls.Add(BUI.Toggle("선 끝에서 펜을 멈추고 있으면 직선으로", () => App.Get("holdLine", false), v => { App.Set("holdLine", v); Save(); }));
-        p.Controls.Add(BUI.Slider("필압 다듬기", 0, 0.8, () => BrushPreset.Num(Feel()["pressureSmooth"]) ?? 0, v => { Feel()["pressureSmooth"] = Math.Round(v, 2); Save(); }, BUI.Pct, step: 0.05));
-        p.Controls.Add(BUI.Toggle("펜을 대는 순간 굵게 찍히는 것 줄이기 (선 시작이 늘 가늘어짐)", () => Feel()["startRamp"] is JsonNode n && BrushPreset.Bool(n), v => { Feel()["startRamp"] = v; Save(); }));
-        p.Controls.Add(BUI.Select("측면 버튼 누르고 그리기", new[] { ("eyedropper", "스포이트"), ("eraser", "지우개"), ("pan", "화면 이동"), ("none", "사용 안 함") }, () => App.Get("penButton", "eyedropper"), v => { App.Set("penButton", v); Save(); }));
-        p.Controls.Add(BUI.Select("두 번째 측면 버튼 (와콤 등)", new[] { ("pan", "화면 이동"), ("eyedropper", "스포이트"), ("eraser", "지우개"), ("radial", "원형 메뉴"), ("none", "사용 안 함") }, () => App.Get("penButton2", "pan"), v => { App.Set("penButton2", v); Save(); }));
-        p.Controls.Add(BUI.Toggle("펜 위치 예측 (선보다 조금 앞을 흐리게 미리 보여 줌)", () => Feel()["predict"] is not JsonNode n || BrushPreset.Bool(n), v => { Feel()["predict"] = v; Save(); }));
-        p.Controls.Add(BUI.Slider("펜을 뗀 뒤 터치 무시 시간", 0, 1500, () => N("palmGuardMs", 350), v => { App.Set("palmGuardMs", (int)v); Save(); }, v => $"{v:0}ms", step: 50));
-        p.Controls.Add(BUI.Slider("마우스 필압", 0.05, 1, () => N("mousePressure", 1), v => { App.Set("mousePressure", Math.Round(v, 2)); Save(); }, BUI.Pct, step: 0.05));
-        scroll.Controls.Add(p);
-        f.Controls.Add(scroll);
-        var close = new Button { Text = "닫기", DialogResult = DialogResult.OK, Dock = DockStyle.Bottom, Height = 32 };
-        f.Controls.Add(close); f.AcceptButton = close;
+        return new Control[]
+        {
+            new CurveEditor("필압 곡선 (모든 브러시)",
+                // 예전 감마 값만 있으면 그 모양을 점으로 바꿔서 보여 줌
+                () => Pressure.ParsePts(s["pressurePts"]) ?? ((N("pressureGamma", 1) is double gm && gm != 1 && gm > 0) ? new[] { 0, 0.25, 0.5, 0.75, 1 }.Select(x => new[] { x, Math.Round(Math.Pow(x, gm), 3) }).ToArray() : null),
+                pts => { App.Settings["pressurePts"] = Pressure.ToJson(pts); App.Settings["pressureGamma"] = 1; tester.Invalidate(); Save(); }),
+            BUI.Slider("가장 약한 힘 (이보다 약하면 0)", 0, 0.5, () => BrushPreset.Num(Feel()["pmin"]) ?? 0, v => { Feel()["pmin"] = Math.Round(v, 2); tester.Invalidate(); Save(); }, BUI.Pct, step: 0.01),
+            BUI.Slider("가장 센 힘 (이만큼만 눌러도 최대)", 0.4, 1, () => BrushPreset.Num(Feel()["pmax"]) ?? 1, v => { Feel()["pmax"] = Math.Round(v, 2); tester.Invalidate(); Save(); }, BUI.Pct, step: 0.01),
+            tester,
+            BUI.Select("브러시 커서 모양", new[] { ("nib", "펜촉 + 크기 원 (클립스튜디오식)"), ("circle", "크기 원 + 십자"), ("cross", "십자만"), ("dot", "점만") }, () => App.Get("brushCursor", "nib"), v => { App.Set("brushCursor", v); Modules.Shell2.CursorLook.Apply(); }),
+            Opt.Button("펜 필기감 진단 (이 기기·이 펜에 맞추기)…", () => Modules.Shell2.WebIds.Run("pen.diagnose")),
+            BUI.Toggle("필압 없이 쓰기 (필압을 못 보내는 펜: 굵기 고정)", () => App.Get("penNoPressure", false), v => { App.Set("penNoPressure", v); Save(); }),
+            BUI.Help("와콤·휴이온·XP-Pen 등 PC 용 태블릿은 드라이버 설정에서 \"Windows Ink\" 를 켜야 필압·기울기가 옵니다. 펜 뒤쪽 지우개는 자동으로 지우개가 됩니다."),
+            BUI.Seg(new[] { ("euro", "자동 보정"), ("avg", "평균"), ("lazy", "끈 당기기"), ("spring", "무거운 펜") }, () => (string)Feel()["filter"] ?? "euro", v => { Feel()["filter"] = v; Save(); }),
+            BUI.Help("흔들림 보정 방식 (브러시 옵션에서 브러시마다 따로 정할 수도 있음). 끈 당기기 = 펜이 끈 길이만큼 멀어질 때만 선이 따라옴, 무거운 펜 = 살짝 늦게 부드럽게 따라옴."),
+            BUI.Toggle("선 끝에서 펜을 멈추고 있으면 직선으로", () => App.Get("holdLine", false), v => { App.Set("holdLine", v); Save(); }),
+            BUI.Slider("필압 다듬기", 0, 0.8, () => BrushPreset.Num(Feel()["pressureSmooth"]) ?? 0, v => { Feel()["pressureSmooth"] = Math.Round(v, 2); Save(); }, BUI.Pct, step: 0.05),
+            BUI.Toggle("펜을 대는 순간 굵게 찍히는 것 줄이기 (선 시작이 늘 가늘어짐)", () => Feel()["startRamp"] is JsonNode n && BrushPreset.Bool(n), v => { Feel()["startRamp"] = v; Save(); }),
+            BUI.Toggle("펜 위치 예측 (선이 덜 늦게 따라옴)", () => Feel()["predict"] is not JsonNode n || BrushPreset.Bool(n), v => { Feel()["predict"] = v; Save(); }),
+            BUI.Select("측면 버튼 누르고 그리기", new[] { ("eyedropper", "스포이트"), ("eraser", "지우개"), ("pan", "화면 이동"), ("radial", "원형 메뉴"), ("none", "사용 안 함") }, () => App.Get("penButton", "eyedropper"), v => { App.Set("penButton", v); Save(); }),
+            BUI.Select("두 번째 측면 버튼 (와콤 등)", new[] { ("pan", "화면 이동"), ("eyedropper", "스포이트"), ("eraser", "지우개"), ("radial", "원형 메뉴"), ("none", "사용 안 함") }, () => App.Get("penButton2", "pan"), v => { App.Set("penButton2", v); Save(); }),
+            BUI.Slider("펜을 뗀 뒤 터치 무시 시간", 0, 1500, () => N("palmGuardMs", 350), v => { App.Set("palmGuardMs", (int)(Math.Round(v / 50) * 50)); Save(); }, v => $"{v:0}ms", step: 50),
+            BUI.Toggle("마우스 오른쪽 버튼 = 원형 메뉴", () => App.Get("mouseRadial", true), v => { App.Set("mouseRadial", v); Save(); }),
+            BUI.Slider("마우스 필압", 0.05, 1, () => N("mousePressure", 1), v => { App.Set("mousePressure", Math.Round(v, 2)); Save(); }, BUI.Pct, step: 0.05),
+        };
+    }
+
+    /// <summary>펜·필압 설정만 따로 (예전 메뉴·명령): 환경 설정 창과 같은 "펜" 구역</summary>
+    public static void Show()
+    {
+        var body = Opt.Panel(new Control[] { Opt.Title("펜 (S펜·와콤·휴이온·XP-Pen·서피스 펜·애플 펜슬)") }.Concat(Section()).ToArray());
+        using var f = new UI.Dialogs.ModalForm("펜·필압 설정", 820, 0);
+        f.SetContent(body);
+        f.AddAction("닫기", () => true, primary: true);
         f.ShowDialog(App.Main);
         App.SaveSettings();
     }
 
     /// <summary>필압 시험 칸: 그리면 굵기 1+14×곡선(필압), 오른쪽에 지금 곡선</summary>
-    sealed class PressureTester : FlowLayoutPanel
+    sealed class PressureTester : Control, UI.Controls.IWebBlock
     {
-        readonly PenInputControl pad = new() { Width = 420, Height = 140, BackColor = Color.FromArgb(30, 30, 34), Margin = new Padding(0, 0, 6, 0) };
+        // 웹 pressureTester: 그려 보는 칸(남는 폭 모두, 높이 140) + 오른쪽 지금 곡선 140×140, 아래 "여기에 펜으로 그려 보세요"
+        readonly PenInputControl pad = new() { Width = 420, Height = 140, BackColor = Color.FromArgb(30, 30, 34) };
         readonly Control curve = new Panel { Width = 140, Height = 140, BackColor = Color.FromArgb(30, 30, 34) };
         readonly Label info = BUI.Help("여기에 펜으로 그려 보세요");
         Bitmap ink = new(420, 140);
         PointF? last;
+        const int H = 140, Gap = 6;
+
+        public override Size GetPreferredSize(Size proposed)
+        {
+            int w = proposed.Width > 1 && proposed.Width < 100000 ? proposed.Width : 566;
+            return new Size(w, H + 4 + info.GetPreferredSize(new Size(w, 0)).Height + 4);
+        }
+        protected override void OnLayout(LayoutEventArgs e)
+        {
+            int w = Math.Max(160, Width);
+            curve.Bounds = new Rectangle(w - H, 0, H, H);
+            pad.Bounds = new Rectangle(0, 0, Math.Max(10, w - H - Gap), H);
+            info.Bounds = new Rectangle(0, H + 4, w, Height - H - 4);
+            if (ink.Width != pad.Width) { var old = ink; ink = new Bitmap(pad.Width, H); using (var g = Graphics.FromImage(ink)) g.DrawImageUnscaled(old, 0, 0); old.Dispose(); }
+        }
 
         public PressureTester()
         {
-            FlowDirection = FlowDirection.TopDown; AutoSize = true; WrapContents = false; BackColor = Opt.Bg;
-            var row = Opt.Row(pad, curve);
-            Controls.Add(row); Controls.Add(info);
+            BackColor = Opt.Bg;
+            info.AutoSize = false;
+            Controls.Add(pad); Controls.Add(curve); Controls.Add(info);
+            Disposed += (_, _) => ink.Dispose();
             pad.Paint += (_, e) => e.Graphics.DrawImageUnscaled(ink, 0, 0);
             pad.PenDown += (x, y, pr, pen) => { using (var g = Graphics.FromImage(ink)) g.Clear(Color.Transparent); last = null; pad.Invalidate(); };
             pad.PenMove += (x, y, pr, pen) =>

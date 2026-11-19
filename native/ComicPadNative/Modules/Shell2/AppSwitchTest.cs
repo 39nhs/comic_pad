@@ -21,7 +21,7 @@ public static class AppSwitchTest
 
         string tmp = Path.Combine(outDir, "switch_tmp");
         if (Directory.Exists(tmp)) Directory.Delete(tmp, true);
-        string root = Path.Combine(tmp, "install"), data = Path.Combine(root, "data"), nat = Path.Combine(root, "native", "ComicPadNative");
+        string root = Path.GetFullPath(Path.Combine(tmp, "install")), data = Path.Combine(root, "data"), nat = Path.Combine(root, "native", "ComicPadNative");   // GetFullPath: 결과 폴더를 / 로 줘도 역슬래시 경로로 맞춤
         Directory.CreateDirectory(nat); Directory.CreateDirectory(Path.Combine(data, "config"));
         File.WriteAllText(Path.Combine(root, "ComicPad.exe"), "stand-in");
         File.WriteAllText(Path.Combine(root, "server.py"), "# stand-in");

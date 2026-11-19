@@ -16,16 +16,9 @@ public static class Shell2Settings
     {
         var p = Opt.Panel();   // 웹 .settings: 구역 제목 + 부품 (세로 쌓기)
         void Add(params Control[] cs) { foreach (var c in cs) if (c != null) p.Controls.Add(c); }
-        Add(Opt.Title("펜 (S펜·와콤·휴이온·XP-Pen·서피스 펜)"),
-            Opt.Row(Opt.Button("필압 곡선·흔들림 보정…", PenSettings.Show), Opt.Button("펜 진단 (필압·지연·곡선)…", () => WebIds.Run("pen.diagnose"))),
-            Opt.Choice("브러시 커서 모양", new[] { ("nib", "펜촉 + 크기 원 (클립스튜디오식)"), ("circle", "크기 원 + 십자"), ("cross", "십자만"), ("dot", "점만") }, () => App.Get("brushCursor", "nib"), v => { App.Set("brushCursor", v); CursorLook.Apply(); }),
-            Opt.Choice("측면 버튼 누르고 그리기", new[] { ("eyedropper", "스포이트"), ("eraser", "지우개"), ("pan", "화면 이동"), ("radial", "원형 메뉴"), ("none", "사용 안 함") }, () => App.Get("penButton", "eyedropper"), v => App.Set("penButton", v)),
-            Opt.Choice("두 번째 측면 버튼 (와콤 등)", new[] { ("pan", "화면 이동"), ("eyedropper", "스포이트"), ("eraser", "지우개"), ("radial", "원형 메뉴"), ("none", "사용 안 함") }, () => App.Get("penButton2", "pan"), v => App.Set("penButton2", v)),
-            Opt.Check("펜 위치 예측 (선보다 조금 앞을 흐리게 미리 보여 줌)", () => Modules.Gaps.PenPredict.Enabled(), v => { if (App.Settings["penFeel"] is not System.Text.Json.Nodes.JsonObject f) App.Settings["penFeel"] = f = new System.Text.Json.Nodes.JsonObject(); f["predict"] = v; App.SaveSettingsSoon(); }),
-            Opt.Check("마우스 오른쪽 버튼 = 원형 메뉴", () => App.Get("mouseRadial", true), v => App.Set("mouseRadial", v)),
-            Opt.Slider("펜을 뗀 뒤 터치 무시 (ms)", 0, 1500, () => App.Get("palmGuardMs", 350.0), v => App.Set("palmGuardMs", Math.Round(v / 50) * 50), step: 50),
-            Opt.Slider("마우스 필압", 0.05, 1, () => App.Get("mousePressure", 1.0), v => App.Set("mousePressure", Math.Round(v, 2)), pct: true),
-            W(Opt.Help("와콤·휴이온·XP-Pen 등 PC 용 태블릿은 드라이버 설정에서 \"Windows Ink\" 를 켜야 필압·기울기가 옵니다. 펜 뒤쪽 지우개는 자동으로 지우개가 됩니다.")));
+        // 웹 ui/settings.js 와 같은 구역·순서·글. 네이티브에만 있는 것은 각 구역 끝에 (웹 전용: 저지연 모드·메모리 절약·네이티브 펜 입력 = 이 앱엔 필요 없음)
+        Add(Opt.Title("펜 (S펜·와콤·휴이온·XP-Pen·서피스 펜·애플 펜슬)"));
+        Add(PenSettings.Section());
         Add(Opt.Title("터치"),
             Opt.Check("손가락으로 그리기 (끄면 손가락은 화면 조작 전용)", () => App.Get("fingerDraw", false), v => App.Set("fingerDraw", v)),
             Opt.Check("두 손가락으로 회전", () => App.Get("touchRotate", true), v => App.Set("touchRotate", v)),
@@ -36,15 +29,16 @@ public static class Shell2Settings
             Opt.Choice("마우스 휠", new[] { ("zoom", "확대/축소"), ("scroll", "스크롤 (웹툰)") }, () => App.Get("wheelMode", "zoom"), v => App.Set("wheelMode", v)),
             Opt.Check("큰 버튼 (터치용)", () => App.Get("largeUI", false), v => { App.Set("largeUI", v); UiMode.ApplyLarge(); }),
             Opt.Check("왼손잡이 배치 (패널을 왼쪽에)", () => App.Get("leftHanded", false), v => { App.Set("leftHanded", v); Workspaces.ApplyLayout(); }),
+            Opt.Slider("격자 간격", 10, 500, () => App.Get("gridSize", 100.0), v => { App.Set("gridSize", Math.Round(v / 10) * 10); Shell2Ui.Canvas?.RedrawAll(); }, step: 10, fmt: v => $"{v:0}px"),
             Opt.Check("간단히 보기 (자주 쓰는 도구·메뉴만)", () => UiMode.IsSimple, v => UiMode.SetMode(v ? "simple" : "full")),
             Opt.Choice("그래픽 가속 (GPU)", new[] { ("auto", "자동 (그래픽 카드가 있으면 GPU)"), ("on", "켜기 (카드가 없으면 소프트웨어 D3D)"), ("off", "끄기 (CPU 만)") }, () => App.Get("gpu", "auto"), v => App.Set("gpu", v)),
             W(Opt.Help("그림판 화면(확대·회전·선택 테두리)과 레이어 합성을 Direct3D 11 로. 결과는 CPU 와 같고, 효과·조정 계산 등 GPU 가 못 하는 부분만 CPU 로 합니다. 지금: " + Gpu.GpuDevice.Status)),
-            Opt.Slider("격자 간격 (px)", 10, 500, () => App.Get("gridSize", 100.0), v => { App.Set("gridSize", Math.Round(v / 10) * 10); Shell2Ui.Canvas?.RedrawAll(); }, step: 10),
             Opt.Row(Opt.Button("화면 꾸미기…", UiMode.Customize), Opt.Button("퀵바 버튼…", Bars.EditQuick), Opt.Button("아래 막대 버튼…", Bars.EditBottom)));
         Add(Opt.Title("저장"),
-            Opt.Slider("자동 저장 간격 (분, 다시 켜면 적용)", 1, 30, () => App.Get("autosaveMin", 3.0), v => App.Set("autosaveMin", Math.Round(v)), step: 1),
+            Opt.Slider("자동 저장 간격", 0, 30, () => App.Get("autosaveMin", 3.0), v => App.Set("autosaveMin", Math.Round(v)), step: 1, fmt: v => v >= 1 ? $"{v:0}분" : "끔"),
+            Opt.Row(Opt.Button("data 폴더 열기", () => Shell.OpenFolder(Path.Combine(App.DataDir, "projects"))), Opt.Button("설정 파일 폴더", () => Shell.OpenFolder(Path.GetDirectoryName(App.SettingsPath) ?? App.DataDir))),
             W(Opt.Help($"작업물 폴더: {App.DataDir}")),
-            Opt.Row(Opt.Button("작업물 폴더 열기", () => Shell.OpenFolder(App.DataDir)), Opt.Button("설정 파일 폴더", () => Shell.OpenFolder(Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData), "ComicPad"))), Opt.Button("작업물 백업…", BackupUi.Dialog)),
+            Opt.Row(Opt.Button("작업물 백업…", BackupUi.Dialog)),
             Opt.Slider("실행취소 기억 메모리 (MB)", 200, 6000, () => App.History.MaxBytes / 1_000_000.0, v => { App.History.MaxBytes = (long)(v * 1_000_000); App.Set("undoMB", Math.Round(v)); }, step: 50));
         Add(Opt.Title("업데이트"),
             Opt.Check("켤 때 새 버전 확인 (하루 한 번)", () => Updater.Conf()["auto"]?.GetValue<bool>() != false, v => { Updater.Conf()["auto"] = v; App.SaveSettingsSoon(); }),

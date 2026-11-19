@@ -34,7 +34,7 @@ public sealed class BrushOptions
     {
         tool = t; cat = t.Category; erase = t.EraseMode;
         Root = Opt.Panel();
-        // 웹: section(프리셋 2열 목록, 복제·이름·기본값·삭제) — 네이티브는 새로·가져오기·내보내기·ABR 도 함께
+        // 웹: section(프리셋 2열 목록, 복제·이름·기본값·삭제) — 네이티브의 새로·가져오기·내보내기·ABR 은 맨 아래 "프리셋 파일" 구역
         list = new PresetGrid(() => PresetStore.List(cat), () => P?.Id, p => erase ? 0xFF888888 : p.Color != null ? Px.FromHex(p.Color) : App.Fg | 0xFF000000);
         list.Picked += p => { if (p.Id == P?.Id) return; PresetStore.SetActive(cat, p.Id); tool.Activate(); RenderList(); Rebuild(); };
         list.Menu += (p, at) =>
@@ -43,6 +43,9 @@ public sealed class BrushOptions
             var m = new ContextMenuStrip();
             m.Items.Add("복제", null, (_, _) => Duplicate()); m.Items.Add("이름 바꾸기", null, (_, _) => Rename());
             m.Items.Add("기본값으로", null, (_, _) => ResetDefault()); m.Items.Add("삭제", null, (_, _) => Delete());
+            m.Items.Add(new ToolStripSeparator());
+            m.Items.Add("새 프리셋…", null, (_, _) => NewPreset()); m.Items.Add("프리셋 가져오기…", null, (_, _) => Import()); m.Items.Add("프리셋 내보내기…", null, (_, _) => Export());
+            if (!erase) m.Items.Add("ABR 가져오기…", null, (_, _) => BrushesModule.ImportAbr());
             m.Show(list, at);
         };
         var btns = Opt.Row(Opt.Button("복제", Duplicate), Opt.Button("이름", Rename), Opt.Button("기본값", ResetDefault), new WebButton("삭제", BtnKind.Danger));
@@ -50,9 +53,11 @@ public sealed class BrushOptions
         foreach (Control c in btns.Controls) c.Margin = Padding.Empty;
         var more = Opt.Row(Opt.Button("새로", NewPreset), Opt.Button("가져오기", Import), Opt.Button("내보내기", Export), erase ? null : Opt.Button("ABR 가져오기", () => BrushesModule.ImportAbr()));
         foreach (Control c in more.Controls) c.Margin = Padding.Empty;
-        Root.Controls.Add(new WebSection(null, list, btns, more));
+        // 웹과 같은 머리 (프리셋 목록 + 복제·이름·기본값·삭제), 네이티브에만 있는 새로·가져오기·내보내기는 맨 아래 구역 (오른쪽 클릭 메뉴에도)
+        Root.Controls.Add(new WebSection(null, list, btns));
         body = new WebStack { FillParent = false };
         Root.Controls.Add(body);
+        Root.Controls.Add(new WebSection("프리셋 파일", more));
         refreshSoon.Tick += (_, _) => { refreshSoon.Stop(); if (Root.IsDisposed) return; testPad?.Refresh2(); RenderList(); };
         Action onChange = () => { if (!Root.IsDisposed) { refreshSoon.Stop(); refreshSoon.Start(); } };
         PresetStore.Changed += onChange;

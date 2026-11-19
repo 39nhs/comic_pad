@@ -99,7 +99,25 @@ public static class UiMode
     }
 
     // ---- 패널 탭 -----------------------------------------------------------------------------
-    public static bool PanelShown(string idOrTitle) => !Strs(Ui()["hiddenPanels"]).Contains(PanelId(idOrTitle));
+    /// <summary>웹 판에 있는 패널 id (나머지 = 네이티브에만 있는 탭: 처음엔 숨김 — 웹과 같은 탭 머리, 켜면 각 칸 끝에)</summary>
+    public static readonly HashSet<string> WebPanels = new() { "tool", "color", "nav", "pages", "layers", "assets", "history", "anim" };
+    public static bool PanelShown(string idOrTitle)
+    {
+        string id = PanelId(idOrTitle);
+        if (WebPanels.Contains(id)) return !Strs(Ui()["hiddenPanels"]).Contains(id);
+        return Strs(Ui()["extraPanels"]).Contains(id);
+    }
+    /// <summary>패널 탭 보이기/숨기기 (웹 패널 = hiddenPanels, 네이티브 전용 = extraPanels)</summary>
+    public static void SetPanelShown(string idOrTitle, bool v)
+    {
+        string id = PanelId(idOrTitle);
+        var u = Ui();
+        string key = WebPanels.Contains(id) ? "hiddenPanels" : "extraPanels";
+        var set = Strs(u[key]);
+        if (v == (key == "extraPanels")) set.Add(id); else set.Remove(id);
+        u[key] = new JsonArray(set.Select(x => (JsonNode)x).ToArray());
+        App.SaveSettingsSoon();
+    }
     public static void ApplyPanels() => Shell2Ui.Side?.Rerender();
     public static IEnumerable<string> AllPanelTitles() => Shell2Ui.Side?.Defs.Select(d => d.Title) ?? Enumerable.Empty<string>();
 
@@ -206,12 +224,7 @@ public static class UiMode
                 foreach (var d in Shell2Ui.Side?.Defs ?? new List<SideDef>())
                 {
                     string pid = d.Id;
-                    content.Controls.Add(Chk(d.Title, PanelShown(pid), v =>
-                    {
-                        var set = Strs(u["hiddenPanels"]);
-                        if (v) set.Remove(pid); else set.Add(pid);
-                        u["hiddenPanels"] = new JsonArray(set.Select(x => (JsonNode)x).ToArray());
-                    }, d.Icon));
+                    content.Controls.Add(Chk(d.Title, PanelShown(pid), v => SetPanelShown(pid, v), d.Icon));
                 }
             }
             else

@@ -270,7 +270,7 @@ public sealed class SidePanel : Control
 /// <summary>"도구" 탭 (웹 toolPropsPanel): 머리 = 도구 아이콘 + 이름 (주황), 아래 = 도구 옵션</summary>
 public sealed class ToolOptionsPanel : Panel
 {
-    readonly Panel body = new() { Dock = DockStyle.Fill, AutoScroll = true, BackColor = Theme.Panel };
+    readonly Controls.WebScroll body = new() { Dock = DockStyle.Fill, BackColor = Theme.Panel };
     readonly Head head = new();
 
     public ToolOptionsPanel()
@@ -287,15 +287,16 @@ public sealed class ToolOptionsPanel : Panel
         if (IsDisposed) return;
         head.Invalidate();
         body.SuspendLayout();
-        foreach (Control c in body.Controls.Cast<Control>().ToList()) c.Dispose();
-        body.Controls.Clear();
+        var old = body.Content;
+        body.Content = null;
+        old?.Dispose();
         Control opt = null;
         try { opt = App.Tool?.BuildOptions(); } catch (Exception ex) { opt = new Label { Text = "옵션 표시 오류: " + ex.Message, AutoSize = true, ForeColor = Theme.Muted }; }
         if (opt == null && App.Tool != null) opt = new Label { Text = "설정할 옵션이 없습니다.", AutoSize = true, ForeColor = Theme.Muted, Font = Theme.Small, Margin = new Padding(0, 6, 0, 6) };
-        if (opt != null) { opt.Location = new Point(4, 0); body.Controls.Add(opt); }
+        // 웹 .panel-scroll: 세로로만 굴러가고 얇은 막대는 내용 폭을 줄이지 않음 (WebScroll)
+        if (opt is Label lb) lb.Padding = new Padding(10, 0, 10, 0);
+        body.Content = opt;
         body.ResumeLayout();
-        // 가로 스크롤 막대는 숨김 (웹 .panel-scroll 은 세로만)
-        body.AutoScroll = false; body.HorizontalScroll.Maximum = 0; body.HorizontalScroll.Visible = false; body.AutoScroll = true;
     }
 
     sealed class Head : Control

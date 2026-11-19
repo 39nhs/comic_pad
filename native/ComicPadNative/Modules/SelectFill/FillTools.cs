@@ -239,22 +239,25 @@ public sealed class FillTool : ToolBase
         }
     }
 
+    // 웹 basic.js fillTool.options 와 같은 순서·글 (위), 네이티브에만 있는 것은 아래 "더 똑똑하게 칠하기" 구역
     public override Control BuildOptions() => Opt.Panel(
         Opt.Title("채우기"),
         Ui.Segmented(new[] { ("all", "모든 레이어"), ("ref", "참조 레이어"), ("layer", "현재 레이어") }, () => Source, v => { Source = v; SelUtil.Put("fill.source", v); RefreshPreview(); }),
         Opt.Slider("색 허용 오차", 0, 255, () => Tolerance, v => { Tolerance = v; SelUtil.Put("fill.tolerance", v); }, step: 1, onEnd: RefreshPreview),
+        Opt.Slider("틈 막기 (이 너비까지 빈틈은 선으로)", 0, 50, () => Gap, v => { Gap = v; SelUtil.Put("fill.gap", v); }, step: 1, fmt: v => v > 0 ? $"{v:0}px" : "끔"),
+        Opt.Help("선이 살짝 끊겨 있어도 이 너비 이하의 빈틈은 막힌 것으로 보고, 틈 너머로는 칠하지 않습니다. 선이 많이 끊긴 러프는 10~20px."),
+        Opt.Slider("영역 확장", 0, 10, () => Expand, v => { Expand = v; SelUtil.Put("fill.expand", v); }, step: 1, fmt: v => $"{v:0}px"),
+        Opt.Help("선 아래까지 칠하려면 \"영역 확장\"을 1~3px로. 선이 살짝 끊겨 있으면 \"틈 닫기\"를 올리세요."),
+        Opt.Slider("디더 무늬 (칠하는 칸 비율)", 0, 1, () => Dither, v => { Dither = v >= 1 ? 0 : v; SelUtil.Put("fill.dither", Dither); }, pct: true, step: 0.0625, fmt: v => v > 0 && v < 1 ? $"{v * 100:0}%" : "끔"),
+        Ui.Segmented(new[] { (2, "2×2"), (4, "4×4") }, () => DitherSize, v => { DitherSize = v; SelUtil.Put("fill.ditherSize", v); }),
+        Opt.Title("더 똑똑하게 칠하기"),
         Opt.Slider("틈 닫기 (끊긴 선 끝 잇기)", 0, 50, () => Close, v => { Close = v; SelUtil.Put("fill.close", v); }, step: 1, fmt: v => v > 0 ? $"{v:0}px" : "끔", onEnd: RefreshPreview),
         Opt.Check("닫는 선 미리 보기 (분홍 선)", () => ShowClose, v => { ShowClose = v; SelUtil.Put("fill.closePreview", v); RefreshPreview(); }),
         Opt.Help("선 끝이 이 칸 수 이하로 다른 선과 떨어져 있으면 보이지 않는 선(분홍)으로 이어 막고 칠합니다. 좁은 칸·평행선은 막지 않습니다."),
-        Opt.Slider("틈 막기 (선을 두껍게 봄)", 0, 50, () => Gap, v => { Gap = v; SelUtil.Put("fill.gap", v); }, step: 1, fmt: v => v > 0 ? $"{v:0}px" : "끔"),
-        Opt.Help("선이 살짝 끊겨 있어도 이 너비 이하의 빈틈은 막힌 것으로 보고, 틈 너머로는 칠하지 않습니다. 선이 많이 끊긴 러프는 10~20px."),
-        Opt.Slider("영역 확장", 0, 10, () => Expand, v => { Expand = v; SelUtil.Put("fill.expand", v); }, step: 1, fmt: v => $"{v:0}px"),
         Opt.Slider("덜 칠한 곳 메우기", 0, 40, () => Leftover, v => { Leftover = v; SelUtil.Put("fill.leftover", v); }, step: 1, fmt: v => v > 0 ? $"{v:0}px 이하" : "끔"),
-        Opt.Help("선 아래까지 칠하려면 \"영역 확장\"을 1~3px로. 칠한 곳 안에 남은 작은 빈틈(잡티·점)은 \"덜 칠한 곳 메우기\"로 함께 칠합니다."),
+        Opt.Help("칠한 곳 안에 남은 작은 빈틈(잡티·점)을 함께 칠합니다."),
         Opt.Check("여러 칸 칠하기 (끌어서)", () => Multi, v => { Multi = v; SelUtil.Put("fill.multi", v); }),
-        Opt.Help("켜면 끌면서 지나간 칸을 모두 칠합니다 (실행취소 한 번). 처음 누른 곳과 색이 다른 곳(선 위)은 건너뜁니다."),
-        Opt.Slider("디더 무늬 (칠하는 칸 비율)", 0, 1, () => Dither, v => { Dither = v >= 1 ? 0 : v; SelUtil.Put("fill.dither", Dither); }, pct: true, step: 0.0625, fmt: v => v > 0 && v < 1 ? $"{v * 100:0}%" : "끔"),
-        Ui.Segmented(new[] { (2, "2×2"), (4, "4×4") }, () => DitherSize, v => { DitherSize = v; SelUtil.Put("fill.ditherSize", v); }));
+        Opt.Help("켜면 끌면서 지나간 칸을 모두 칠합니다 (실행취소 한 번). 처음 누른 곳과 색이 다른 곳(선 위)은 건너뜁니다."));
 }
 
 public sealed class GradientTool : ToolBase
